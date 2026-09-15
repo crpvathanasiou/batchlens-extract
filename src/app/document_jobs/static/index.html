@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Document conversion</title><link rel="stylesheet" href="/documents/style.css"><script src="/documents/app.js" defer></script></head>
+<body><main><h1>Document conversion</h1><p>Upload PDFs and download structured data and readable HTML.</p>
+<form id="login"><label>Email or username <input id="username" autocomplete="username" required></label><label>Password <input id="password" type="password" autocomplete="current-password" required></label><button>Sign in</button></form>
+<button id="logout" hidden>Sign out</button><p id="notice" role="status" aria-live="polite"></p>
+<section id="workspace" hidden><div id="drop" tabindex="0"><label>Drop PDFs here or choose files <input id="files" type="file" accept="application/pdf,.pdf" multiple></label></div><p id="limit"></p><button id="refresh">Refresh jobs</button><div id="jobs" aria-live="polite"></div></section>
+</main></body></html>

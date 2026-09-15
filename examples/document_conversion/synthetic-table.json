@@ -1,0 +1,637 @@
+{
+  "JobStatus": "SUCCEEDED",
+  "DocumentMetadata": {
+    "Pages": 1
+  },
+  "Blocks": [
+    {
+      "Id": "page",
+      "BlockType": "PAGE",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "table",
+            "layout"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "layout",
+      "BlockType": "LAYOUT_TABLE",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "table"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "c-1-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-1-1"
+          ]
+        }
+      ],
+      "RowIndex": 1,
+      "ColumnIndex": 1,
+      "EntityTypes": [
+        "COLUMN_HEADER"
+      ]
+    },
+    {
+      "Id": "w-c-1-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "11.00 mg"
+    },
+    {
+      "Id": "c-1-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-1-2"
+          ]
+        }
+      ],
+      "RowIndex": 1,
+      "ColumnIndex": 2,
+      "EntityTypes": [
+        "COLUMN_HEADER"
+      ]
+    },
+    {
+      "Id": "w-c-1-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "12.00 mg"
+    },
+    {
+      "Id": "c-2-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-2-1"
+          ]
+        }
+      ],
+      "RowIndex": 2,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-2-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "21.00 mg"
+    },
+    {
+      "Id": "c-2-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-2-2"
+          ]
+        }
+      ],
+      "RowIndex": 2,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-2-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "22.00 mg"
+    },
+    {
+      "Id": "c-3-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-3-1"
+          ]
+        }
+      ],
+      "RowIndex": 3,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-3-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "31.00 mg"
+    },
+    {
+      "Id": "c-3-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [],
+      "RowIndex": 3,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "c-4-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-4-1"
+          ]
+        }
+      ],
+      "RowIndex": 4,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-4-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "41.00 mg"
+    },
+    {
+      "Id": "c-4-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-4-2"
+          ]
+        }
+      ],
+      "RowIndex": 4,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-4-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "42.00 mg"
+    },
+    {
+      "Id": "c-5-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-5-1"
+          ]
+        }
+      ],
+      "RowIndex": 5,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-5-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "51.00 mg"
+    },
+    {
+      "Id": "c-5-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-5-2"
+          ]
+        }
+      ],
+      "RowIndex": 5,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-5-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "52.00 mg"
+    },
+    {
+      "Id": "c-6-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-6-1"
+          ]
+        }
+      ],
+      "RowIndex": 6,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-6-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "61.00 mg"
+    },
+    {
+      "Id": "c-6-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-6-2"
+          ]
+        }
+      ],
+      "RowIndex": 6,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-6-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "62.00 mg"
+    },
+    {
+      "Id": "c-7-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-7-1"
+          ]
+        }
+      ],
+      "RowIndex": 7,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-7-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "71.00 mg"
+    },
+    {
+      "Id": "c-7-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-7-2"
+          ]
+        }
+      ],
+      "RowIndex": 7,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-7-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "72.00 mg"
+    },
+    {
+      "Id": "c-8-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-8-1"
+          ]
+        }
+      ],
+      "RowIndex": 8,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-8-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "81.00 mg"
+    },
+    {
+      "Id": "c-8-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-8-2"
+          ]
+        }
+      ],
+      "RowIndex": 8,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-8-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "82.00 mg"
+    },
+    {
+      "Id": "c-9-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-9-1"
+          ]
+        }
+      ],
+      "RowIndex": 9,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-9-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "91.00 mg"
+    },
+    {
+      "Id": "c-9-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-9-2"
+          ]
+        }
+      ],
+      "RowIndex": 9,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-9-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "92.00 mg"
+    },
+    {
+      "Id": "c-10-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-10-1"
+          ]
+        }
+      ],
+      "RowIndex": 10,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-10-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "101.00 mg"
+    },
+    {
+      "Id": "c-10-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-10-2"
+          ]
+        }
+      ],
+      "RowIndex": 10,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-10-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "102.00 mg"
+    },
+    {
+      "Id": "c-11-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-11-1"
+          ]
+        }
+      ],
+      "RowIndex": 11,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-11-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "111.00 mg"
+    },
+    {
+      "Id": "c-11-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-11-2"
+          ]
+        }
+      ],
+      "RowIndex": 11,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-11-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "112.00 mg"
+    },
+    {
+      "Id": "c-12-1",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-12-1"
+          ]
+        }
+      ],
+      "RowIndex": 12,
+      "ColumnIndex": 1,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-12-1",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "121.00 mg"
+    },
+    {
+      "Id": "c-12-2",
+      "BlockType": "CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w-c-12-2"
+          ]
+        }
+      ],
+      "RowIndex": 12,
+      "ColumnIndex": 2,
+      "EntityTypes": []
+    },
+    {
+      "Id": "w-c-12-2",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "122.00 mg"
+    },
+    {
+      "Id": "merged",
+      "BlockType": "MERGED_CELL",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "c-1-1",
+            "c-1-2"
+          ]
+        }
+      ],
+      "RowIndex": 1,
+      "ColumnIndex": 1,
+      "RowSpan": 1,
+      "ColumnSpan": 2
+    },
+    {
+      "Id": "table",
+      "BlockType": "TABLE",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "MERGED_CELL",
+          "Ids": [
+            "merged"
+          ]
+        },
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "c-1-1",
+            "c-1-2",
+            "c-2-1",
+            "c-2-2",
+            "c-3-1",
+            "c-3-2",
+            "c-4-1",
+            "c-4-2",
+            "c-5-1",
+            "c-5-2",
+            "c-6-1",
+            "c-6-2",
+            "c-7-1",
+            "c-7-2",
+            "c-8-1",
+            "c-8-2",
+            "c-9-1",
+            "c-9-2",
+            "c-10-1",
+            "c-10-2",
+            "c-11-1",
+            "c-11-2",
+            "c-12-1",
+            "c-12-2"
+          ]
+        }
+      ]
+    }
+  ]
+}

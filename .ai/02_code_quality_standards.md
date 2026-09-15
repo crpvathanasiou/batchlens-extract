@@ -33,74 +33,40 @@
 29. Exceptions and Architectural Decisions
 30. Project-Wide Quality Gates
 31. Core Code Quality Rules
+32. Standards vs Current Compliance
 
 ---
 
 ## 1. Purpose and Authority
 
-This document defines the long-lived engineering and code-quality standards for projects built from this starter repository.
+This document defines the long-lived engineering and code-quality standards for **BatchLens Extract** (`batchlens-extract`).
 
-It applies to:
+It applies to application code, tests, scripts, Docker configuration, project-defined CI/CD when introduced, infrastructure integration code, and AI-assisted changes.
 
-* application code;
-* tests;
-* scripts;
-* Docker configuration;
-* project-defined CI/CD when introduced;
-* infrastructure integration code;
-* AI-assisted code changes performed through Cursor or another coding assistant.
+It owns **stable engineering rules**. It does not own product scope, milestone sequencing, pipeline contracts, product data-handling policy, extraction-accuracy evaluation, or check inventories.
 
-Its purpose is to ensure that implementation remains:
+| Document | Owns |
+|----------|------|
+| [00_project_reference.md](00_project_reference.md) | Product purpose and boundaries |
+| [01_implementation_roadmap.md](01_implementation_roadmap.md) | Milestones and DoD |
+| [03_common_handoff.md](03_common_handoff.md) | Current execution state |
+| [04_code_map.md](04_code_map.md) | Implemented modules |
+| [05_pipeline_contracts.md](05_pipeline_contracts.md) | Pipeline semantics and contracts |
+| [06_security_and_data_handling.md](06_security_and_data_handling.md) | Product data protection and security-claim evidence |
+| [07_extraction_evaluation.md](07_extraction_evaluation.md) | Extraction-quality and reviewer-effort evaluation |
+| [08_check_selection_strategy.md](08_check_selection_strategy.md) | Check selection strategy |
 
-* understandable;
-* testable;
-* maintainable;
-* secure;
-* traceable;
-* production-disciplined;
-* aligned with the approved functional and architectural references.
+Do not require separate Task Definition / Detailed Specification / ADR documents by default. Milestone DoD lives in [01](01_implementation_roadmap.md).
 
-This document defines stable engineering rules. It does not own milestone sequencing or current execution state.
+Documentation-only changes require content, link, and scope checks — not application tests or Docker rebuilds.
 
-Canonical documentation ownership:
-
-```text
-00_project_reference.md
-→ architecture, scope, project-wide boundaries
-
-01_implementation_roadmap.md
-→ sequencing, milestones, dependencies, milestone Definition of Done, evidence
-
-02_code_quality_standards.md
-→ stable engineering and code-quality rules
-
-03_common_handoff.md
-→ current execution state when relevant
-
-04_code_map.md
-→ implemented code and module responsibility map
-```
-
-Do not require by default:
-
-* a separate Task Definition;
-* a separate Detailed Specification;
-* a separate Definition of Done document;
-* an Architecture Decision Record (ADR).
-
-Those may exist only when complexity or the actual workflow justifies them.
-
-Milestone-level Definition of Done belongs in `01_implementation_roadmap.md`.
-
-When a milestone, design note, or optional specification conflicts with this document, the conflict must be explicitly identified and resolved before implementation.
-
-`00_project_reference.md` remains authoritative for project-wide architecture and functional boundaries.
+When a milestone or design note conflicts with this document, resolve the conflict explicitly before implementation.
 
 ---
 
 ## 2. Quality Philosophy
 
-Projects built from this starter follow:
+BatchLens Extract follows:
 
 ```text
 Quality by Design
@@ -210,29 +176,9 @@ Avoid hidden:
 
 When the system contains completed runs, versions, audit history, historical outputs, or other authoritative records that must remain reproducible, completed historical state must not be silently rewritten.
 
-Prefer:
+Prefer new version/run or supersede/version rather than silently mutating completed history when historical traceability matters.
 
-```text
-New version or run
-rather than
-Silently mutating completed history
-```
-
-```text
-Supersede / version
-rather than
-Destructive overwrite
-```
-
-when historical traceability matters.
-
-```text
-Controlled disable / deactivation
-rather than
-Destructive deletion
-```
-
-when audit or history requirements justify retention.
+Controlled deletion remains allowed under an explicit retention/deletion policy. Historical traceability requirements must coexist with product data-handling rules in [06_security_and_data_handling.md](06_security_and_data_handling.md). Do **not** imply unlimited retention of confidential content.
 
 Not every application requires versioned historical state. Apply these principles only where reproducibility, auditability, or historical integrity is part of the approved design.
 
@@ -251,32 +197,34 @@ The system should fail:
 
 ## 4. Technology Baseline
 
-The approved foundation is:
+### Current foundation (implemented)
 
 ```text
-Python: 3.11.x
-(the repository-pinned patch version is authoritative)
-FastAPI
+Python: 3.11.x  (>=3.11,<3.12 in pyproject.toml)
+FastAPI + Uvicorn
 Poetry
-Pydantic v2
-Pydantic Settings
-Docker
-Docker Compose
-Ruff
-Pyright
-pytest
-Existing OpenAI LLM client / wrapper
+Pydantic v2 + Pydantic Settings
+Docker + Docker Compose
+Ruff + Pyright (strict) + pytest
+Optional async OpenAI LLM wrapper (present, not wired to product flows)
 ```
 
-The OpenAI wrapper is a reusable starter asset when LLM functionality is required.
+### Approved deployment direction (not implemented)
 
-Its presence does not mean every assignment must use an LLM.
+```text
+FastAPI, Docker, ECR, ECS/Fargate on AWS
+```
 
-When an assignment requires an LLM and does not mandate another provider, prefer reuse of the existing OpenAI wrapper.
+Detailed AWS service selection follows document-processing requirements. Do not treat AWS topology details as decided beyond this direction.
 
-Do not introduce speculative multi-provider factories, Anthropic adapters, Gemini adapters, provider registries, or generic provider plugin frameworks solely for theoretical portability.
+### Optional / deferred technology guidance
 
-Reuse before rewrite.
+* The existing OpenAI wrapper is a **reusable optional asset**. Its presence does **not** commit BatchLens Extract’s extraction architecture to OpenAI.
+* Prefer reuse of the existing wrapper only when an approved design selects OpenAI (or compatible chat-completions usage) for a concrete integration.
+* Do not introduce speculative multi-provider factories, Neo4j, GraphRAG, queues, or persistence layers solely because they might be useful later.
+* Graph visualization must be generatable deterministically from extracted data; Neo4j/GraphRAG are deferred and not required for the recipe graph.
+
+Reuse before rewrite when an existing asset fits an **approved** need.
 
 Dependencies must be:
 
@@ -292,33 +240,27 @@ Do not add a dependency when the standard library or an existing dependency prov
 
 ## 5. Project Structure
 
-Preserve the existing starter repository layout unless there is a concrete reason to restructure it.
+Preserve the existing BatchLens Extract layout (`src/app`, `tests/`, `scripts/`, `.ai/`) unless there is a concrete reason to restructure it.
 
 Do not migrate between layout styles such as `app/` and `src/` merely to satisfy this document.
 
 The standard emphasizes responsibility boundaries over directory-name dogma.
 
-An illustrative structure:
+Current package root:
 
 ```text
-<application_root>/
-└── <application_package>/
-    ├── api/
-    ├── application/
-    ├── domain/
-    ├── infrastructure/
-    ├── config/
-    └── main.py
+src/app/
+├── api/
+├── llm/          # optional reusable asset; not product extraction
+├── exceptions.py
+├── logging_config.py
+├── settings.py
+└── main.py
 
 tests/
-├── unit/
-├── integration/
-└── contract/
 ```
 
-Use the actual application package name already present in the repository.
-
-The exact directories should be created only when they contain real responsibilities.
+Additional directories (application, domain, infrastructure, etc.) should be created only when they contain real responsibilities.
 
 Empty architectural folders should not be created merely to imitate a template.
 
@@ -727,7 +669,7 @@ class ObjectStore(Protocol):
 
 Do not create a Protocol for a private helper function with one trivial implementation.
 
-Do not create provider-neutral abstractions merely because the starter currently has one OpenAI implementation. Prefer reuse of the existing OpenAI wrapper when LLM functionality is required and no conflicting provider requirement exists.
+Do not create provider-neutral abstractions merely because one OpenAI wrapper exists. Prefer reuse of the existing OpenAI wrapper only when an approved design selects that integration path.
 
 ### 9.6 Dependency Injection
 
@@ -748,7 +690,7 @@ Core application code should remain usable outside FastAPI.
 
 ## 10. FastAPI Standards
 
-FastAPI is an intentional reusable starter asset.
+FastAPI is the approved application framework for BatchLens Extract.
 
 ### 10.1 Application Factory
 
@@ -789,13 +731,13 @@ Preserve the semantic requirement:
 Liveness ≠ Readiness
 ```
 
-Use the existing starter application's approved health contract.
+Preserve the existing health contract: `/health`, `/ready`, `/version`.
 
 Do not rename working health endpoints merely to satisfy this document.
 
-Liveness should not depend on external systems that may temporarily fail.
+Liveness (`/health`) should not depend on external systems that may temporarily fail.
 
-Readiness should include only dependencies required for the application instance to serve its approved responsibility.
+The current `/ready` endpoint reports **foundation readiness** (configured environment and version). It is not proof of document-processing or AWS dependency availability. When product dependencies are introduced, readiness must include only dependencies required for the application instance to serve its approved responsibility, and that change must be explicit.
 
 ### 10.6 Endpoint Responsibilities
 
@@ -1008,14 +950,19 @@ validate:
 
 Structured outputs from parsers, model / LLM providers, or other external systems must be validated before they affect authoritative application state, where applicable.
 
-### 13.6 Human Review
+### 13.6 Human Review and Automatic Delivery
 
-Human review must be used when:
+Approved product mode includes **automatic unreviewed delivery**: when a usable result exists, return it with uncertainty/findings and an **explicit unreviewed** status. Human review must not universally prevent automatic draft delivery.
 
-* governance judgment is required;
-* provenance is ambiguous;
-* automatic reconciliation is unsafe;
-* confidence is insufficient for a consequential action.
+Human review may be required for:
+
+* governance judgment or consequential approval actions;
+* cases where the product policy explicitly gates an action on review;
+* unsafe automatic reconciliation that would mutate authoritative state without evidence.
+
+Missing evidence or uncertainty is not automatically a pass, a technical failure, or a mandatory human-review stop ([05_pipeline_contracts.md](05_pipeline_contracts.md)).
+
+Invalid input, authorization failure, and unrecoverable technical failure still receive explicit handling.
 
 Guardrails should prevent unsafe action, not merely produce warnings after the action occurs.
 
@@ -1135,13 +1082,18 @@ All external input is untrusted until validated.
 
 This includes:
 
-* uploaded files;
+* uploaded files and source documents;
 * metadata;
 * HTTP headers;
 * query parameters;
 * environment configuration;
 * external-service responses;
-* model-generated output where used.
+* model-generated output where used;
+* OCR / extracted text derived from documents.
+
+Source documents are untrusted data. Extracted text must **not** become instructions that override application policy or authorization.
+
+Product-specific data handling, retention, provider flows, and UI security claims belong in [06_security_and_data_handling.md](06_security_and_data_handling.md). This section retains general secure-coding principles only.
 
 ### 15.4 Authorization
 
@@ -1173,6 +1125,8 @@ Dependency changes should be reviewed for:
 ## 16. Testing Standards
 
 Testing must focus on behaviour and risks, not only line coverage.
+
+**Scope split:** code/unit/integration/contract tests belong here. Extraction accuracy, reviewer-effort measurement, and evaluation datasets belong in [07_extraction_evaluation.md](07_extraction_evaluation.md). Fake-model unit tests do not establish extraction accuracy.
 
 ### 16.1 Test Categories
 
@@ -1209,7 +1163,7 @@ Used for:
 
 #### End-to-End Tests
 
-Used selectively for critical vertical flows required by the actual assignment or application.
+Used selectively for critical vertical flows required by the actual product milestone or application.
 
 An illustrative generic pattern:
 
@@ -1359,7 +1313,7 @@ Do not use casts or ignores merely to silence incorrect design.
 
 ## 20. Docker Standards
 
-Docker is an intentional reusable starter asset.
+Docker is part of the approved BatchLens Extract packaging and local runtime path.
 
 ### 20.1 Image Design
 
@@ -1408,7 +1362,7 @@ Do not retain unused services as speculative placeholders.
 
 ## 21. CI Standards
 
-CI/CD is **project-dependent** and is not part of this starter baseline.
+CI/CD is **project-dependent** and is not part of the current BatchLens Extract baseline.
 
 When a project introduces CI, it should verify at least:
 
@@ -1418,7 +1372,7 @@ Dependency installation
 → Formatting check
 → Pyright
 → pytest
-→ Docker build when Docker / container delivery is part of the active starter / delivery path
+→ Docker build when Docker / container delivery is part of the active delivery path
 ```
 
 Project CI, when present, should:
@@ -1429,7 +1383,7 @@ Project CI, when present, should:
 * use dependency caching safely;
 * prefer short-lived federated / OIDC cloud authentication over long-lived cloud credentials when cloud auth is required.
 
-Do not make a specific cloud provider or AWS deployment mandatory.
+AWS is the **approved deployment direction** for BatchLens Extract (FastAPI, Docker, ECR, ECS/Fargate). Documentation-only and local quality work need **no** cloud deployment. Do not require AWS verification for milestones that do not touch deployment. Do not treat alternative clouds as required; do not contradict the approved AWS target when deployment work begins.
 
 Do not require unrelated deployment verification for milestones that do not touch deployment.
 
@@ -1492,30 +1446,19 @@ Do not require verbose docstrings for trivial private helpers.
 
 ### 23.3 Reference Separation
 
-Maintain the distinction:
-
 ```text
-Project Reference
-→ architecture, requirements, project-wide boundaries
-
-Implementation Roadmap
-→ sequencing, milestone scope, dependencies, milestone Definition of Done, evidence
-
-Code Quality Standards
-→ long-lived engineering standards
-
-Code Map
-→ implemented responsibilities and important code locations
-
-Common Handoff
-→ current execution state / next action when relevant
-
-Optional task specification / Cursor prompt
-→ used only when complexity justifies them
-
-ADR
-→ optional only when the project deliberately uses ADRs for a material architectural decision
+00 Project Reference → product purpose, scope, boundaries
+01 Roadmap → milestones and DoD
+02 Code Quality → stable engineering standards
+03 Handoff → current execution state
+04 Code Map → implemented modules
+05 Pipeline Contracts → pipeline semantics and open contract decisions
+06 Security and Data Handling → product data protection and claim evidence
+07 Extraction Evaluation → accuracy and reviewer-effort measurement
+08 Check Selection → check prioritization; Extract vs Audit ownership
 ```
+
+Prefer links and short summaries over copying whole sections. Read only task-relevant documents during Cursor work.
 
 Do not make ADR mandatory.
 
@@ -1524,6 +1467,8 @@ Do not make ADR mandatory.
 Update documentation when implementation materially changes information owned by that document.
 
 Do not update documentation mechanically when nothing relevant changed.
+
+Documentation-only milestones require content/link/scope checks, not application tests or Docker rebuilds.
 
 A milestone or work item is not complete when it changes project structure or behaviour but leaves relevant authoritative documentation stale.
 
@@ -1590,12 +1535,10 @@ Cursor and other coding assistants are implementation tools, not architectural a
 
 ### 26.1 Required Workflow
 
-The required flow is:
-
 ```text
-Approved Scope / Canonical References
+Approved Scope / task-relevant references
 → Repository Inspection
-→ Milestone / Work-Item Plan
+→ Milestone / Work-Item Plan (when needed)
 → Implementation Within Approved Scope
 → Validation Against Milestone Definition of Done
 → Evidence
@@ -1604,9 +1547,9 @@ Approved Scope / Canonical References
 
 Planning depth must be proportional to complexity.
 
-For substantial, cross-boundary, or architecture-affecting work, Cursor should plan before implementation.
+**Read only task-relevant documents.** Do not require rereading all nine `.ai/` files for every small edit. Use [03](03_common_handoff.md) plus the owning docs for the change.
 
-For small already-approved changes, do not create artificial approval ceremonies.
+For substantial, cross-boundary, or architecture-affecting work, plan before implementation. For small already-approved changes, do not create artificial approval ceremonies.
 
 ### 26.2 Cursor Planning
 
@@ -1844,7 +1787,7 @@ The relevant milestone / work-item Definition of Done must state which applicabl
 18. Update the Code Map and Common Handoff when the implementation materially affects the information they own.
 19. Record justified exceptions explicitly.
 20. A milestone / work item is complete only when its applicable measurable Definition of Done passes.
-21. Reuse existing production-grade starter assets before replacing or rebuilding them. This includes the existing OpenAI LLM wrapper when LLM functionality is required and no conflicting provider requirement exists.
+21. Reuse existing production-grade assets before replacing or rebuilding them when they fit an approved need. The OpenAI LLM wrapper may be reused only when the approved extraction/integration design selects it; its presence alone does not mandate OpenAI.
 
 The resulting engineering model is:
 
@@ -1858,3 +1801,16 @@ Clear Contracts
 → Reviewable Change
 → Production Discipline
 ```
+
+---
+
+## 32. Standards vs Current Compliance
+
+Stable standards describe desired engineering behaviour. They are **not** proof that every current module already implements every future control.
+
+In particular:
+
+* Documented desired errors, retries, tracing, or lifecycle behaviour do **not** prove the optional OpenAI wrapper implements them fully.
+* Those standards must **not** trigger wrapper hardening during documentation tasks (D2). Wrapper hardening remains deferred until extraction integration is designed ([01](01_implementation_roadmap.md)).
+* Product security requirements in [06](06_security_and_data_handling.md) are not current implementation claims unless the evidence register says so.
+* Pipeline lifecycle meanings in [05](05_pipeline_contracts.md) are approved semantics for design — not implemented application state machines.

@@ -59,4 +59,4 @@ sys.exit(0) if urllib.request.urlopen(url, timeout=2).status==200 else sys.exit(
 
 USER appuser
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]

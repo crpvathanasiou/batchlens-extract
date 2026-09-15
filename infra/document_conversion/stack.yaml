@@ -1,0 +1,946 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: BatchLens bounded document conversion development slice. Public-IP ECS
+  egress; no NAT. Private versioned artifacts. Existing regional ACM certificate and
+  controlled DNS required.
+Parameters:
+  Prefix:
+    Type: String
+    Default: batchlens-doc-dev
+    AllowedPattern: '[a-z][a-z0-9-]{2,28}'
+  ImageUri:
+    Type: String
+    Description: Exact immutable ECR image URI with tag or digest.
+  RepositoryArn:
+    Type: String
+    Description: RepositoryArn output from registry stack.
+  DomainName:
+    Type: String
+    Description: Existing controlled DNS name; create a CNAME to ALBDnsName after
+      deployment.
+    AllowedPattern: '[a-zA-Z0-9.-]+'
+  CertificateArn:
+    Type: String
+    Description: ISSUED ACM certificate in this region covering DomainName.
+  AllowedIngressCidr:
+    Type: String
+    Description: Approved operator public IPv4/CIDR, e.g. 203.0.113.4/32. No default.
+  VpcCidr:
+    Type: String
+    Default: 10.64.0.0/16
+  SubnetACidr:
+    Type: String
+    Default: 10.64.0.0/24
+  SubnetBCidr:
+    Type: String
+    Default: 10.64.1.0/24
+  ApiCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 2
+  WorkerCount:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 2
+  ActiveJobs:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 8
+  JobWorkers:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 8
+  PageWorkers:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+  MaxPdfMiB:
+    Type: Number
+    Default: 25
+    MinValue: 1
+    MaxValue: 100
+  RetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 8
+    MaxValue: 365
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues:
+    - 7
+    - 14
+    - 30
+    - 60
+    - 90
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: {}
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: Vpc
+      InternetGatewayId:
+        Ref: InternetGateway
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: Vpc
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+    DependsOn: GatewayAttachment
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock:
+        Ref: SubnetACidr
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+  SubnetRouteA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetA
+      RouteTableId:
+        Ref: RouteTable
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock:
+        Ref: SubnetBCidr
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+  SubnetRouteB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetB
+      RouteTableId:
+        Ref: RouteTable
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: Vpc
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+      - Ref: RouteTable
+  DynamoEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: Vpc
+      ServiceName:
+        Fn::Sub: com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      RouteTableIds:
+      - Ref: RouteTable
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS from explicitly approved operator CIDR
+      VpcId:
+        Ref: Vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp:
+          Ref: AllowedIngressCidr
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 8000
+        ToPort: 8000
+        CidrIp:
+          Ref: VpcCidr
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API only from ALB; outbound HTTPS
+      VpcId:
+        Ref: Vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 8000
+        ToPort: 8000
+        SourceSecurityGroupId:
+          Ref: AlbSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Worker no inbound; outbound HTTPS
+      VpcId:
+        Ref: Vpc
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      OwnershipControls:
+        Rules:
+        - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+        - AllowedOrigins:
+          - Fn::Sub: https://${DomainName}
+          AllowedMethods:
+          - POST
+          - GET
+          - HEAD
+          AllowedHeaders:
+          - '*'
+          MaxAge: 300
+          ExposedHeaders:
+          - ETag
+          - x-amz-version-id
+      LifecycleConfiguration:
+        Rules:
+        - Id: ExplicitDevelopmentRetention
+          Status: Enabled
+          Prefix: documents/
+          ExpirationInDays:
+            Ref: RetentionDays
+          NoncurrentVersionExpiration:
+            NoncurrentDays:
+              Ref: RetentionDays
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 1
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Deny
+          Principal: '*'
+          Action: s3:*
+          Resource:
+          - Fn::GetAtt:
+            - Bucket
+            - Arn
+          - Fn::Sub: ${Bucket.Arn}/*
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+  Jobs:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: pk
+        AttributeType: S
+      KeySchema:
+      - AttributeName: pk
+        KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  DeadLetters:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  Queue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600
+      ReceiveMessageWaitTimeSeconds: 10
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - DeadLetters
+          - Arn
+        maxReceiveCount: 5
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+      - Ref: Queue
+      - Ref: DeadLetters
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Deny
+          Principal: '*'
+          Action: sqs:*
+          Resource:
+          - Fn::GetAtt:
+            - Queue
+            - Arn
+          - Fn::GetAtt:
+            - DeadLetters
+            - Arn
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+  Users:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName:
+        Fn::Sub: ${Prefix}-operators
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameAttributes:
+      - email
+      AutoVerifiedAttributes:
+      - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 14
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 1
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+        - Name: admin_only
+          Priority: 1
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  UserClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: Users
+      GenerateSecret: false
+      ExplicitAuthFlows:
+      - ALLOW_USER_PASSWORD_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      EnableTokenRevocation: true
+  Logs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /batchlens/${Prefix}/documents
+      RetentionInDays:
+        Ref: LogRetentionDays
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+          Condition:
+            StringEquals:
+              aws:SourceAccount:
+                Ref: AWS::AccountId
+      Policies:
+      - PolicyName: DocumentFeature
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ecr:GetAuthorizationToken
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - ecr:BatchCheckLayerAvailability
+            - ecr:GetDownloadUrlForLayer
+            - ecr:BatchGetImage
+            Resource:
+              Ref: RepositoryArn
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+              Fn::GetAtt:
+              - Logs
+              - Arn
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+          Condition:
+            StringEquals:
+              aws:SourceAccount:
+                Ref: AWS::AccountId
+      Policies:
+      - PolicyName: DocumentFeature
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+            - Fn::Sub: ${Bucket.Arn}/documents/incoming/*
+            - Fn::Sub: ${Bucket.Arn}/documents/results/*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+              Fn::Sub: ${Bucket.Arn}/documents/incoming/*
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Scan
+            Resource:
+              Fn::GetAtt:
+              - Jobs
+              - Arn
+          - Effect: Allow
+            Action:
+            - sqs:SendMessage
+            Resource:
+              Fn::GetAtt:
+              - Queue
+              - Arn
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+          Condition:
+            StringEquals:
+              aws:SourceAccount:
+                Ref: AWS::AccountId
+      Policies:
+      - PolicyName: DocumentFeature
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+            - Fn::Sub: ${Bucket.Arn}/documents/incoming/*
+            - Fn::Sub: ${Bucket.Arn}/documents/results/*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+              Fn::Sub: ${Bucket.Arn}/documents/results/*
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Scan
+            Resource:
+              Fn::GetAtt:
+              - Jobs
+              - Arn
+          - Effect: Allow
+            Action:
+            - dynamodb:DeleteItem
+            Resource:
+              Fn::GetAtt:
+              - Jobs
+              - Arn
+          - Effect: Allow
+            Action:
+            - sqs:SendMessage
+            Resource:
+            - Fn::GetAtt:
+              - Queue
+              - Arn
+            - Fn::GetAtt:
+              - DeadLetters
+              - Arn
+          - Effect: Allow
+            Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:ChangeMessageVisibility
+            - sqs:GetQueueAttributes
+            Resource:
+              Fn::GetAtt:
+              - Queue
+              - Arn
+          - Effect: Allow
+            Action:
+            - textract:StartDocumentAnalysis
+            - textract:GetDocumentAnalysis
+            Resource: '*'
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName:
+        Fn::Sub: ${Prefix}-documents
+  ApiTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family:
+        Fn::Sub: ${Prefix}-api
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn:
+        Fn::GetAtt:
+        - ExecutionRole
+        - Arn
+      TaskRoleArn:
+        Fn::GetAtt:
+        - ApiRole
+        - Arn
+      ContainerDefinitions:
+      - Name: api
+        Image:
+          Ref: ImageUri
+        Essential: true
+        Command:
+        - uvicorn
+        - app.main:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        - --workers
+        - '1'
+        - --no-access-log
+        Environment:
+        - Name: APP_ENV
+          Value: dev
+        - Name: DOCUMENT_CONVERSION_ENABLED
+          Value: 'true'
+        - Name: DOCUMENT_REGION
+          Value:
+            Ref: AWS::Region
+        - Name: DOCUMENT_BUCKET
+          Value:
+            Ref: Bucket
+        - Name: DOCUMENT_TABLE
+          Value:
+            Ref: Jobs
+        - Name: DOCUMENT_QUEUE_URL
+          Value:
+            Ref: Queue
+        - Name: DOCUMENT_DLQ_URL
+          Value:
+            Ref: DeadLetters
+        - Name: DOCUMENT_COGNITO_POOL_ID
+          Value:
+            Ref: Users
+        - Name: DOCUMENT_COGNITO_CLIENT_ID
+          Value:
+            Ref: UserClient
+        - Name: DOCUMENT_ORIGIN
+          Value:
+            Fn::Sub: https://${DomainName}
+        - Name: DOCUMENT_ACTIVE_JOBS
+          Value:
+            Ref: ActiveJobs
+        - Name: DOCUMENT_JOB_WORKERS
+          Value:
+            Ref: JobWorkers
+        - Name: DOCUMENT_PAGE_WORKERS
+          Value:
+            Ref: PageWorkers
+        - Name: DOCUMENT_RETENTION_DAYS
+          Value:
+            Ref: RetentionDays
+        - Name: DOCUMENT_MAX_PDF_MIB
+          Value:
+            Ref: MaxPdfMiB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group:
+              Ref: Logs
+            awslogs-region:
+              Ref: AWS::Region
+            awslogs-stream-prefix: api
+        ReadonlyRootFilesystem: true
+        LinuxParameters:
+          InitProcessEnabled: true
+        StopTimeout: 120
+        PortMappings:
+        - ContainerPort: 8000
+          Protocol: tcp
+        HealthCheck:
+          Command:
+          - CMD-SHELL
+          - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"
+          Interval: 30
+          Timeout: 5
+          Retries: 3
+          StartPeriod: 30
+  WorkerTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family:
+        Fn::Sub: ${Prefix}-worker
+      Cpu: '1024'
+      Memory: '4096'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn:
+        Fn::GetAtt:
+        - ExecutionRole
+        - Arn
+      TaskRoleArn:
+        Fn::GetAtt:
+        - WorkerRole
+        - Arn
+      ContainerDefinitions:
+      - Name: worker
+        Image:
+          Ref: ImageUri
+        Essential: true
+        Command:
+        - python
+        - -m
+        - app.document_jobs.worker
+        Environment:
+        - Name: APP_ENV
+          Value: dev
+        - Name: DOCUMENT_CONVERSION_ENABLED
+          Value: 'true'
+        - Name: DOCUMENT_REGION
+          Value:
+            Ref: AWS::Region
+        - Name: DOCUMENT_BUCKET
+          Value:
+            Ref: Bucket
+        - Name: DOCUMENT_TABLE
+          Value:
+            Ref: Jobs
+        - Name: DOCUMENT_QUEUE_URL
+          Value:
+            Ref: Queue
+        - Name: DOCUMENT_DLQ_URL
+          Value:
+            Ref: DeadLetters
+        - Name: DOCUMENT_COGNITO_POOL_ID
+          Value:
+            Ref: Users
+        - Name: DOCUMENT_COGNITO_CLIENT_ID
+          Value:
+            Ref: UserClient
+        - Name: DOCUMENT_ORIGIN
+          Value:
+            Fn::Sub: https://${DomainName}
+        - Name: DOCUMENT_ACTIVE_JOBS
+          Value:
+            Ref: ActiveJobs
+        - Name: DOCUMENT_JOB_WORKERS
+          Value:
+            Ref: JobWorkers
+        - Name: DOCUMENT_PAGE_WORKERS
+          Value:
+            Ref: PageWorkers
+        - Name: DOCUMENT_RETENTION_DAYS
+          Value:
+            Ref: RetentionDays
+        - Name: DOCUMENT_MAX_PDF_MIB
+          Value:
+            Ref: MaxPdfMiB
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group:
+              Ref: Logs
+            awslogs-region:
+              Ref: AWS::Region
+            awslogs-stream-prefix: worker
+        ReadonlyRootFilesystem: false
+        LinuxParameters:
+          InitProcessEnabled: true
+        StopTimeout: 120
+        HealthCheck:
+          Command:
+          - CMD-SHELL
+          - test -r /proc/1/status
+          Interval: 30
+          Timeout: 5
+          Retries: 3
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+      - Ref: SubnetA
+      - Ref: SubnetB
+      SecurityGroups:
+      - Ref: AlbSecurityGroup
+      LoadBalancerAttributes:
+      - Key: routing.http.drop_invalid_header_fields.enabled
+        Value: 'true'
+    DependsOn: GatewayAttachment
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId:
+        Ref: Vpc
+      Protocol: HTTP
+      Port: 8000
+      TargetType: ip
+      HealthCheckPath: /health
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: '30'
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: Alb
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+      - CertificateArn:
+          Ref: CertificateArn
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: TargetGroup
+  ApiService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName:
+        Fn::Sub: ${Prefix}-api
+      Cluster:
+        Ref: Cluster
+      TaskDefinition:
+        Ref: ApiTask
+      DesiredCount:
+        Ref: ApiCount
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+          - Ref: SubnetA
+          - Ref: SubnetB
+          SecurityGroups:
+          - Ref: ApiSecurityGroup
+      HealthCheckGracePeriodSeconds: 60
+      LoadBalancers:
+      - ContainerName: api
+        ContainerPort: 8000
+        TargetGroupArn:
+          Ref: TargetGroup
+    DependsOn:
+    - HttpsListener
+    - DefaultRoute
+    - SubnetRouteA
+    - SubnetRouteB
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName:
+        Fn::Sub: ${Prefix}-worker
+      Cluster:
+        Ref: Cluster
+      TaskDefinition:
+        Ref: WorkerTask
+      DesiredCount:
+        Ref: WorkerCount
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+          - Ref: SubnetA
+          - Ref: SubnetB
+          SecurityGroups:
+          - Ref: WorkerSecurityGroup
+    DependsOn:
+    - HttpsListener
+    - DefaultRoute
+    - SubnetRouteA
+    - SubnetRouteB
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Inspect jobs and worker logs; no notification subscription
+        configured.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - DeadLetters
+          - QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+  QueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Inspect jobs and worker logs; no notification subscription
+        configured.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+      - Name: QueueName
+        Value:
+          Fn::GetAtt:
+          - Queue
+          - QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 600
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+Outputs:
+  ApplicationUrl:
+    Value:
+      Fn::Sub: https://${DomainName}/documents
+  AlbDnsName:
+    Value:
+      Fn::GetAtt:
+      - Alb
+      - DNSName
+  BucketName:
+    Value:
+      Ref: Bucket
+  JobsTable:
+    Value:
+      Ref: Jobs
+  QueueUrl:
+    Value:
+      Ref: Queue
+  DeadLetterQueueUrl:
+    Value:
+      Ref: DeadLetters
+  UserPoolId:
+    Value:
+      Ref: Users
+  UserClientId:
+    Value:
+      Ref: UserClient
+  ClusterName:
+    Value:
+      Ref: Cluster
+  ApiServiceName:
+    Value:
+      Fn::GetAtt:
+      - ApiService
+      - Name
+  WorkerServiceName:
+    Value:
+      Fn::GetAtt:
+      - WorkerService
+      - Name
+  LogGroup:
+    Value:
+      Ref: Logs

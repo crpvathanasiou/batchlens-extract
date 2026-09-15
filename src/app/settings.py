@@ -24,6 +24,8 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    document_conversion_enabled: bool = False
+
     app_env: AppEnvironment = "local"
     app_version: str = Field(default="0.1.0", min_length=1)
     log_level: LogLevel = "INFO"

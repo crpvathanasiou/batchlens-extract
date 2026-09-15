@@ -24,3 +24,6 @@ __pycache__/
 
 # === Project Specific Files ===
 template-setup-steps.txt
+# Explicit document-conversion example outputs can contain confidential content.
+out/
+*.handle.json

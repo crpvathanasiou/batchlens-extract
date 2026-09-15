@@ -1,0 +1,172 @@
+{
+  "JobStatus": "SUCCEEDED",
+  "DocumentMetadata": {
+    "Pages": 2
+  },
+  "Blocks": [
+    {
+      "Id": "p2",
+      "BlockType": "PAGE",
+      "Page": 2,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "t2"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "t2",
+      "BlockType": "LAYOUT_TEXT",
+      "Page": 2,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "l2"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "l2",
+      "BlockType": "LINE",
+      "Page": 2,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w2"
+          ]
+        }
+      ],
+      "Text": "Page two"
+    },
+    {
+      "Id": "w2",
+      "BlockType": "WORD",
+      "Page": 2,
+      "Relationships": [],
+      "Text": "Page two"
+    },
+    {
+      "Id": "p1",
+      "BlockType": "PAGE",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "list",
+            "fig"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "list",
+      "BlockType": "LAYOUT_LIST",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "item",
+            "nested"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "item",
+      "BlockType": "LAYOUT_TEXT",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "line"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "line",
+      "BlockType": "LINE",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "word",
+            "check"
+          ]
+        }
+      ],
+      "Text": "<script>alert('x')</script> & 12.50 mg"
+    },
+    {
+      "Id": "word",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "<script>alert('x')</script> & 12.50 mg"
+    },
+    {
+      "Id": "check",
+      "BlockType": "SELECTION_ELEMENT",
+      "Page": 1,
+      "Relationships": [],
+      "SelectionStatus": "SELECTED"
+    },
+    {
+      "Id": "nested",
+      "BlockType": "LAYOUT_LIST",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "item2"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "item2",
+      "BlockType": "LAYOUT_TEXT",
+      "Page": 1,
+      "Relationships": [
+        {
+          "Type": "CHILD",
+          "Ids": [
+            "w3"
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "w3",
+      "BlockType": "WORD",
+      "Page": 1,
+      "Relationships": [],
+      "Text": "<script>alert('x')</script> & 12.50 mg"
+    },
+    {
+      "Id": "fig",
+      "BlockType": "LAYOUT_FIGURE",
+      "Page": 1,
+      "Relationships": [],
+      "Geometry": {
+        "BoundingBox": {
+          "Left": 0.1,
+          "Top": 0.4,
+          "Width": 0.2,
+          "Height": 0.3
+        }
+      }
+    }
+  ]
+}

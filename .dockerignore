@@ -13,3 +13,6 @@ __pycache__/
 .idea/
 notes/
 .ai/
+
+out/
+*.handle.json

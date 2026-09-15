@@ -153,3 +153,13 @@ The current baseline does not yet implement:
 * persistence, queues, workers, authentication, authorization, or AWS infrastructure
 
 These capabilities will be added through small, verified implementation milestones.
+
+
+## Optional asynchronous document conversion
+
+The authorized PDF-to-HTML reference slice is integrated and disabled by default.
+Start with [the component README](src/app/document_conversion/README.md),
+[offline examples](examples/document_conversion/README.md),
+and [the AWS operator guide](infra/document_conversion/AWS_SETUP.md).
+See [VERIFICATION.md](VERIFICATION.md) for local checks and unperformed cloud/fidelity gates.
+The existing optional LLM wrapper remains unchanged and unwired.
