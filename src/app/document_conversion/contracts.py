@@ -78,6 +78,12 @@ class Page(Model):
 
 
 class Document(Model):
+    """Canonical unreviewed conversion result.
+
+    Text is extracted OCR. Structure, geometry, and ``references`` are source
+    evidence and must not be treated as pharmaceutical recipe facts.
+    """
+
     schema_version: str = "1.0.0"
     converter_version: str = "1.0.0"
     source: Source
@@ -93,7 +99,14 @@ class ConversionError(ValueError):
 
 
 class ConversionLimits(Model):
+    """Input guards applied before Textractor parsing.
+
+    max_relationship_depth: maximum block-relationship chain length allowed in
+    the raw Textract response.  Responses containing chains longer than this
+    value raise RELATIONSHIP_DEPTH_EXCEEDED; cycles raise CYCLIC_RELATIONSHIP.
+    This check does not restrict legitimate table size.
+    """
+
     max_blocks: int = Field(default=100_000, ge=1)
     max_pages: int = Field(default=200, ge=1)
-    max_table_positions: int = Field(default=10_000, ge=1)
     max_relationship_depth: int = Field(default=64, ge=1, le=128)

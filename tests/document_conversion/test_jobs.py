@@ -74,7 +74,8 @@ def test_restart_duplicate_messages_and_two_concurrent_isolated_jobs() -> None:
     assert a.phase == b.phase == "SUCCEEDED" and a.pages_available == 2
     assert {x.key for x in a.artifacts.values()}.isdisjoint(x.key for x in b.artifacts.values())
     html = objects.read(a.artifacts["document.html"]).decode()
-    assert html.index('id="page-1"') < html.index('id="page-2"')
+    # Textractor renderer uses id="source-page-N" for page sections.
+    assert html.index('id="source-page-1"') < html.index('id="source-page-2"')
     with pytest.raises(JobError, match="JOB_NOT_FOUND"):
         restarted.download(first, "bob", "document.html")
 
@@ -513,8 +514,14 @@ def test_enabled_lifespan_wires_ui_api_and_isolation_headers(
     def load() -> DocumentSettings:
         return service.settings
 
+    def build_review(config: DocumentSettings, jobs: object) -> object:
+        assert config.bucket == service.settings.bucket
+        assert jobs is service.store
+        return object()
+
     monkeypatch.setattr("app.document_jobs.composition.build_service", build)
     monkeypatch.setattr("app.document_jobs.settings.load_document_settings", load)
+    monkeypatch.setattr("app.document_review.composition.build_review_service", build_review)
     app = create_app(Settings(document_conversion_enabled=True))
     with TestClient(app) as client:
         app.state.document_auth = Auth()

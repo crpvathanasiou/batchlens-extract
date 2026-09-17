@@ -38,6 +38,7 @@ class DocumentHeaders:
                         b"content-security-policy",
                         b"default-src 'self'; script-src 'self'; "
                         b"style-src 'self'; connect-src 'self' https://*.amazonaws.com; "
+                        b"worker-src 'self'; img-src 'self' data:; font-src 'self'; "
                         b"frame-ancestors 'none'; object-src 'none'; "
                         b"base-uri 'none'; form-action 'self'",
                     ),
@@ -63,10 +64,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from app.document_jobs.auth import CognitoAuth
             from app.document_jobs.composition import build_service
             from app.document_jobs.settings import load_document_settings
+            from app.document_review.composition import build_review_service
 
             feature = load_document_settings()
             app.state.document_settings = feature
             app.state.document_service = await run_in_threadpool(build_service, feature)
+            app.state.document_review_service = await run_in_threadpool(
+                build_review_service, feature, app.state.document_service.store
+            )
             app.state.document_auth = CognitoAuth(
                 feature.region,
                 feature.cognito_pool_id,
@@ -78,11 +83,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.include_router(system_router)
     if resolved.document_conversion_enabled:
+        from app.api.document_reviews import install_errors as install_review_errors
+        from app.api.document_reviews import router as document_review_router
         from app.api.documents import install_errors
         from app.api.documents import router as document_router
 
         app.include_router(document_router)
+        app.include_router(document_review_router)
         install_errors(app)
+        install_review_errors(app)
         app.add_middleware(DocumentHeaders)
 
     logger.info(

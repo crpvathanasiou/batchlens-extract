@@ -27,3 +27,11 @@ template-setup-steps.txt
 # Explicit document-conversion example outputs can contain confidential content.
 out/
 *.handle.json
+
+# Local document-review acceptance inputs and persistent state contain protected data.
+manual-input/
+.local-review-data/
+
+# Reproducible frontend build output is produced by `npm --prefix frontend run build`.
+src/app/document_review/static/
+frontend/node_modules/

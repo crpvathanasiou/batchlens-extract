@@ -83,6 +83,17 @@ def config(request: Request) -> dict[str, str | int]:
     }
 
 
+@router.get("/documents/review-assets/{asset:path}", include_in_schema=False)
+def review_asset(asset: str) -> FileResponse:
+    from pathlib import Path
+
+    root = (Path(__file__).parent.parent / "document_review" / "static").resolve()
+    requested = (root / asset).resolve()
+    if not requested.is_relative_to(root) or not requested.is_file():
+        raise JobError("REVIEW_BUILD_MISSING", 404)
+    return FileResponse(requested)
+
+
 @router.get("/documents", include_in_schema=False)
 @router.get("/documents/{asset}", include_in_schema=False)
 def ui(asset: str = "index.html") -> FileResponse:

@@ -9,7 +9,12 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 from uuid import uuid4
 
-from app.document_conversion import Source, convert_textract, render_document, render_pages
+from app.document_conversion import Source
+from app.document_conversion.adapter import (
+    convert_and_render,
+    render_full_document_html,
+    render_individual_pages,
+)
 from app.document_conversion.aws import (
     JobHandle,
     S3Source,
@@ -20,13 +25,20 @@ from app.document_conversion.aws import (
 from app.document_conversion.aws import stage_pdf as upload_pdf
 
 
-def write_outputs(raw: object, source: Source, output: Path, page_workers: int = 1) -> None:
-    document = convert_textract(raw, source)
+def write_outputs(raw: object, source: Source, output: Path) -> None:
+    """Convert raw Textract response and write document.json, document.html,
+    and page-NNNN.html artifacts into the output directory.
+
+    Single-threaded; no parallel page processing.
+    """
+    result = convert_and_render(raw, source)
     output.mkdir(parents=True, exist_ok=True)
-    (output / "document.json").write_text(document.model_dump_json(indent=2), encoding="utf-8")
-    (output / "document.html").write_text(render_document(document), encoding="utf-8")
-    for page, html in render_pages(document, page_workers).items():
-        (output / f"page-{page:04d}.html").write_text(html, encoding="utf-8")
+    (output / "document.json").write_text(
+        result.document.model_dump_json(indent=2), encoding="utf-8"
+    )
+    (output / "document.html").write_text(render_full_document_html(result), encoding="utf-8")
+    for page_number, html_page in render_individual_pages(result).items():
+        (output / f"page-{page_number:04d}.html").write_text(html_page, encoding="utf-8")
 
 
 def save_handle(path: Path, handle: JobHandle) -> None:
@@ -52,6 +64,8 @@ def main() -> None:
     offline.add_argument("response", type=Path)
     offline.add_argument("--output", type=Path, required=True)
     offline.add_argument("--source-id", default="saved-textract-response")
+    # --page-workers is accepted for CLI compatibility but ignored; the
+    # Textractor adapter renders pages single-threaded.
     offline.add_argument("--page-workers", type=int, default=1)
     submit = commands.add_parser("submit")
     submit.add_argument("--region", required=True)
@@ -74,7 +88,6 @@ def main() -> None:
             json.loads(args.response.read_text(encoding="utf-8")),
             Source(identity=args.source_id),
             args.output,
-            args.page_workers,
         )
         return
     import boto3

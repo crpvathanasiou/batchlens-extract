@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Pharma batch extraction"
 readme = "README.md"
 packages = [{ include = "app", from = "src" }]
+include = [{ path = "src/app/document_review/static/**/*", format = ["sdist", "wheel"] }]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
@@ -13,6 +14,7 @@ pydantic-settings = "^2.4.0"
 openai = "^2.30.0"
 boto3 = ">=1.40,<2"
 pyjwt = {version = ">=2.10,<3", extras = ["crypto"]}
+amazon-textract-textractor = "1.10.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

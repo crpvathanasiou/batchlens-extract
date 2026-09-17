@@ -36,7 +36,16 @@ Do not treat planned work as implemented.
 
 BatchLens Extract digitizes pharmaceutical manufacturing PDFs into structured, inspectable recipe data, reducing manual transcription and reconciliation work.
 
+It has two core product legs:
+
+| Leg | Status | Intent |
+|-----|--------|--------|
+| Evidence-preserving document preparation and review | CURRENT / IMPLEMENTED in this repository; not production-qualified | `source PDF → Textract raw result → Textractor/conversion → canonical document.json + HTML → human review/revisions/approvals → reviewed HTML/JSON exports`. Text-only review; structure, table identities, geometry, and source relationships stay protected. Document-review approval is not batch release, regulatory release, or a 21 CFR Part 11 electronic signature. |
+| Pharmaceutical information extraction | APPROVED TARGET / not implemented | Extract pharmaceutical facts, recipe/process data, and other structured information from the reviewed document, preserving evidence and provenance links to the source and reviewed revision. |
+
 Built incrementally by a solo AI engineer. User value, implementation effort, and operating cost guide design decisions.
+
+A later rules capability may evaluate extracted facts against versioned FDA, EU, or customer rules. That layer is **not implemented**.
 
 **BatchLens Audit** is a separate planned tool for regulatory and process-rule evaluation over compatible structured recipe/batch data, including input from other sources.
 
@@ -61,19 +70,22 @@ Discussed ~85% effort reduction and ~90% extraction accuracy are **hypotheses**,
 
 ## 3. Current implementation
 
-**Status:** CURRENT / IMPLEMENTED — application foundation only.
+**Status:** CURRENT / IMPLEMENTED — foundation plus conversion and review slices in the working tree. Not production-qualified. Not AWS integration-verified.
 
 - FastAPI application factory with injectable settings
 - Validated configuration with defaults for `APP_ENV`, `APP_VERSION`, `LOG_LEVEL`, plus optional OpenAI settings
 - Application logging under the `app` namespace
 - `/health`, `/ready`, `/version`
 - Python 3.11, Poetry, Ruff, Pyright strict, pytest
-- Multistage Docker + Compose
+- Multistage Docker + Compose, including a Node 22.12 review-frontend build stage
 - Optional async OpenAI wrapper with fake-based tests (unwired to product flows)
+- Optional document conversion (disabled by default): Textract, Textractor 1.10.0, durable DynamoDB/S3/SQS jobs, Cognito-owned upload/jobs shell, canonical `document.json` + unreviewed HTML
+- Optional document review (same feature flag): Vue/TipTap/PDF.js workspace, review API, immutable revisions, page/document approval, reviewed HTML/JSON exports
+- Development/test-only local review harness under `tests/document_review/`
 
 `/ready` is foundation readiness only — not document-processing or AWS dependency proof.
 
-Upload, OCR, extraction, review/graph UI, persistence, queues, authentication, and AWS deployment are **not** implemented. See [04](04_code_map.md).
+Pharmaceutical extraction, recipe graph UI, rules/Audit evaluation, and AWS deployment verification are **not** implemented. Intended production composition uses Cognito, DynamoDB, S3, and SQS; that wiring exists in code and is **not** live-cloud verified. See [04](04_code_map.md) and [03](03_common_handoff.md).
 
 ---
 
@@ -130,7 +142,8 @@ Do not claim certification, guaranteed confidentiality, or AWS-only data residen
 
 - LLM wrapper hardening/redesign until extraction integration is designed
 - Neo4j and GraphRAG
-- BatchLens Audit implementation
+- BatchLens Audit implementation and the future rules layer
+- Persistent audit/provenance ledger (direction recorded in [03](03_common_handoff.md) and [05](05_pipeline_contracts.md); not implemented)
 - Broader enterprise integrations
 
 ### Optional (pending measured quality improvement)
@@ -152,7 +165,7 @@ Do not duplicate full decision lists elsewhere; follow the owning document.
 | [06](06_security_and_data_handling.md) | Retention durations, regions, tenancy, identity provider, encryption/keys, egress, provider processing/training/destinations |
 | [07](07_extraction_evaluation.md) | Sample counts, matching/tolerance rules, numerical thresholds, evaluation-set versions |
 | [08](08_check_selection_strategy.md) | Initial check inventory, severity/blocking policy, scoring (if any) |
-| Product / deployment (this file + design) | OCR/parser and extraction model/provider; frontend; queue/persistence/auth; detailed AWS topology beyond approved direction |
+| Product / deployment (this file + design) | OCR/parser and extraction model/provider; queue/persistence/auth details beyond the existing intended Cognito/DynamoDB/S3/SQS composition; live AWS topology verification |
 
 ---
 
@@ -170,20 +183,26 @@ Detailed topology follows processing requirements. Documentation-only and local 
 
 | Area | Current state |
 |------|---------------|
-| Language | Python 3.11.x (`>=3.11,<3.12`) |
+| Language | Python 3.11.x (`>=3.11,<3.12`); Node.js 22.12+ for the review frontend build |
 | API | FastAPI 0.116.2 / Starlette 0.48.0 (B2.1 working tree) |
-| Packaging | Poetry |
+| Packaging | Poetry; npm lockfile for `frontend/` |
 | Validation | Pydantic v2 / Pydantic Settings |
-| Quality | Ruff, Pyright strict, pytest |
-| Containers | Multistage Dockerfile, Compose |
+| Quality | Ruff, Pyright strict, pytest; frontend vue-tsc + vitest |
+| Containers | Multistage Dockerfile (Node review builder + Python), Compose |
+| Conversion | Amazon Textractor 1.10.0; boto3 Textract/S3/DynamoDB/SQS (feature-flagged) |
+| Review UI | Vue 3, TipTap 3, PDF.js (feature-flagged) |
 | Optional LLM asset | Async OpenAI wrapper (unwired) |
 
 ---
 
 ## 9. Next design step
 
-After documentation review (D2), **M-Design** develops pipeline/contracts and the first slice primarily in [05](05_pipeline_contracts.md), with security, evaluation, and check-selection implications recorded in [06](06_security_and_data_handling.md)–[08](08_check_selection_strategy.md).
+Operational current state: [03_common_handoff.md](03_common_handoff.md).
 
-Defining and reviewing schemas is a purpose of M-Design. Schemas remain open during documentation initialization (D2). Provider and topology decisions may stay open until their requirements are understood.
+**Immediate next (from 03):** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Do not implement audit logging, extraction, rules, or deployment in that step.
 
-Do not implement the pipeline in documentation-only work.
+**Later:** pharmaceutical-extraction **M-Design** develops remaining pipeline/contracts and the extraction slice primarily in [05](05_pipeline_contracts.md), with security, evaluation, and check-selection implications recorded in [06](06_security_and_data_handling.md)–[08](08_check_selection_strategy.md).
+
+Conversion and document-review contracts already exist in code. Extraction schemas, provider choices, and detailed AWS topology may stay open until their requirements are understood.
+
+Do not implement extraction, the rules layer, or the audit ledger in documentation-only work.

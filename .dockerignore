@@ -16,3 +16,7 @@ notes/
 
 out/
 *.handle.json
+manual-input/
+.local-review-data/
+tests/document_review/
+frontend/node_modules/

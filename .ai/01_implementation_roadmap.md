@@ -20,12 +20,15 @@ Do not invent a full implementation schedule, deadline, or milestone estimates.
 
 - FastAPI factory, injectable settings, logging, `/health` `/ready` `/version`
 - Python 3.11 / Poetry / Ruff / Pyright strict / pytest
-- Multistage Docker + Compose
+- Multistage Docker + Compose, including Node 22.12 review-frontend build
 - Optional unwired OpenAI wrapper with fake-based tests
+- Optional document conversion and document-review slices in the working tree (feature-flagged; local harness accepted; not AWS integration-verified)
 
 Scripts: `lint`, `format-check`, `format`, `typecheck`, `test`, `quality`, `dev`, `docker-up`, `docker-down` under `scripts/`.
 
-Gaps: upload, OCR, extraction, review/graph UI, persistence, queues, auth, AWS deploy.
+Remaining gaps: pharmaceutical extraction, recipe graph UI, rules/Audit, persistent audit ledger, AWS deploy verification.
+
+Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations: [04_code_map.md](04_code_map.md).
 
 ---
 
@@ -37,7 +40,8 @@ Gaps: upload, OCR, extraction, review/graph UI, persistence, queues, auth, AWS d
 | B2.1 — FastAPI/Starlette security update | Starlette ≥ 0.47.2 via FastAPI + lock | MUST | DONE (working tree; see [03](03_common_handoff.md)) |
 | D — Five-file documentation init | `.ai/` 00–04 reflect BatchLens Extract | MUST | DONE |
 | D2 — Nine-document documentation set | Align 00–04; create 05–08 design docs | MUST | DONE (docs implemented/checked; awaiting user review / Git commit) |
-| M-Design — Pipeline & contracts design | Pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
+| Conversion + HITL review slices | Textract/Textractor conversion, review workspace, local harness | MUST | DONE in working tree for local acceptance; not cloud-verified (see [03](03_common_handoff.md)) |
+| M-Design — Pipeline & contracts design | Remaining extraction-pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
 | LLM wrapper hardening / redesign | Harden/redesign for extraction integration | — | DEFERRED |
 
 ```text
@@ -102,6 +106,20 @@ Evidence: see [03_common_handoff.md](03_common_handoff.md).
 
 ---
 
+### Conversion + HITL review slices
+
+**Status:** DONE in working tree for local acceptance; not cloud-verified
+**Priority:** MUST
+**Dependencies:** M0 foundation; conversion contracts in code
+
+**Objective:** Evidence-preserving PDF conversion and optional human document review.
+
+Implemented in the working tree: Textract/Textractor conversion, durable jobs, Vue/TipTap/PDF.js review workspace, review API, local harness. Local visual/functional acceptance is recorded in [03](03_common_handoff.md). This is not AWS integration verification, production qualification, or Part 11 evidence.
+
+Pharmaceutical extraction and the rules/Audit layer remain out of this slice.
+
+---
+
 ### M-Design — Document-processing pipeline and data contracts
 
 **Status:** PLANNED
@@ -127,9 +145,9 @@ Also update implications in:
 - Synchronization of JSON, structured UI, and graph view
 - First demonstrable end-to-end slice and evaluation criteria
 
-**May remain open until requirements are clearer:** OCR/provider, frontend, detailed AWS topology, queues/persistence/auth specifics.
+**May remain open until requirements are clearer:** extraction model/provider, detailed AWS topology verification, remaining persistence/auth specifics beyond the existing intended composition.
 
-**Non-goals:** Implementing the pipeline; hardening the LLM wrapper; introducing Neo4j/GraphRAG; inventing acceptance thresholds without evaluation design.
+**Non-goals:** Implementing pharmaceutical extraction in this design milestone; hardening the LLM wrapper; introducing Neo4j/GraphRAG; inventing acceptance thresholds without evaluation design; implementing the audit ledger.
 
 **Definition of Done (design):**
 
@@ -155,11 +173,13 @@ M0 (DONE)
 → B2.1 (DONE in working tree)
 → D five-file docs (DONE)
 → D2 nine-document set (DONE — awaiting review)
-→ M-Design pipeline/contracts (next after review)
-→ First implementation slice (after design; not yet defined)
+→ Conversion + HITL review slices (DONE in working tree; local acceptance complete; not cloud-verified)
+→ Intended-use / regulatory-boundary and audit/provenance design (next; no audit-log implementation)
+→ M-Design remaining extraction pipeline/contracts
+→ Extraction implementation slice (after design; not yet defined)
 ```
 
-Safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product, wrapper hardening, enterprise integrations.
+Safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product / rules layer, audit-ledger implementation, wrapper hardening, enterprise integrations.
 
 ---
 
@@ -167,5 +187,6 @@ Safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product, wrapper hardening,
 
 Operational detail: [03_common_handoff.md](03_common_handoff.md).
 
-**Current:** D2 documentation implemented/checked; awaiting user review.
-**Next after review:** M-Design — develop pipeline/contracts and first slice using 05–08.
+**Current:** Conversion and HITL review slices are implemented in the working tree. Local harness visual/functional acceptance is complete for the behaviours listed in 03. AWS/production integration remains unverified.
+
+**Next:** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Extraction M-Design remains later.

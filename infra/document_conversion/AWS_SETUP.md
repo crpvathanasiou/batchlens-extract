@@ -94,6 +94,11 @@ The local image starts with the feature disabled. This proves baseline container
 
 Templates create a fresh VPC with two subnets, an internet gateway, free-of-hourly-charge S3/DynamoDB gateway endpoint types, an HTTPS ALB, one API task (0.25 vCPU / 0.5 GiB), one worker task (1 vCPU / 4 GiB), private versioned S3, DynamoDB, work queue and DLQ, Cognito, IAM task roles, logs and two queue alarms. Check current endpoint pricing before treating network costs as zero overall.
 
+The template includes a narrowly scoped API-role `s3:PutObject` permission for
+`documents/results/*/review/*`. Existing deployments must receive that template update through
+the normal reviewed CloudFormation workflow before production review saves or exports can work.
+The local review harness uses file-backed test storage and needs no AWS credentials or IAM update.
+
 **Network choice:** ECS tasks use public IPv4 addresses for outbound HTTPS, no NAT Gateway. API inbound is only from the ALB security group; worker has no inbound rule. ALB ingress is limited to `$AllowedCidr`. Tasks have no SSH endpoint. S3 is private, not a public website. The ALB terminates TLS and forwards HTTP within this VPC security-group boundary; this is not TLS all the way to the container. Outbound HTTPS is not domain-allowlisted. Public IPv4 and ALB costs still apply. For private-subnet production networking, separately design either NAT or all required interface endpoints plus Cognito JWKS access; this template does not silently provision either option.
 
 Create the exact parameter file in UTF-8 (it contains resource identifiers, no secrets):

@@ -20,7 +20,8 @@ Data protection extends to **derived** artifacts, not only original PDFs.
 | Reports | Human-readable summaries of results/findings |
 | Optional enrichment | Embeddings, catalog snapshots, retrieved snippets |
 | Temporary artifacts | Working files, intermediate conversions |
-| Diagnostic records | Logs, traces, error reports (minimized) |
+| Diagnostic records | Logs, traces, error reports (minimized; stdout operational logs only today) |
+| Future audit ledger | Append-only event references (APPROVED TARGET / not implemented; see [05](05_pipeline_contracts.md) §6) |
 
 Historical traceability ([02](02_code_quality_standards.md)) must coexist with retention/deletion policy here. Do **not** imply unlimited retention of confidential content.
 
@@ -32,8 +33,8 @@ Describe required access boundaries **without** selecting services or claiming t
 
 ```text
 Users / customers
-→ Application (API / future UI)
-→ Storage and workers (when introduced)
+→ Application (API / review UI)
+→ Storage and workers (when the document feature is enabled)
 → External providers (OCR, LLM, hosting, etc.)
 ```
 
@@ -78,11 +79,12 @@ The UI should communicate only **implemented** protections with verifiable evide
 | Non-root container user | Dockerfile uses non-root `appuser` (baseline design) | Confirm image still runs as non-root | "Container runs as non-root" — only after verified for the shipped image |
 | Foundation health endpoints | `/health`, `/ready`, `/version` implemented and historically smoke-tested | Re-verify after runtime changes | Liveness/readiness as implemented — not "document processing ready" |
 | Dependency security update (Starlette) | B2.1 report: Starlette 0.48.0 | Keep lock reviewed on changes | Do not claim "fully hardened" product security |
-| Authentication / authorization | **Absent** | Design + implement | **No claim** |
-| Encrypted storage / KMS | **Absent** | Design + implement | **No claim** |
+| Authentication / authorization | Cognito JWT verification and ownership-hiding job lookup exist in code (`document_jobs.auth`, documents/review APIs). Local harness uses synthetic `local-test-reviewer`. | Live Cognito authorization, token revocation, and production IAM | **No production/auth claim**. Do not describe the local harness as Cognito proof |
+| Encrypted storage / KMS | IaC/settings may name encryption; **not verified** | Design + verify | **No claim** |
 | Provider data-processing agreements | **Not verified** | Obtain and record | **No claim** |
 | Isolation / penetration tests | **Not verified** | Perform if required | **No claim** |
-| Document retention/deletion controls | **Absent** | Design in M-Design+ | **No claim** |
+| Document retention/deletion controls | Job/review expiry fields exist in contracts; deletion workflows **absent** | Design in remaining M-Design+ | **No claim** |
+| Persistent audit ledger | **Absent** (direction only in [05](05_pipeline_contracts.md) §6) | Intended-use / provenance design before implementation | **No claim**. Stdout logs are not the audit ledger |
 
 Populate only from observed baseline facts. Do not invent provider policies or production security.
 
@@ -93,9 +95,10 @@ Populate only from observed baseline facts. Do not invent provider policies or p
 - Retention durations and deletion workflows
 - Data regions and residency statements
 - Tenancy / customer isolation model
-- Identity provider and authorization model
+- Identity provider and authorization model (Cognito is the implemented intended provider in code; live verification **OPEN**)
 - Encryption and key management configuration
 - Egress controls and allowed external destinations
 - Provider processing, retention, and training terms before confidential use
+- Audit-ledger location, retention, and access (direction in [05](05_pipeline_contracts.md); implementation deferred)
 
 Link lifecycle artifact definitions to [05](05_pipeline_contracts.md). Do not mandate paid security tooling in this document.

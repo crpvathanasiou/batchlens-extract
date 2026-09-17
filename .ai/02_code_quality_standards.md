@@ -204,8 +204,9 @@ Python: 3.11.x  (>=3.11,<3.12 in pyproject.toml)
 FastAPI + Uvicorn
 Poetry
 Pydantic v2 + Pydantic Settings
-Docker + Docker Compose
+Docker + Docker Compose (Node 22.12 review-frontend builder stage)
 Ruff + Pyright (strict) + pytest
+Optional document conversion + document review (feature-flagged; not AWS-verified)
 Optional async OpenAI LLM wrapper (present, not wired to product flows)
 ```
 
@@ -251,13 +252,18 @@ Current package root:
 ```text
 src/app/
 ├── api/
-├── llm/          # optional reusable asset; not product extraction
+├── document_conversion/   # Textract/Textractor → canonical Document + unreviewed HTML
+├── document_jobs/         # durable conversion jobs, Cognito, Dynamo/S3/SQS adapters
+├── document_review/       # review domain, mapping, storage, reviewed exports
+├── llm/                   # optional reusable asset; not product extraction
 ├── exceptions.py
 ├── logging_config.py
 ├── settings.py
 └── main.py
 
+frontend/                  # Vue 3 / TipTap 3 / PDF.js review workspace
 tests/
+tests/document_review/     # review tests + local harness (not production)
 ```
 
 Additional directories (application, domain, infrastructure, etc.) should be created only when they contain real responsibilities.
@@ -1813,4 +1819,5 @@ In particular:
 * Documented desired errors, retries, tracing, or lifecycle behaviour do **not** prove the optional OpenAI wrapper implements them fully.
 * Those standards must **not** trigger wrapper hardening during documentation tasks (D2). Wrapper hardening remains deferred until extraction integration is designed ([01](01_implementation_roadmap.md)).
 * Product security requirements in [06](06_security_and_data_handling.md) are not current implementation claims unless the evidence register says so.
-* Pipeline lifecycle meanings in [05](05_pipeline_contracts.md) are approved semantics for design — not implemented application state machines.
+* Pipeline lifecycle meanings in [05](05_pipeline_contracts.md) remain approved semantics for **extraction** design. Conversion job phases and document-review revision/approval state machines **are** implemented in code; they are not production-qualified and are not pharmaceutical-extraction lifecycle.
+* A future append-only audit ledger is recorded as direction only. Structured stdout logs are not that ledger.

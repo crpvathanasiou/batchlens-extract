@@ -461,6 +461,11 @@ Resources:
               Fn::Sub: ${Bucket.Arn}/documents/incoming/*
           - Effect: Allow
             Action:
+            - s3:PutObject
+            Resource:
+              Fn::Sub: ${Bucket.Arn}/documents/results/*/review/*
+          - Effect: Allow
+            Action:
             - dynamodb:GetItem
             - dynamodb:PutItem
             - dynamodb:UpdateItem

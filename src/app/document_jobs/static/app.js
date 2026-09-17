@@ -4,6 +4,8 @@ let token = null;
 let config;
 let polling = false;
 let uploading = false;
+let reviewController = null;
+let reviewDirty = false;
 const notice = message => { byId("notice").textContent = message; };
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) }, cache: "no-store" });
@@ -15,11 +17,49 @@ async function api(path, options = {}) {
   return body;
 }
 function logout() {
+  if (reviewDirty && !confirm("Sign out and discard unsaved review edits?")) return;
+  closeReview();
   token = null;
   byId("workspace").hidden = true;
   byId("login").hidden = false;
   byId("logout").hidden = true;
   byId("jobs").replaceChildren();
+}
+function closeReview() {
+  if (reviewController && typeof reviewController.unmount === "function") reviewController.unmount();
+  reviewController = null;
+  reviewDirty = false;
+  byId("review-root").replaceChildren();
+  byId("review-workspace").hidden = true;
+  if (token) byId("workspace").hidden = false;
+  if (location.hash.startsWith("#review=")) history.replaceState(null, "", location.pathname);
+}
+async function openReview(job) {
+  if (!token) return;
+  byId("workspace").hidden = true;
+  byId("review-workspace").hidden = false;
+  location.hash = `review=${encodeURIComponent(job.id)}`;
+  try {
+    const review = await import("/documents/review-assets/review.js");
+    reviewController = review.mountReviewWorkspace(byId("review-root"), {
+      jobId: job.id,
+      filename: job.filename,
+      getAccessToken: () => token,
+      onAuthenticationRequired: () => {
+        byId("login").hidden = false;
+        notice("Your session expired. Sign in again; unsaved review edits remain in this tab.");
+      },
+      onDirtyChange: dirty => { reviewDirty = dirty; },
+      onBack: () => {
+        if (!reviewDirty || confirm("Discard unsaved review edits?")) {
+          closeReview();
+          refresh();
+        }
+      },
+    });
+  } catch (_) {
+    byId("review-root").textContent = "The review workspace has not been built. Run npm --prefix frontend run build; original unreviewed downloads remain available.";
+  }
 }
 byId("logout").onclick = logout;
 byId("login").onsubmit = async event => {
@@ -34,14 +74,21 @@ byId("login").onsubmit = async event => {
     token = body.AuthenticationResult.AccessToken;
     byId("login").hidden = true;
     byId("logout").hidden = false;
-    byId("workspace").hidden = false;
+    byId("workspace").hidden = Boolean(reviewController);
     notice("Signed in. Your access token stays in this tab's memory.");
+    if (reviewController) return;
     await refresh();
+    const reviewId = location.hash.startsWith("#review=") ? decodeURIComponent(location.hash.slice(8)) : null;
+    if (reviewId) {
+      const jobs = await api("/api/v1/documents/jobs");
+      const job = jobs.find(item => item.id === reviewId);
+      if (job) await openReview(job);
+    }
   } catch (error) { notice(error.message); }
   finally { byId("password").value = ""; }
 };
 async function refresh() {
-  if (!token || polling) return;
+  if (!token || polling || reviewController) return;
   polling = true;
   try {
     const activeToken = token;
@@ -73,8 +120,8 @@ async function refresh() {
       }
       if (job.artifacts.length) {
         const select = document.createElement("select"); select.setAttribute("aria-label", "Artifact");
-        for (const name of job.artifacts) { const option = document.createElement("option"); option.value = name; option.textContent = name; select.append(option); }
-        const download = document.createElement("button"); download.textContent = "Download";
+        for (const name of job.artifacts) { const option = document.createElement("option"); option.value = name; option.textContent = `Original · unreviewed · ${name}`; select.append(option); }
+        const download = document.createElement("button"); download.textContent = "Download original · unreviewed";
         download.onclick = async () => {
           try {
             const result = await api(`/api/v1/documents/jobs/${job.id}/artifacts/${encodeURIComponent(select.value)}`);
@@ -82,6 +129,11 @@ async function refresh() {
           } catch(error) { notice(error.message); }
         };
         row.append(select, download);
+      }
+      if ((job.phase === "SUCCEEDED" || job.phase === "PARTIAL_SUCCESS") && job.artifacts.includes("document.json")) {
+        const review = document.createElement("button"); review.textContent = "Review";
+        review.onclick = () => openReview(job);
+        row.append(review);
       }
       fragment.append(row);
     }

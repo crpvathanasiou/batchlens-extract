@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Approved semantic requirements; detailed contract design **OPEN**; pipeline **not implemented**.
+**Status:** Approved semantic requirements for extraction remain **OPEN** in detail. Document conversion and optional human review **are implemented** in code (not production-qualified). Pharmaceutical extraction, rules/Audit evaluation, and a persistent audit ledger are **not implemented**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -104,6 +104,17 @@ Keep **operational errors** (engineering failures) distinct from **data-quality 
 - Graph nodes/edges are generated deterministically from the versioned model — not a separate LLM reconstruction.
 - Neo4j / GraphRAG: not required ([00](00_project_reference.md)).
 
+### Future audit ledger (APPROVED TARGET / not implemented)
+
+Initial persistence target, recorded as direction only — **no implementation in current work**:
+
+- One canonical append-only JSON Lines audit ledger, for example `.audit/audit-events.jsonl`, under a persistent application-data directory.
+- The ledger must remain outside source control and Docker images.
+- Operational logs remain structured stdout logs, not another persistent audit file ([02](02_code_quality_standards.md) §14.5).
+- Future audit events should store references, IDs, hashes, revision links, actors, times, actions, and outcomes — not duplicate full PDFs or complete JSON artifacts.
+- A future AWS/Azure adapter should persist the same canonical event schema as append-only events or rows.
+- A hash chain can be tamper-evident, but is not proof of tamper-proof storage or 21 CFR Part 11 compliance.
+
 ---
 
 ## 7. Extract vs Audit boundary
@@ -118,13 +129,14 @@ Shared versioned contract schema and deployment separation: **OPEN**.
 
 ## 8. Open decisions
 
-- Detailed stage inputs/outputs and orchestration order
-- Identifiers and serialization formats (including JSON schemas)
-- Evidence location format (page/region/text span/other)
-- Exact lifecycle transition names and allowed transitions
-- Versioning mechanism for results and review revisions
-- Retry / resume behavior after partial failure
+- Detailed stage inputs/outputs and orchestration order for **pharmaceutical extraction**
+- Identifiers and serialization formats for extraction results (including JSON schemas)
+- Evidence location format for extracted facts (page/region/text span/other)
+- Exact lifecycle transition names and allowed transitions for extraction runs
+- Versioning mechanism for **extracted** results (document-review revisions are implemented in code; see [04](04_code_map.md))
+- Retry / resume behavior after partial extraction failure
 - Extract–Audit contract fields and versioning
-- First demonstrable end-to-end slice scope
+- First demonstrable end-to-end **extraction** slice scope
+- Audit-ledger event schema (direction in §6; implementation deferred)
 
-These are purposes of **M-Design** after D2 review ([01](01_implementation_roadmap.md)). They remain open during documentation initialization.
+These remain purposes of remaining **M-Design** work after intended-use / regulatory-boundary and audit/provenance design ([01](01_implementation_roadmap.md), [03](03_common_handoff.md)). Conversion and review contracts already exist in code and must not be silently redesigned here.

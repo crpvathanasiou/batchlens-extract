@@ -9,7 +9,7 @@ import pytest
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
 
-from app.document_conversion import convert_textract
+from app.document_conversion.adapter import convert_and_render
 from app.document_conversion.aws import (
     AwsError,
     JobHandle,
@@ -58,7 +58,11 @@ def test_submit_and_pagination_boundary_relationship_partial_success() -> None:
         {
             "JobStatus": "PARTIAL_SUCCESS",
             "DocumentMetadata": {"Pages": 1},
-            "Blocks": [block("LAYOUT_TEXT", "layout", ("word",))],
+            # Page 1 block + LAYOUT_TEXT that references line "line".
+            "Blocks": [
+                block("PAGE", "p1", ("layout", "line")),
+                block("LAYOUT_TEXT", "layout", ("line",)),
+            ],
             "NextToken": "next",
             "Warnings": [{"ErrorCode": "PAGE_ERROR", "Pages": [1]}],
         },
@@ -69,14 +73,19 @@ def test_submit_and_pagination_boundary_relationship_partial_success() -> None:
         {
             "JobStatus": "PARTIAL_SUCCESS",
             "DocumentMetadata": {"Pages": 1},
-            "Blocks": [block("WORD", "word", Text="42.00 mg")],
+            # LINE + WORD arrive in the second paginated response; collect() merges them.
+            "Blocks": [
+                block("LINE", "line", ("word",), Text="42.00 mg"),
+                block("WORD", "word", Text="42.00 mg"),
+            ],
         },
         {"JobId": "provider-job", "MaxResults": 1000, "NextToken": "next"},
     )
     with stub:
         adapter = TextractAdapter(client, "eu-west-1")
         result = adapter.collect(adapter.submit(source, "request-token"))
-        doc = convert_textract(result.raw, source.document_source())
+        conversion = convert_and_render(result.raw, source.document_source())
+        doc = conversion.document
         assert doc.status == "PARTIAL_SUCCESS" and doc.pages[0].elements[0].text == "42.00 mg"
         assert any(w.code == "AWS_PAGE_ERROR" for w in doc.warnings)
         assert "NextToken" not in result.raw

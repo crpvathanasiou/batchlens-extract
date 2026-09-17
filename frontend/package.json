@@ -1,0 +1,32 @@
+{
+  "name": "@batchlens/review-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.31.3",
+    "@tiptap/extension-table": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "@tiptap/vue-3": "3.31.3",
+    "pdfjs-dist": "5.4.624",
+    "vue": "3.5.42"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.3",
+    "@vitejs/plugin-vue": "6.0.9",
+    "jsdom": "28.0.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vitest": "5.0.1",
+    "vue-tsc": "3.3.11"
+  }
+}

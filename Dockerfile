@@ -1,7 +1,19 @@
 # syntax=docker/dockerfile:1.6
 
 ############################
-# Builder stage
+# Review frontend builder
+############################
+FROM node:22.12-bookworm-slim AS review-builder
+
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN npm --prefix frontend ci
+COPY frontend ./frontend
+COPY src ./src
+RUN npm --prefix frontend run build
+
+############################
+# Python builder stage
 ############################
 FROM python:3.11-slim AS builder
 
@@ -29,6 +41,7 @@ RUN poetry install --only main --no-root --no-interaction --no-ansi
 # README.md is required because pyproject.toml declares it as the package readme.
 COPY README.md ./
 COPY src ./src
+COPY --from=review-builder /app/src/app/document_review/static ./src/app/document_review/static
 RUN poetry install --only-root --no-interaction --no-ansi
 
 ############################

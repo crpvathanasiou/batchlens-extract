@@ -6,9 +6,13 @@ import time
 from collections.abc import Callable
 from uuid import uuid4
 
-from app.document_conversion import ConversionError, ConversionLimits, convert_textract
+from app.document_conversion import ConversionError, ConversionLimits
+from app.document_conversion.adapter import (
+    convert_and_render,
+    render_full_document_html,
+    render_individual_pages,
+)
 from app.document_conversion.aws import AwsError, S3Source, TextractAdapter
-from app.document_conversion.html import render_document, render_pages
 from app.document_jobs.contracts import (
     ACTIVE,
     TERMINAL,
@@ -282,14 +286,15 @@ class JobService:
                 if job.raw is None:
                     raise JobError("PERSISTED_RAW_MISSING")
                 heartbeat()
-                document = convert_textract(
+                result = convert_and_render(
                     json.loads(self.objects.read(job.raw)),
                     job.source.document_source(),
                     ConversionLimits(
                         max_blocks=self.settings.max_blocks, max_pages=self.settings.max_pages
                     ),
                 )
-                pages = render_pages(document, self.settings.page_workers)
+                document = result.document
+                pages = render_individual_pages(result)
                 artifacts = {"textract.json": job.raw}
                 artifacts["document.json"] = self.objects.put(
                     job.id,
@@ -300,13 +305,15 @@ class JobService:
                 artifacts["document.html"] = self.objects.put(
                     job.id,
                     "document.html",
-                    render_document(document).encode(),
+                    render_full_document_html(result).encode(),
                     "text/html",
                 )
-                for number, html in pages.items():
+                for number, html_page in pages.items():
                     heartbeat()
                     name = f"page-{number:04d}.html"
-                    artifacts[name] = self.objects.put(job.id, name, html.encode(), "text/html")
+                    artifacts[name] = self.objects.put(
+                        job.id, name, html_page.encode(), "text/html"
+                    )
                 job = self.save(
                     job.model_copy(
                         update={
