@@ -161,6 +161,22 @@ describe('FindingsPanel decision indicators', () => {
   })
 })
 
+function scopeSelect(host: HTMLElement): HTMLSelectElement {
+  return host.querySelector('select[aria-label="Finding scope"]') as HTMLSelectElement
+}
+
+async function setScope(host: HTMLElement, value: 'all' | 'page'): Promise<HTMLSelectElement> {
+  const scope = scopeSelect(host)
+  scope.value = value
+  scope.dispatchEvent(new Event('change'))
+  await nextTick()
+  return scope
+}
+
+function findingCodes(host: HTMLElement): string[] {
+  return [...host.querySelectorAll('.bl-finding__code')].map((el) => el.textContent?.trim() ?? '')
+}
+
 describe('FindingsPanel counts and decision help', () => {
   function countLabels(host: HTMLElement): string[] {
     return [...host.querySelectorAll('.bl-findings__counts > span')].map(
@@ -177,14 +193,12 @@ describe('FindingsPanel counts and decision help', () => {
     const mounted = await mountPanel({ findings, activePage: 1 })
 
     expect(countLabels(mounted.host)).toEqual(['Document findings 3', 'Page findings 2'])
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(2)
 
-    const scope = mounted.host.querySelector('select[aria-label="Finding scope"]') as HTMLSelectElement
-    scope.value = 'page'
-    scope.dispatchEvent(new Event('change'))
-    await nextTick()
+    await setScope(mounted.host, 'all')
 
     expect(countLabels(mounted.host)).toEqual(['Document findings 3', 'Page findings 2'])
-    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(2)
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(3)
   })
 
   it('updates the page findings count when the active page changes', async () => {
@@ -226,6 +240,143 @@ describe('FindingsPanel counts and decision help', () => {
     expect(mounted.host.querySelector('#bl-help-acknowledge-limitation')?.textContent).toBe(
       ACTION_HELP.ACKNOWLEDGED_LIMITATION,
     )
+  })
+})
+
+describe('FindingsPanel scope filter', () => {
+  it('defaults to This page on a fresh mount', async () => {
+    const findings = [
+      findingWithDecision(null, { finding_id: 'f1', pages: [1] }),
+      findingWithDecision(null, { finding_id: 'f2', pages: [2] }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 1 })
+    const scope = scopeSelect(mounted.host)
+
+    expect(scope.value).toBe('page')
+    expect(scope.options[scope.selectedIndex]?.textContent).toBe('This page')
+    expect(findingCodes(mounted.host)).toEqual(['Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY'])
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(1)
+  })
+
+  it('updates the page-filtered list when the active page changes', async () => {
+    const findings = [
+      findingWithDecision(null, {
+        finding_id: 'f-page-1',
+        pages: [1],
+        code: 'UNINTERPRETED_LAYOUT_FIGURE',
+      }),
+      findingWithDecision(null, { finding_id: 'f-page-2a', pages: [2] }),
+      findingWithDecision(null, { finding_id: 'f-page-2b', pages: [2] }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 1 })
+    expect(findingCodes(mounted.host)).toEqual(['Finding: UNINTERPRETED LAYOUT FIGURE'])
+
+    mounted.props.activePage = 2
+    await nextTick()
+
+    expect(scopeSelect(mounted.host).value).toBe('page')
+    expect(findingCodes(mounted.host)).toEqual([
+      'Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY',
+      'Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY',
+    ])
+  })
+
+  it('keeps an explicit All warnings selection across page navigation', async () => {
+    const findings = [
+      findingWithDecision(null, { finding_id: 'f1', pages: [1] }),
+      findingWithDecision(null, { finding_id: 'f2', pages: [2] }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 1 })
+    await setScope(mounted.host, 'all')
+    expect(scopeSelect(mounted.host).value).toBe('all')
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(2)
+
+    mounted.props.activePage = 2
+    await nextTick()
+
+    expect(scopeSelect(mounted.host).value).toBe('all')
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(2)
+  })
+
+  it('shows the current active page after switching back to This page', async () => {
+    const findings = [
+      findingWithDecision(null, {
+        finding_id: 'f1',
+        pages: [1],
+        code: 'UNINTERPRETED_LAYOUT_FIGURE',
+      }),
+      findingWithDecision(null, { finding_id: 'f2', pages: [2] }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 1 })
+    await setScope(mounted.host, 'all')
+    mounted.props.activePage = 2
+    await nextTick()
+    await setScope(mounted.host, 'page')
+
+    expect(scopeSelect(mounted.host).value).toBe('page')
+    expect(findingCodes(mounted.host)).toEqual(['Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY'])
+  })
+
+  it('shows the empty state on a page with no findings instead of document-wide findings', async () => {
+    const findings = [
+      findingWithDecision(null, { finding_id: 'f1', pages: [1] }),
+      findingWithDecision(null, { finding_id: 'f2', pages: [1, 2] }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 3 })
+
+    expect(mounted.host.querySelectorAll('.bl-finding')).toHaveLength(0)
+    expect(mounted.host.querySelector('.bl-muted')?.textContent).toBe('No findings in this view.')
+    expect(scopeSelect(mounted.host).value).toBe('page')
+  })
+
+  it('includes multi-page findings on each associated page, including figure and non-suggestion items', async () => {
+    const findings = [
+      findingWithDecision(null, {
+        finding_id: 'f-figure',
+        pages: [5],
+        code: 'UNINTERPRETED_LAYOUT_FIGURE',
+        suggested_replacement: null,
+      }),
+      findingWithDecision(null, {
+        finding_id: 'f-tol-a',
+        pages: [5],
+        code: 'POSSIBLE_TOLERANCE_SYMBOL_AMBIGUITY',
+      }),
+      findingWithDecision(null, {
+        finding_id: 'f-tol-b',
+        pages: [5],
+        code: 'POSSIBLE_TOLERANCE_SYMBOL_AMBIGUITY',
+        suggested_replacement: null,
+      }),
+      findingWithDecision(null, {
+        finding_id: 'f-shared',
+        pages: [4, 5],
+        code: 'UNINTERPRETED_LAYOUT_FIGURE',
+        suggested_replacement: null,
+      }),
+      findingWithDecision(null, {
+        finding_id: 'f-other',
+        pages: [1],
+        code: 'UNINTERPRETED_LAYOUT_FIGURE',
+        suggested_replacement: null,
+      }),
+    ]
+    const mounted = await mountPanel({ findings, activePage: 5 })
+    expect(findingCodes(mounted.host)).toEqual([
+      'Finding: UNINTERPRETED LAYOUT FIGURE',
+      'Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY',
+      'Finding: POSSIBLE TOLERANCE SYMBOL AMBIGUITY',
+      'Finding: UNINTERPRETED LAYOUT FIGURE',
+    ])
+    expect(
+      [...mounted.host.querySelectorAll('button')].filter(
+        (button) => button.textContent?.trim() === 'Apply suggested ±',
+      ),
+    ).toHaveLength(1)
+
+    mounted.props.activePage = 4
+    await nextTick()
+    expect(findingCodes(mounted.host)).toEqual(['Finding: UNINTERPRETED LAYOUT FIGURE'])
   })
 })
 

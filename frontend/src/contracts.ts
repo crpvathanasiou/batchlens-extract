@@ -183,6 +183,52 @@ export interface UpdateReviewBody {
   expected_revision: string | null
   changes: RequestedChange[]
   decisions: FindingDecisionRequest[]
+  operation_id?: string | null
+}
+export interface ReviewContext {
+  schema_version: 1
+  context_id: string
+  job_id: string
+  actor: string
+  baseline: Artifact
+}
+export interface SaveReceipt {
+  operation_id: string
+  revision_id: string
+  generation: number
+  replayed: boolean
+}
+export interface ReconciliationResult {
+  status: 'COMMITTED' | 'UNRESOLVED'
+  head_revision_id: string | null
+  head_generation: number
+  receipt: SaveReceipt | null
+}
+export interface OperationLookup {
+  context: ReviewContext
+  reconciliation: ReconciliationResult
+}
+export interface SaveDispatch {
+  operationId: string
+  contextId: string
+  body: string
+}
+export interface AttemptedTextItem {
+  pageLabel: string
+  text: string
+}
+export interface AttemptedDecisionItem {
+  actionLabel: string
+  findingLabel: string
+  pageLabel: string
+  replacement: string | null
+  note: string | null
+}
+export interface AttemptedWorkView {
+  changes: RequestedChange[]
+  decisions: FindingDecisionRequest[]
+  textItems: AttemptedTextItem[]
+  decisionItems: AttemptedDecisionItem[]
 }
 export type AccessTokenProvider = () => string | null | Promise<string | null>
 export interface ReviewWorkspaceOptions {

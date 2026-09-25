@@ -100,6 +100,14 @@ def _headers(token: str = TOKEN) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def local_review_paths(root: Path) -> dict[str, Path]:
+    return _fixture(root)
+
+
+def local_review_headers(token: str = TOKEN) -> dict[str, str]:
+    return _headers(token)
+
+
 def test_startup_reports_every_missing_absolute_input(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -234,6 +242,14 @@ def test_real_routes_persist_restart_history_and_originals(tmp_path: Path) -> No
     restarted = _client(paths)
     restored = restarted.get(review_path, headers=_headers()).json()
     assert restored["revision_id"] == approved_id
+    context = restarted.get(f"{review_path}/context", headers=_headers())
+    assert context.status_code == 200
+    assert context.json()["job_id"] == JOB_ID
+    assert context.json()["actor"] == OWNER
+    sidecar = json.loads((paths["data_dir"] / "review-context.json").read_text(encoding="utf-8"))
+    assert sidecar["schema_version"] == 1
+    assert sidecar["storage_id"]
+    assert len(context.json()["context_id"]) == 64
     assert restored["document"]["pages"][0]["elements"][0]["text"] == "First correction"
     assert restored["pages"][0]["approval"] is not None
     assert restarted.get(download_url).content == downloaded.content

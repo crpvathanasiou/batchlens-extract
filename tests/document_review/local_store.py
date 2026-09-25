@@ -8,24 +8,46 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import secrets
+import uuid
 from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from threading import RLock
 from typing import Literal, cast
 
+from pydantic import ValidationError
+
 from app.document_conversion.aws import S3Source
 from app.document_conversion.contracts import Document
 from app.document_jobs.contracts import Artifact, Job
-from app.document_review.contracts import ReviewHead
+from app.document_review.contracts import ReviewError, ReviewHead, ReviewRevision
+from app.document_review.history_jsonl import (
+    HistoryJsonlError,
+    history_jsonl_status,
+    materialize_history_jsonl,
+)
 
 JOB_ID = "local-fexofenadine"
 OWNER = "local-test-reviewer"
+REVIEW_CONTEXT_FILE = "review-context.json"
+HISTORY_JSONL_FILE = "history.jsonl"
+HistoryRebuildTrigger = Literal["publish", "startup"]
+_CONTEXT_INIT_LOCK = RLock()
+_LOGGER = logging.getLogger("tests.document_review.local_store")
 
 
 class LocalHarnessError(RuntimeError):
     """A safe startup or persistent-state validation error."""
+
+
+class LocalHistoryRebuildError(LocalHarnessError):
+    """Post-publish or startup derived-history rebuild failed. Head is not rolled back."""
+
+    def __init__(self, code: str = "LOCAL_HISTORY_REBUILD_FAILED") -> None:
+        super().__init__(code)
+        self.code = code
 
 
 def sha256_file(path: Path) -> str:
@@ -101,6 +123,44 @@ def ensure_manifest(data_dir: Path, inputs: Mapping[str, Path]) -> dict[str, obj
     return expected
 
 
+def _read_review_context(path: Path) -> str:
+    try:
+        loaded: object = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}") from error
+    if not isinstance(loaded, dict):
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}")
+    payload = cast(dict[str, object], loaded)
+    if set(payload) != {"schema_version", "storage_id"}:
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}")
+    if payload.get("schema_version") != 1:
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}")
+    storage_id = payload.get("storage_id")
+    if not isinstance(storage_id, str):
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}")
+    try:
+        parsed = uuid.UUID(storage_id)
+    except ValueError as error:
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}") from error
+    if parsed.version != 4 or str(parsed) != storage_id:
+        raise LocalHarnessError(f"INVALID_REVIEW_CONTEXT: {path}")
+    return storage_id
+
+
+def load_review_storage_namespace(data_dir: Path, *, initialize: bool) -> str | None:
+    """Load or create the auxiliary review-storage identity for one data directory."""
+
+    path = data_dir / REVIEW_CONTEXT_FILE
+    with _CONTEXT_INIT_LOCK:
+        if path.exists():
+            return _read_review_context(path)
+        if not initialize:
+            return None
+        storage_id = str(uuid.uuid4())
+        _atomic_json(path, {"schema_version": 1, "storage_id": storage_id})
+        return storage_id
+
+
 class LocalReviewStore:
     """All three review ports, backed only by immutable files and an atomic head."""
 
@@ -129,6 +189,7 @@ class LocalReviewStore:
         self._lock = RLock()
         self._head_path = self.data_dir / "head.json"
         self._download_path = self.data_dir / "downloads.json"
+        self.history_path = self.data_dir / HISTORY_JSONL_FILE
 
         source = document.source
         if source.bucket is None or source.key is None:
@@ -142,6 +203,9 @@ class LocalReviewStore:
             )
         if initialize_manifest:
             ensure_manifest(self.data_dir, self.inputs)
+        self.storage_namespace = load_review_storage_namespace(
+            self.data_dir, initialize=initialize_manifest
+        )
         source_version = source.version or f"local-sha256:{source_hash}"
         self.source = S3Source(
             bucket=source.bucket,
@@ -175,6 +239,9 @@ class LocalReviewStore:
                 "document.html": self.original_html,
             },
         )
+        published = self.get_head(JOB_ID)
+        if published is not None:
+            self._sync_derived_history(published, trigger="startup")
 
     @staticmethod
     def _input_artifact(name: str, path: Path, content_type: str) -> Artifact:
@@ -209,7 +276,61 @@ class LocalReviewStore:
             if current_revision != expected_revision:
                 return False
             _atomic_json(self._head_path, head.model_dump(mode="json"))
+            self._sync_derived_history(head, trigger="publish")
             return True
+
+    def _sync_derived_history(self, head: ReviewHead, *, trigger: HistoryRebuildTrigger) -> None:
+        """Rebuild derived history after a published head. Not a second authority.
+
+        The in-process RLock serialises this process only. It is not a directory
+        lock and does not provide multi-process writer safety. One local harness
+        process per ``--data-dir`` is the supported model.
+        """
+
+        if (
+            trigger == "startup"
+            and history_jsonl_status(self.history_path, head).status == "CURRENT"
+        ):
+            return
+        try:
+            materialize_history_jsonl(
+                self.history_path, self.job, head, self._read_revision_envelope
+            )
+        except LocalHistoryRebuildError:
+            raise
+        except (HistoryJsonlError, ReviewError, LocalHarnessError, OSError, ValueError) as error:
+            self._log_history_rebuild_failed(head, trigger, error)
+            raise LocalHistoryRebuildError("LOCAL_HISTORY_REBUILD_FAILED") from error
+
+    def _read_revision_envelope(self, artifact: Artifact) -> ReviewRevision:
+        try:
+            body = self.read(artifact)
+        except LocalHarnessError:
+            raise
+        except OSError as error:
+            raise LocalHarnessError("MISSING_LOCAL_REVISION") from error
+        try:
+            return ReviewRevision.model_validate_json(body)
+        except (ValidationError, ValueError, TypeError, UnicodeDecodeError):
+            raise LocalHarnessError("INVALID_LOCAL_REVISION") from None
+
+    def _log_history_rebuild_failed(
+        self, head: ReviewHead, trigger: HistoryRebuildTrigger, error: BaseException
+    ) -> None:
+        code = getattr(error, "code", None)
+        error_code = code if isinstance(code, str) and code else type(error).__name__
+        _LOGGER.error(
+            "local_history_rebuild_failed event=local_history_rebuild_failed "
+            "job_id=%s revision_id=%s generation=%s history_path=%s trigger=%s "
+            "error_code=%s error_type=%s",
+            head.job_id,
+            head.revision_id,
+            head.generation,
+            str(self.history_path),
+            trigger,
+            error_code,
+            type(error).__name__,
+        )
 
     def _generated_path(self, key: str) -> Path:
         if not key.startswith("local-generated/"):

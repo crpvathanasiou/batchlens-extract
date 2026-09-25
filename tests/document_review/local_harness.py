@@ -18,18 +18,21 @@ from typing import Final
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.document_reviews import install_errors as install_review_errors
 from app.api.document_reviews import router as review_router
 from app.api.documents import install_errors as install_job_errors
 from app.document_jobs.contracts import JobError
+from app.document_review.history_jsonl import history_jsonl_status
 from app.document_review.service import ReviewService
 from tests.document_review.local_store import (
     JOB_ID,
     OWNER,
     LocalHarnessError,
     LocalHeads,
+    LocalHistoryRebuildError,
     LocalJobs,
     LocalReviewStore,
 )
@@ -90,6 +93,14 @@ class LocalAuth:
         if token != TOKEN:
             raise JobError("UNAUTHORIZED", 401)
         return OWNER
+
+
+async def _local_history_rebuild_handler(request: Request, error: Exception) -> JSONResponse:
+    if isinstance(error, LocalHistoryRebuildError):
+        code = error.code
+    else:
+        code = "LOCAL_HISTORY_REBUILD_FAILED"
+    return JSONResponse({"code": code}, status_code=503, headers={"Cache-Control": "no-store"})
 
 
 def resolve_path(value: str | os.PathLike[str], root: Path = REPO_ROOT) -> Path:
@@ -208,7 +219,12 @@ def create_app(
         inputs["textract"],
         inputs["html"],
     )
-    service = ReviewService(LocalJobs(store), LocalHeads(store), store)
+    service = ReviewService(
+        LocalJobs(store),
+        LocalHeads(store),
+        store,
+        storage_namespace=store.storage_namespace,
+    )
 
     app = FastAPI(title="BatchLens local review harness")
     app.state.document_review_service = service
@@ -217,6 +233,7 @@ def create_app(
     app.include_router(review_router)
     install_job_errors(app)
     install_review_errors(app)
+    app.add_exception_handler(LocalHistoryRebuildError, _local_history_rebuild_handler)
 
     def _local_review() -> HTMLResponse:
         return HTMLResponse(_page(store.job.filename))
@@ -306,11 +323,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Local review harness did not start:\n{error}", file=sys.stderr)
         return 2
 
+    store = app.state.local_review_store
     url = f"http://127.0.0.1:{args.port}/documents/local-review"
     print("Local document review harness")
     for name, path in inputs.items():
         print(f"  {name}: {path}")
     print(f"  data-dir: {data_dir}")
+    print(f"  history: {store.history_path}")
+    head = store.get_head(JOB_ID)
+    if head is None:
+        print("  history-status: none (no published head)")
+    else:
+        print(f"  history-status: {history_jsonl_status(store.history_path, head).status}")
     print(f"  URL: {url}")
     print(f"  reviewer: {OWNER}")
     print("  originals: untouched (all generated state stays in data-dir)")

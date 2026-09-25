@@ -1,4 +1,4 @@
-import type { CatalogueNode, Content, ReviewFinding, ReviewStateResponse } from '../src/contracts'
+import type { CatalogueNode, Content, ReviewContext, ReviewFinding, ReviewStateResponse } from '../src/contracts'
 
 const content = (text: string): Content => ({ text, references: [], selections: [] })
 const geometry = (
@@ -19,6 +19,12 @@ const emptyElement = {
   rows: 0,
   columns: 0,
 }
+
+export const FIXTURE_REVISION_1 = '11111111-1111-4111-8111-111111111111'
+export const FIXTURE_REVISION_2 = '22222222-2222-4222-8222-222222222222'
+export const FIXTURE_HEAD_OTHER = '33333333-3333-4333-8333-333333333333'
+export const FIXTURE_OPERATION_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+export const FIXTURE_OPERATION_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 export function reviewFixture(): ReviewStateResponse {
   const table = {
@@ -157,4 +163,26 @@ export function toleranceReviewFixture(): ReviewStateResponse {
     },
     findings,
   }
+}
+
+export function reviewContextFixture(
+  server: ReviewStateResponse = reviewFixture(),
+  overrides: Partial<ReviewContext> = {},
+): ReviewContext {
+  return {
+    schema_version: 1 as const,
+    context_id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    job_id: 'job',
+    actor: 'alice',
+    baseline: server.catalogue.baseline,
+    ...overrides,
+  }
+}
+
+export function inReviewState(
+  server: ReviewStateResponse = reviewFixture(),
+  revisionId = FIXTURE_REVISION_1,
+  generation = 1,
+): ReviewStateResponse {
+  return { ...server, status: 'IN_REVIEW', revision_id: revisionId, generation }
 }

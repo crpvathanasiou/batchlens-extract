@@ -13,6 +13,9 @@ from pydantic import ValidationError
 from app.document_conversion.contracts import Document
 from app.document_jobs.contracts import Artifact, Job
 from app.document_review.contracts import (
+    REVIEW_ENVELOPE_VERSION,
+    SAVE_FINGERPRINT_VERSION,
+    ChangeOrigin,
     DocumentApproval,
     ExportPointers,
     FinalApprovalBody,
@@ -23,16 +26,22 @@ from app.document_review.contracts import (
     PageApproval,
     PageApprovalBody,
     PageState,
+    ReconciliationResult,
     RequestedChange,
     ReviewCatalogue,
+    ReviewContext,
     ReviewError,
     ReviewFinding,
     ReviewHead,
     ReviewRevision,
     ReviewState,
     ReviewStore,
+    SaveOperation,
+    SaveReceipt,
     TextChange,
+    UpdateResult,
     UpdateReviewBody,
+    compute_review_context_id,
 )
 from app.document_review.mapping import (
     apply_changes,
@@ -44,6 +53,11 @@ from app.document_review.mapping import (
     raw_page_lookup,
     suggested_tolerance_text,
     tolerance_replacement_eligible,
+)
+from app.document_review.operations import (
+    find_committed_save,
+    load_committed_chain,
+    save_request_fingerprint,
 )
 from app.document_review.rendering import render_reviewed_html
 
@@ -64,12 +78,15 @@ class ReviewService:
         objects: ObjectSource,
         clock: Callable[[], float] = time.time,
         new_revision_id: Callable[[], str] = lambda: str(uuid4()),
+        *,
+        storage_namespace: str | None = None,
     ) -> None:
         self.jobs = jobs
         self.store = store
         self.objects = objects
         self.clock = clock
         self.new_revision_id = new_revision_id
+        self.storage_namespace = storage_namespace
 
     def _now(self) -> datetime:
         return datetime.fromtimestamp(self.clock(), UTC)
@@ -83,6 +100,31 @@ class ReviewService:
         if "document.json" not in job.artifacts or job.raw is None or job.source.version is None:
             raise ReviewError("REVIEW_NOT_READY")
         return job
+
+    def _require_storage_namespace(self) -> str:
+        if self.storage_namespace is None:
+            raise ReviewError("REVIEW_CONTEXT_UNAVAILABLE", 503)
+        return self.storage_namespace
+
+    def review_context(self, job_id: str, owner: str) -> ReviewContext:
+        job = self._owned_completed(job_id, owner)
+        namespace = self._require_storage_namespace()
+        raw = cast(Artifact, job.raw)
+        baseline = job.artifacts["document.json"]
+        return ReviewContext(
+            context_id=compute_review_context_id(
+                namespace, job.id, owner, baseline, job.source, raw
+            ),
+            job_id=job.id,
+            actor=owner,
+            baseline=baseline,
+        )
+
+    def require_matching_context(self, job_id: str, owner: str, context_id: str) -> ReviewContext:
+        current = self.review_context(job_id, owner)
+        if current.context_id != context_id:
+            raise ReviewError("REVIEW_CONTEXT_CHANGED")
+        return current
 
     def _baseline(self, job: Job) -> tuple[Document, dict[str, object]]:
         try:
@@ -112,7 +154,7 @@ class ReviewService:
     def _read_revision(self, artifact: Artifact) -> ReviewRevision:
         try:
             return ReviewRevision.model_validate_json(self.objects.read(artifact))
-        except (ValidationError, ValueError, TypeError, UnicodeDecodeError):
+        except (ValidationError, ValueError, TypeError, UnicodeDecodeError, KeyError, OSError):
             raise ReviewError("INVALID_REVIEW_STATE", 409) from None
 
     def _current(self, job: Job) -> tuple[ReviewHead, ReviewRevision] | None:
@@ -213,6 +255,15 @@ class ReviewService:
             raise ReviewError("REVIEW_CONFLICT")
         return self._state(head, revision)
 
+    def _committed_chain(
+        self, job: Job, current: tuple[ReviewHead, ReviewRevision] | None
+    ) -> tuple[ReviewHead, ReviewRevision, tuple[ReviewRevision, ...]] | None:
+        if current is None:
+            return None
+        head, revision = current
+        chain = load_committed_chain(job, revision, self._read_revision)
+        return head, revision, chain
+
     @staticmethod
     def _validate_requests(body: UpdateReviewBody) -> None:
         if len({change.node_id for change in body.changes}) != len(body.changes):
@@ -253,9 +304,92 @@ class ReviewService:
         return tuple(result)
 
     def update(self, job_id: str, owner: str, body: UpdateReviewBody) -> ReviewState:
+        return self.update_with_receipt(job_id, owner, body).state
+
+    def update_with_receipt(self, job_id: str, owner: str, body: UpdateReviewBody) -> UpdateResult:
         job = self._owned_completed(job_id, owner)
         self._validate_requests(body)
+        fingerprint = (
+            save_request_fingerprint(job.id, owner, body) if body.operation_id is not None else None
+        )
         current = self._current(job)
+        if body.operation_id is not None and fingerprint is not None:
+            replayed = self._replay_committed(job, current, owner, body.operation_id, fingerprint)
+            if replayed is not None:
+                return replayed
+        return self._commit_draft(job, owner, body, current, fingerprint)
+
+    def reconcile_save_operation(
+        self, job_id: str, owner: str, operation_id: str
+    ) -> ReconciliationResult:
+        job = self._owned_completed(job_id, owner)
+        current = self._current(job)
+        loaded = self._committed_chain(job, current)
+        if loaded is None:
+            return ReconciliationResult(status="UNRESOLVED", head_generation=0)
+        head, _, chain = loaded
+        match = find_committed_save(chain, job.id, owner, operation_id)
+        if match is None or match.save_operation is None:
+            return ReconciliationResult(
+                status="UNRESOLVED",
+                head_revision_id=head.revision_id,
+                head_generation=head.generation,
+            )
+        return ReconciliationResult(
+            status="COMMITTED",
+            head_revision_id=head.revision_id,
+            head_generation=head.generation,
+            receipt=SaveReceipt(
+                operation_id=operation_id,
+                revision_id=match.revision_id,
+                generation=match.generation,
+                replayed=False,
+            ),
+        )
+
+    def _replay_committed(
+        self,
+        job: Job,
+        current: tuple[ReviewHead, ReviewRevision] | None,
+        owner: str,
+        operation_id: str,
+        fingerprint: str,
+    ) -> UpdateResult | None:
+        loaded = self._committed_chain(job, current)
+        if loaded is None:
+            return None
+        head, revision, chain = loaded
+        match = find_committed_save(chain, job.id, owner, operation_id)
+        if match is None or match.save_operation is None:
+            return None
+        if match.save_operation.request_fingerprint != fingerprint:
+            raise ReviewError("SAVE_OPERATION_MISMATCH")
+        return UpdateResult(
+            state=self._state(head, revision),
+            receipt=SaveReceipt(
+                operation_id=operation_id,
+                revision_id=match.revision_id,
+                generation=match.generation,
+                replayed=True,
+            ),
+        )
+
+    def _result_after_publish_conflict(
+        self, job: Job, owner: str, operation_id: str, fingerprint: str
+    ) -> UpdateResult:
+        replayed = self._replay_committed(job, self._current(job), owner, operation_id, fingerprint)
+        if replayed is not None:
+            return replayed
+        raise ReviewError("REVIEW_CONFLICT")
+
+    def _commit_draft(
+        self,
+        job: Job,
+        owner: str,
+        body: UpdateReviewBody,
+        current: tuple[ReviewHead, ReviewRevision] | None,
+        fingerprint: str | None,
+    ) -> UpdateResult:
         if current is None:
             if body.expected_revision is not None:
                 raise ReviewError("REVIEW_CONFLICT")
@@ -335,20 +469,33 @@ class ReviewService:
             )
             for page in prior_pages
         )
+        applied_by_node = {
+            item.replacement.node_id: item.finding_id
+            for item in body.decisions
+            if item.replacement is not None
+        }
         changes = tuple(
-            TextChange(
-                node_id=node_id,
-                baseline=baseline,
-                original_text=node_map[node_id].baseline_text,
-                previous_text=values[0],
-                new_text=values[1],
-                actor=owner,
-                at=at,
-                revision_id=revision_id,
+            self._text_change(
+                node_id,
+                values,
+                node_map[node_id].baseline_text,
+                baseline,
+                owner,
+                at,
+                revision_id,
+                applied_by_node.get(node_id),
             )
             for node_id, values in sorted(changed.items())
         )
+        save_operation = None
+        if body.operation_id is not None and fingerprint is not None:
+            save_operation = SaveOperation(
+                operation_id=body.operation_id,
+                request_fingerprint=fingerprint,
+                fingerprint_version=SAVE_FINGERPRINT_VERSION,
+            )
         revision = ReviewRevision(
+            schema_version=REVIEW_ENVELOPE_VERSION,
             job_id=job.id,
             owner=owner,
             revision_id=revision_id,
@@ -366,8 +513,50 @@ class ReviewService:
             findings=tuple(resolved_findings),
             changes=changes,
             action="DRAFT_SAVED",
+            save_operation=save_operation,
         )
-        return self._persist(job, revision, body.expected_revision)
+        try:
+            state = self._persist(job, revision, body.expected_revision)
+        except ReviewError as error:
+            if error.code != "REVIEW_CONFLICT" or body.operation_id is None or fingerprint is None:
+                raise
+            return self._result_after_publish_conflict(job, owner, body.operation_id, fingerprint)
+        receipt = None
+        if body.operation_id is not None:
+            receipt = SaveReceipt(
+                operation_id=body.operation_id,
+                revision_id=revision.revision_id,
+                generation=revision.generation,
+                replayed=False,
+            )
+        return UpdateResult(state=state, receipt=receipt)
+
+    @staticmethod
+    def _text_change(
+        node_id: str,
+        values: tuple[str, str],
+        original_text: str,
+        baseline: Artifact,
+        owner: str,
+        at: datetime,
+        revision_id: str,
+        applied_finding_id: str | None,
+    ) -> TextChange:
+        origin: ChangeOrigin = (
+            "APPLIED_SUGGESTION" if applied_finding_id is not None else "MANUAL_EDIT"
+        )
+        return TextChange(
+            node_id=node_id,
+            baseline=baseline,
+            original_text=original_text,
+            previous_text=values[0],
+            new_text=values[1],
+            actor=owner,
+            at=at,
+            revision_id=revision_id,
+            origin=origin,
+            finding_id=applied_finding_id,
+        )
 
     def approve_page(
         self, job_id: str, owner: str, page_number: int, body: PageApprovalBody
@@ -400,6 +589,7 @@ class ReviewService:
         )
         revision = prior.model_copy(
             update={
+                "schema_version": REVIEW_ENVELOPE_VERSION,
                 "revision_id": revision_id,
                 "parent_revision_id": prior.revision_id,
                 "parent": head.revision,
@@ -411,6 +601,7 @@ class ReviewService:
                 "action": "PAGE_APPROVED",
                 "document_approval": None,
                 "exports": None,
+                "save_operation": None,
             }
         )
         return self._persist(job, revision, body.expected_revision)
@@ -459,6 +650,7 @@ class ReviewService:
         )
         candidate = prior.model_copy(
             update={
+                "schema_version": REVIEW_ENVELOPE_VERSION,
                 "revision_id": revision_id,
                 "parent_revision_id": prior.revision_id,
                 "parent": head.revision,
@@ -469,6 +661,7 @@ class ReviewService:
                 "action": "DOCUMENT_APPROVED",
                 "document_approval": approval,
                 "exports": None,
+                "save_operation": None,
             }
         )
         html = self.objects.put_export(

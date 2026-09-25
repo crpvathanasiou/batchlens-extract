@@ -4,6 +4,7 @@ import { createReviewApi } from '../api'
 import type { ReviewWorkspaceOptions } from '../contracts'
 import { editableTextMap } from '../mapping'
 import { createReviewState, unresolvedToleranceNodeIds } from '../state'
+import { pendingSaveScope } from '../pendingSave'
 import DocumentEditor from './DocumentEditor.vue'
 import FindingsPanel from './FindingsPanel.vue'
 import PdfPane from './PdfPane.vue'
@@ -15,7 +16,7 @@ const api = createReviewApi(
   props.options.onAuthenticationRequired,
   props.options.apiBaseUrl,
 )
-const review = createReviewState(api)
+const review = createReviewState(api, { scope: pendingSaveScope(props.options.apiBaseUrl) })
 const pdfPages = ref(0)
 const pageMismatch = ref<string | null>(null)
 const editor = ref<InstanceType<typeof DocumentEditor>>()
@@ -31,9 +32,16 @@ const displayReviewStatus = computed(() => {
 })
 const saveLabel = computed(() => {
   if (review.state.saveStatus === 'SAVING') return 'Saving'
-  if (review.state.saveStatus === 'SAVE_FAILED') return 'Save failed'
+  if (review.state.saveStatus === 'UNKNOWN') return 'Save status unknown'
+  if (review.state.saveStatus === 'BLOCKED') {
+    const phase = review.state.pendingRecord?.phase
+    if (phase === 'superseded') return 'Review conflict'
+    if (phase === 'committed') return 'Saved'
+    return 'Save status unknown'
+  }
   return review.dirty.value ? 'Unsaved' : 'Saved'
 })
+const frozen = computed(() => review.blocked.value || review.state.pending)
 const editedNodeIds = computed(() => {
   const server = review.state.server
   if (!server) return []
@@ -45,7 +53,14 @@ const editedNodeIds = computed(() => {
   }
   return [...ids]
 })
-const approvalBlocked = computed(() => Boolean(pageMismatch.value || review.unsupported.value.length || review.state.contentError))
+const approvalBlocked = computed(() =>
+  Boolean(
+    pageMismatch.value
+    || review.unsupported.value.length
+    || review.state.contentError
+    || frozen.value,
+  ),
+)
 const toleranceMarkerNodeIds = computed(() => unresolvedToleranceNodeIds(review.state.server?.findings ?? []))
 const staleFindingIds = computed(() => {
   const server = review.state.server
@@ -86,6 +101,7 @@ async function selectFinding(page: number | null, nodeId: string | null) {
 }
 
 async function reloadAfterConflict() {
+  if (review.blocked.value) return
   if (window.confirm('Reloading discards this browser draft. Reconcile or copy your changes before continuing.')) {
     await review.reloadServer()
   }
@@ -103,6 +119,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', beforeUnload)
+  review.abandonWorkspace()
   props.options.onDirtyChange?.(false)
 })
 </script>
@@ -116,11 +133,11 @@ onBeforeUnmount(() => {
         <span v-if="options.demoLabel" class="bl-demo-label">{{ options.demoLabel }}</span>
         <span v-if="review.state.server" class="bl-statuses">
           <span class="bl-chip bl-chip--document-status">Document status · {{ displayReviewStatus }}</span>
-          <span class="bl-chip" :class="{ 'bl-chip--changed': review.dirty.value || review.state.saveStatus === 'SAVE_FAILED' }">{{ saveLabel }}</span>
+          <span class="bl-chip" :class="{ 'bl-chip--changed': review.dirty.value || review.state.saveStatus !== 'SAVED' }">{{ saveLabel }}</span>
         </span>
       </div>
       <div class="bl-actions">
-        <button type="button" class="bl-button" :disabled="review.state.pending || !review.dirty.value" @click="review.save()">
+        <button type="button" class="bl-button" :disabled="review.state.pending || frozen || !review.dirty.value" @click="review.save()">
           Save draft
         </button>
         <button
@@ -139,7 +156,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <div v-if="review.state.error" class="bl-banner bl-banner--error" role="alert">{{ review.state.error }}</div>
+    <div v-if="review.state.error && !review.blocked.value" class="bl-banner bl-banner--error" role="alert">{{ review.state.error }}</div>
     <div v-if="review.state.contentError" class="bl-banner bl-banner--error" role="alert">
       Editor content error: {{ review.state.contentError }}
     </div>
@@ -147,9 +164,54 @@ onBeforeUnmount(() => {
     <div v-if="review.unsupported.value.length" class="bl-banner bl-banner--error" role="alert">
       Unsupported review content is read-only and approval is blocked: {{ review.unsupported.value[0] }}
     </div>
-    <div v-if="review.state.conflict" class="bl-banner bl-banner--conflict" role="alert">
+    <div v-if="review.state.conflict && !review.blocked.value" class="bl-banner bl-banner--conflict" role="alert">
       Server revision conflict. Your browser draft is intact.
       <button type="button" class="bl-button" @click="reloadAfterConflict">Reload server state</button>
+    </div>
+    <div v-if="review.blocked.value" class="bl-banner bl-banner--conflict" role="alert">
+      <div>
+        <strong>{{ saveLabel }}</strong>
+        <p v-if="review.state.error">{{ review.state.error }}</p>
+        <ul v-if="review.attemptedWork.value && (review.attemptedWork.value.textItems.length || review.attemptedWork.value.decisionItems.length)" class="bl-attempted">
+          <li v-for="(item, index) in review.attemptedWork.value.textItems" :key="`text-${index}`">
+            Attempted text on {{ item.pageLabel }}: {{ item.text }}
+          </li>
+          <li v-for="(item, index) in review.attemptedWork.value.decisionItems" :key="`decision-${index}`">
+            {{ item.actionLabel }} · {{ item.findingLabel }} · {{ item.pageLabel }}
+            <span v-if="item.replacement"> · Suggested replacement: {{ item.replacement }}</span>
+            <span v-if="item.note"> · Note: {{ item.note }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="bl-recovery-actions">
+        <button
+          v-if="review.state.pendingRecord?.phase === 'uncertain' || review.state.pendingRecord?.phase === 'committed'"
+          type="button"
+          class="bl-button"
+          :disabled="review.state.pending"
+          @click="review.checkSaveStatus"
+        >
+          Check save status
+        </button>
+        <button
+          v-if="review.state.pendingRecord?.phase === 'uncertain' || review.state.pendingRecord?.phase === 'committed'"
+          type="button"
+          class="bl-button"
+          :disabled="review.state.pending"
+          @click="review.retrySameSave"
+        >
+          Retry same save
+        </button>
+        <button
+          v-if="review.state.pendingRecord && ['superseded', 'mismatch', 'rejected'].includes(review.state.pendingRecord.phase)"
+          type="button"
+          class="bl-button"
+          :disabled="review.state.pending"
+          @click="review.acknowledgeAttemptedSave"
+        >
+          Discard attempted save
+        </button>
+      </div>
     </div>
 
     <div v-if="review.state.loading" class="bl-loading">Loading review workspace…</div>
@@ -189,7 +251,7 @@ onBeforeUnmount(() => {
           <DocumentEditor
             ref="editor"
             :content="review.state.drafts[review.state.activePage]"
-            :disabled="review.state.pending"
+            :disabled="frozen"
             :tolerance-node-ids="toleranceMarkerNodeIds"
             @update="review.setDraft"
             @content-error="review.setContentError"
@@ -200,7 +262,7 @@ onBeforeUnmount(() => {
             :changed-node-ids="editedNodeIds"
             :pending-decisions="review.state.decisions"
             :stale-finding-ids="staleFindingIds"
-            :disabled="review.state.pending"
+            :disabled="frozen"
             @select="selectFinding"
             @decide="review.decide"
             @replace="review.applyTolerance"

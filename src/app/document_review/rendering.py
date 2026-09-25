@@ -1,9 +1,34 @@
 """Deterministic script-free rendering of approved review revisions."""
 
+from collections.abc import Mapping
 from html import escape
 
 from app.document_conversion.contracts import Content, Element
-from app.document_review.contracts import ReviewRevision
+from app.document_review.contracts import (
+    CatalogueNode,
+    ReviewCatalogue,
+    ReviewError,
+    ReviewRevision,
+)
+
+_HTML_ATTRIBUTE_VERSION = "1"
+
+
+def _attr(name: str, value: str) -> str:
+    return f' {name}="{escape(value, quote=True)}"'
+
+
+def _source_attr(content: Content) -> str:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for reference in content.references:
+        if reference.block_id in seen:
+            continue
+        seen.add(reference.block_id)
+        ordered.append(reference.block_id)
+    if not ordered:
+        return ""
+    return _attr("data-source-id", " ".join(ordered))
 
 
 def _text(content: Content, tag: str = "p", attributes: str = "") -> str:
@@ -19,19 +44,64 @@ def _element_text_tag(kind: str) -> str:
     return "p"
 
 
-def _element(element: Element) -> str:
+def _catalogue_index(catalogue: ReviewCatalogue) -> dict[tuple[int, str], CatalogueNode]:
+    index: dict[tuple[int, str], CatalogueNode] = {}
+    for node in catalogue.nodes:
+        key = (node.page_number, node.path)
+        if key in index:
+            raise ReviewError("INVALID_REVIEW_STATE")
+        index[key] = node
+    return index
+
+
+def _require(
+    index: Mapping[tuple[int, str], CatalogueNode],
+    page_number: int,
+    path: str,
+    kind: str,
+) -> CatalogueNode:
+    node = index.get((page_number, path))
+    if node is None or node.kind != kind or node.page_number != page_number or node.path != path:
+        raise ReviewError("INVALID_REVIEW_STATE")
+    return node
+
+
+def _element(
+    element: Element,
+    page_number: int,
+    path: str,
+    index: Mapping[tuple[int, str], CatalogueNode],
+) -> str:
+    node = _require(index, page_number, path, element.kind)
     kind = escape(element.kind, quote=True)
     heading = (
         "h3" if element.kind in {"TITLE", "SECTION_HEADER", "title", "section_heading"} else "h4"
     )
-    parts = [f'<article class="element" data-kind="{kind}">']
+    parts = [
+        f'<article class="element" data-kind="{kind}"{_attr("data-element-id", node.node_id)}>'
+    ]
     if element.text:
-        parts.append(_text(element, _element_text_tag(element.kind)))
-    parts.extend(_text(title, heading) for title in element.titles)
+        parts.append(
+            _text(
+                element,
+                _element_text_tag(element.kind),
+                _attr("data-node-id", node.node_id) + _source_attr(element),
+            )
+        )
+    for title_index, title in enumerate(element.titles):
+        title_node = _require(index, page_number, f"{path}.titles[{title_index}]", "TITLE")
+        parts.append(
+            _text(
+                title,
+                heading,
+                _attr("data-node-id", title_node.node_id) + _source_attr(title),
+            )
+        )
     if element.cells:
-        parts.append("<table><tbody>")
+        parts.append(f"<table{_attr('data-table-id', node.node_id)}><tbody>")
         row = 0
-        for cell in element.cells:
+        for cell_index, cell in enumerate(element.cells):
+            cell_node = _require(index, page_number, f"{path}.cells[{cell_index}]", "TABLE_CELL")
             if cell.row != row:
                 if row:
                     parts.append("</tr>")
@@ -41,18 +111,32 @@ def _element(element: Element) -> str:
             attributes = (
                 f' rowspan="{cell.row_span}" colspan="{cell.column_span}"'
                 f' data-row="{cell.row}" data-column="{cell.column}"'
+                + _attr("data-node-id", cell_node.node_id)
+                + _source_attr(cell)
             )
             parts.append(_text(cell, tag, attributes))
         if row:
             parts.append("</tr>")
         parts.append("</tbody></table>")
-    parts.extend(_element(child) for child in element.children)
-    parts.extend(_text(footer, "footer") for footer in element.footers)
+    parts.extend(
+        _element(child, page_number, f"{path}.children[{child_index}]", index)
+        for child_index, child in enumerate(element.children)
+    )
+    for footer_index, footer in enumerate(element.footers):
+        footer_node = _require(index, page_number, f"{path}.footers[{footer_index}]", "FOOTER")
+        parts.append(
+            _text(
+                footer,
+                "footer",
+                _attr("data-node-id", footer_node.node_id) + _source_attr(footer),
+            )
+        )
     parts.append("</article>")
     return "".join(parts)
 
 
 def render_reviewed_html(revision: ReviewRevision) -> str:
+    index = _catalogue_index(revision.catalogue)
     approval = revision.document_approval
     approved = (
         f"Approved by {escape(approval.actor)} at {escape(approval.at.isoformat())}"
@@ -60,14 +144,23 @@ def render_reviewed_html(revision: ReviewRevision) -> str:
         else "Not approved"
     )
     limitation = (
-        '<aside class="limitation">Partial conversion: source evidence may be incomplete.</aside>'
+        '<aside class="limitation" data-generated="true">'
+        "Partial conversion: source evidence may be incomplete.</aside>"
         if revision.document.status == "PARTIAL_SUCCESS"
         else ""
     )
     pages = "".join(
         f'<section class="page" id="source-page-{page.number}" data-page="{page.number}">'
-        f"<h2>Page {page.number}</h2>"
-        + "".join(_element(element) for element in page.elements)
+        f"<h2{_attr('data-generated', 'true')}>Page {page.number}</h2>"
+        + "".join(
+            _element(
+                element,
+                page.number,
+                f"pages[{page.number}].elements[{element_index}]",
+                index,
+            )
+            for element_index, element in enumerate(page.elements)
+        )
         + "</section>"
         for page in revision.document.pages
     )
@@ -78,12 +171,21 @@ def render_reviewed_html(revision: ReviewRevision) -> str:
         "table{border-collapse:collapse;width:100%}td,th{border:1px solid #777;padding:.4rem}"
         "p,h2,h3,h4,td,th,footer{white-space:pre-wrap}"
     )
+    root = (
+        "<html"
+        + _attr("data-review-html-version", _HTML_ATTRIBUTE_VERSION)
+        + _attr("data-job-id", revision.job_id)
+        + _attr("data-review-revision-id", revision.revision_id)
+        + _attr("data-review-generation", str(revision.generation))
+        + _attr("data-conversion-status", revision.document.status)
+        + ">"
+    )
     return (
-        '<!doctype html><html><head><meta charset="utf-8">'
+        "<!doctype html>" + root + '<head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Reviewed document</title><style>"
-        + css
-        + '</style></head><body><header class="summary"><h1>Reviewed document</h1>'
+        "<title>Reviewed document</title><style>" + css + "</style></head><body>"
+        f'<header class="summary"{_attr("data-generated", "true")}>'
+        "<h1>Reviewed document</h1>"
         f"<p>Revision: {escape(revision.revision_id)}</p><p>{approved}</p></header>"
         + limitation
         + "<main>"

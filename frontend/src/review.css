@@ -424,6 +424,21 @@ button:disabled {
   color: #624b0c;
 }
 
+.bl-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bl-attempted {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.bl-attempted li + li {
+  margin-top: 4px;
+}
+
 .bl-sr-only {
   position: absolute;
   width: 1px;

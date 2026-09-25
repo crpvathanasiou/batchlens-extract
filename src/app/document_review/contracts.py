@@ -1,6 +1,8 @@
 """Immutable canonical contracts for document review."""
 
-from collections.abc import Iterable
+import hashlib
+import json
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Literal, Protocol
 
@@ -14,7 +16,15 @@ RevisionId = str
 ReviewStatus = Literal["NOT_REVIEWED", "IN_REVIEW", "APPROVED"]
 DecisionAction = Literal["KEEP_ORIGINAL", "RESOLVED_AFTER_EDIT", "ACKNOWLEDGED_LIMITATION"]
 CommittedAction = Literal["DRAFT_SAVED", "PAGE_APPROVED", "DOCUMENT_APPROVED"]
+ChangeOrigin = Literal["MANUAL_EDIT", "APPLIED_SUGGESTION"]
+ReconciliationStatus = Literal["COMMITTED", "UNRESOLVED"]
 REVISION_PATTERN = r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+FINGERPRINT_PATTERN = r"^[0-9a-f]{64}$"
+REVIEW_ENVELOPE_VERSION = "1.1.0"
+SAVE_FINGERPRINT_VERSION = 1
+REVIEW_CONTEXT_SCHEMA = "batchlens.review-context.v1"
+STORAGE_NAMESPACE_SCHEMA = "batchlens.review-storage-namespace.v1"
+REVIEW_CONTEXT_HEADER = "X-Review-Context"
 
 
 class ReviewModel(BaseModel):
@@ -70,6 +80,17 @@ class TextChange(ReviewModel):
     actor: str
     at: datetime
     revision_id: RevisionId = Field(pattern=REVISION_PATTERN)
+    origin: ChangeOrigin | None = None
+    finding_id: str | None = None
+
+    @model_validator(mode="after")
+    def provenance_pair(self) -> "TextChange":
+        if self.origin == "APPLIED_SUGGESTION":
+            if self.finding_id is None:
+                raise ValueError("applied suggestion requires finding_id")
+        elif self.finding_id is not None:
+            raise ValueError("finding_id is only valid for applied suggestions")
+        return self
 
 
 class FindingDecisionRequest(ReviewModel):
@@ -97,7 +118,10 @@ class SuggestedReplacement(ReviewModel):
 
 
 class ReviewFinding(ReviewModel):
-    """A conversion warning bound to current evidence. ``resolved`` requires a matching region hash."""
+    """A conversion warning bound to current evidence.
+
+    ``resolved`` requires a matching region hash.
+    """
 
     finding_id: str
     code: str
@@ -140,6 +164,14 @@ class ExportPointers(ReviewModel):
     json_artifact: Artifact
 
 
+class SaveOperation(ReviewModel):
+    """Metadata for one committed DRAFT_SAVED operation. Absent on legacy revisions."""
+
+    operation_id: RevisionId = Field(pattern=REVISION_PATTERN)
+    request_fingerprint: str = Field(pattern=FINGERPRINT_PATTERN)
+    fingerprint_version: int = Field(ge=1)
+
+
 class ReviewRevision(ReviewModel):
     """Immutable reviewed envelope. ``document`` is the only canonical reviewed Document."""
 
@@ -163,6 +195,7 @@ class ReviewRevision(ReviewModel):
     action: CommittedAction
     exports: ExportPointers | None = None
     document_approval: DocumentApproval | None = None
+    save_operation: SaveOperation | None = None
 
     @model_validator(mode="after")
     def parent_pair(self) -> "ReviewRevision":
@@ -196,6 +229,7 @@ class UpdateReviewBody(ReviewModel):
     expected_revision: RevisionId | None = Field(default=None, pattern=REVISION_PATTERN)
     changes: tuple[RequestedChange, ...] = ()
     decisions: tuple[FindingDecisionRequest, ...] = ()
+    operation_id: RevisionId | None = Field(default=None, pattern=REVISION_PATTERN)
 
 
 class PageApprovalBody(ReviewModel):
@@ -215,6 +249,104 @@ class ReviewState(ReviewModel):
     catalogue: ReviewCatalogue
     pages: tuple[PageState, ...]
     findings: tuple[ReviewFinding, ...]
+
+
+class SaveReceipt(ReviewModel):
+    """Identifies a committed Save operation. Not part of the HTTP ReviewState."""
+
+    operation_id: RevisionId = Field(pattern=REVISION_PATTERN)
+    revision_id: RevisionId = Field(pattern=REVISION_PATTERN)
+    generation: int = Field(ge=1)
+    replayed: bool
+
+
+class UpdateResult(ReviewModel):
+    """Internal Save result. The HTTP adapter must return only ``state``."""
+
+    state: ReviewState
+    receipt: SaveReceipt | None = None
+
+
+class ReconciliationResult(ReviewModel):
+    """Read-only lookup against the committed chain. ``UNRESOLVED`` is not failure."""
+
+    status: ReconciliationStatus
+    head_revision_id: RevisionId | None = None
+    head_generation: int = Field(ge=0)
+    receipt: SaveReceipt | None = None
+
+
+class ReviewContext(ReviewModel):
+    """Server-derived review-storage context. ``context_id`` is not a request fingerprint."""
+
+    schema_version: Literal[1] = 1
+    context_id: str = Field(pattern=FINGERPRINT_PATTERN)
+    job_id: str
+    actor: str
+    baseline: Artifact
+
+
+class OperationLookup(ReviewModel):
+    """Read-only lookup payload. Not a ReviewState and not a Save receipt wrapper."""
+
+    context: ReviewContext
+    reconciliation: ReconciliationResult
+
+
+def canonical_sha256(material: Mapping[str, object]) -> str:
+    """SHA-256 of canonical JSON. Separate from the A1 Save request fingerprint."""
+
+    canonical = json.dumps(
+        material,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def production_storage_namespace(
+    *,
+    region: str,
+    table: str,
+    bucket: str,
+    prefix: str,
+    cognito_pool_id: str,
+) -> str:
+    """Opaque configured-store identity. Does not include secrets or raw endpoints."""
+
+    return canonical_sha256(
+        {
+            "bucket": bucket,
+            "cognito_pool_id": cognito_pool_id,
+            "prefix": prefix,
+            "region": region,
+            "schema": STORAGE_NAMESPACE_SCHEMA,
+            "table": table,
+        }
+    )
+
+
+def compute_review_context_id(
+    storage_namespace: str,
+    job_id: str,
+    actor: str,
+    baseline: Artifact,
+    accepted_source: S3Source,
+    raw: Artifact,
+) -> str:
+    return canonical_sha256(
+        {
+            "accepted_source": accepted_source.model_dump(mode="json"),
+            "actor": actor,
+            "baseline": baseline.model_dump(mode="json"),
+            "job_id": job_id,
+            "raw": raw.model_dump(mode="json"),
+            "schema": REVIEW_CONTEXT_SCHEMA,
+            "storage_namespace": storage_namespace,
+        }
+    )
 
 
 class ReviewStore(Protocol):

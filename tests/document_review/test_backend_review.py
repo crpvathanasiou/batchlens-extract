@@ -1,6 +1,7 @@
 """Synthetic mapping, lifecycle, history, rendering, and API review tests."""
 
 import json
+import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import cast
@@ -32,6 +33,7 @@ from app.document_review.contracts import (
     ReviewError,
     ReviewHead,
     ReviewRevision,
+    ReviewState,
     UpdateReviewBody,
 )
 from app.document_review.mapping import (
@@ -193,7 +195,7 @@ class Auth:
 
 
 def make_service(
-    *, warnings: bool = True, document: Document | None = None
+    *, warnings: bool = True, document: Document | None = None, storage_namespace: str | None = None
 ) -> tuple[ReviewService, Heads, Objects]:
     document = document if document is not None else synthetic_document(warnings=warnings)
     job = Job(
@@ -219,6 +221,7 @@ def make_service(
             objects,
             clock=lambda: 1_700_000_000,
             new_revision_id=lambda: next(identifiers),
+            storage_namespace=storage_namespace,
         ),
         heads,
         objects,
@@ -379,11 +382,20 @@ def test_lifecycle_uses_parent_artifacts_and_retains_historical_approved_exports
     assert json.loads(exported_json)["document"]["pages"][1]["elements"][0]["text"] == (
         "page two corrected"
     )
-    assert "<script" not in objects.read(approved.revision.exports.html_artifact).decode()
-    assert (
-        "Tolerance ±0.1<br>Line two"
-        in objects.read(approved.revision.exports.html_artifact).decode()
-    )
+    assert "data-review-html-version" not in exported_json.decode()
+    html_export = objects.read(approved.revision.exports.html_artifact)
+    html_text = html_export.decode()
+    assert "<script" not in html_text
+    assert "Tolerance ±0.1<br>Line two" in html_text
+    assert approved.revision is not None
+    assert f'data-job-id="{approved.revision.job_id}"' in html_text
+    assert f'data-review-revision-id="{approved.revision.revision_id}"' in html_text
+    assert f'data-review-generation="{approved.revision.generation}"' in html_text
+    assert 'data-review-html-version="1"' in html_text
+    assert 'data-conversion-status="SUCCEEDED"' in html_text
+    page_two_node = next(node for node in approved.catalogue.nodes if node.page_number == 2)
+    assert f'data-node-id="{page_two_node.node_id}"' in html_text
+    assert "page two corrected" in html_text
 
     page_one_node = next(node for node in approved.catalogue.nodes if node.page_number == 1)
     reopened = service.update(
@@ -398,6 +410,8 @@ def test_lifecycle_uses_parent_artifacts_and_retains_historical_approved_exports
     approvals = {page.page_number: page.approval for page in reopened.pages}
     assert approvals[1] is None and approvals[2] is not None
     assert service.export("job", "alice", approved_id, "json").startswith("https://")
+    assert objects.read(approved.revision.exports.html_artifact) == html_export
+    assert objects.read(approved.revision.exports.json_artifact) == exported_json
     assert approved.revision.parent is not None
     assert revision is not None
 
@@ -537,11 +551,11 @@ def test_reviewed_html_uses_canonical_heading_kinds() -> None:
         action="DRAFT_SAVED",
     )
     html = render_reviewed_html(revision)
-    assert "<h2>Document title</h2>" in html
-    assert "<h3>Section heading</h3>" in html
-    assert "<p>Ordinary paragraph</p>" in html
-    assert html.count("<h2>") == 2
-    assert "<p>Catalogue title</p>" in html
+    assert re.search(r"<h2\b[^>]*>Document title</h2>", html)
+    assert re.search(r"<h3\b[^>]*>Section heading</h3>", html)
+    assert re.search(r"<p\b[^>]*>Ordinary paragraph</p>", html)
+    assert html.count("<h2") == 2
+    assert re.search(r"<p\b[^>]*>Catalogue title</p>", html)
     assert 'data-kind="TITLE"' in html
 
 
@@ -647,3 +661,250 @@ def test_api_applies_server_suggestion_for_toler_abbreviation() -> None:
     body = saved.json()
     assert body["document"]["pages"][0]["elements"][0]["text"] == "Tolerance ±0.1%"
     assert body["findings"][0]["decision"]["action"] == "RESOLVED_AFTER_EDIT"
+
+
+def _review_client(service: ReviewService) -> TestClient:
+    app = FastAPI()
+    app.state.document_review_service = service
+    app.state.document_auth = Auth()
+    app.include_router(router)
+    install_errors(app)
+    install_job_errors(app)
+    return TestClient(app)
+
+
+def test_api_legacy_put_returns_top_level_review_state() -> None:
+    service, _, _ = make_service()
+    client = _review_client(service)
+    headers = {"Authorization": "Bearer alice"}
+    path = "/api/v1/documents/jobs/job/review"
+    initial = client.get(path, headers=headers).json()
+    node_id = next(
+        node["node_id"] for node in initial["catalogue"]["nodes"] if node["page_number"] == 2
+    )
+    saved = client.put(
+        path,
+        headers=headers,
+        json={
+            "expected_revision": None,
+            "changes": [{"node_id": node_id, "text": "page two corrected"}],
+            "decisions": [],
+        },
+    )
+    assert saved.status_code == 200
+    body = saved.json()
+    assert "receipt" not in body
+    parsed = ReviewState.model_validate(body)
+    assert parsed.status == "IN_REVIEW"
+    for field in (
+        "document",
+        "catalogue",
+        "pages",
+        "findings",
+        "revision_id",
+        "generation",
+        "status",
+        "revision",
+    ):
+        assert field in body
+    assert parsed.revision_id is not None
+    null_id = client.put(
+        path,
+        headers=headers,
+        json={
+            "expected_revision": parsed.revision_id,
+            "changes": [{"node_id": node_id, "text": "second"}],
+            "decisions": [],
+            "operation_id": None,
+        },
+    )
+    assert null_id.status_code == 200
+    assert ReviewState.model_validate(null_id.json()).generation == 2
+    malformed = client.put(
+        path,
+        headers=headers,
+        json={"changes": [{"node_id": "x", "text": "x"}], "operation_id": "not-a-uuid"},
+    )
+    assert malformed.status_code == 422 and malformed.json() == {"code": "INVALID_REVIEW"}
+    stale = client.put(
+        path,
+        headers=headers,
+        json={"expected_revision": None, "changes": [], "decisions": []},
+    )
+    assert stale.status_code == 409 and stale.json() == {"code": "REVIEW_CONFLICT"}
+
+
+def test_api_operation_aware_put_replays_current_review_state() -> None:
+    service, _, _ = make_service()
+    client = _review_client(service)
+    headers = {"Authorization": "Bearer alice"}
+    path = "/api/v1/documents/jobs/job/review"
+    initial = client.get(path, headers=headers).json()
+    node_id = next(
+        node["node_id"] for node in initial["catalogue"]["nodes"] if node["page_number"] == 2
+    )
+    operation_a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    operation_b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    first = client.put(
+        path,
+        headers=headers,
+        json={
+            "expected_revision": None,
+            "changes": [{"node_id": node_id, "text": "page two corrected"}],
+            "decisions": [],
+            "operation_id": operation_a,
+        },
+    )
+    assert first.status_code == 200
+    first_body = ReviewState.model_validate(first.json())
+    second = client.put(
+        path,
+        headers=headers,
+        json={
+            "expected_revision": first_body.revision_id,
+            "changes": [{"node_id": node_id, "text": "later edit"}],
+            "decisions": [],
+            "operation_id": operation_b,
+        },
+    )
+    assert second.status_code == 200
+    replay = client.put(
+        path,
+        headers=headers,
+        json={
+            "expected_revision": None,
+            "changes": [{"node_id": node_id, "text": "page two corrected"}],
+            "decisions": [],
+            "operation_id": operation_a,
+        },
+    )
+    assert replay.status_code == 200
+    body = replay.json()
+    assert "receipt" not in body
+    parsed = ReviewState.model_validate(body)
+    assert parsed.revision_id == ReviewState.model_validate(second.json()).revision_id
+    assert parsed.document.pages[1].elements[0].text == "later edit"
+    assert parsed.generation == 2
+
+
+def test_api_unauthorized_does_not_expose_operation() -> None:
+    service, heads, _ = make_service()
+    client = _review_client(service)
+    path = "/api/v1/documents/jobs/job/review"
+    operation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    payload: dict[str, object] = {
+        "expected_revision": None,
+        "changes": [],
+        "decisions": [],
+        "operation_id": operation,
+    }
+    original_get = heads.get
+    calls = {"count": 0}
+
+    def counting_get(job_id: str) -> ReviewHead | None:
+        calls["count"] += 1
+        return original_get(job_id)
+
+    heads.get = counting_get  # type: ignore[method-assign]
+    assert client.put(path, json=payload).status_code == 401
+    assert (
+        client.put(path, headers={"Authorization": "Bearer bob"}, json=payload).status_code == 401
+    )
+    assert calls["count"] == 0
+
+
+def test_api_context_lookup_and_optional_header_compat() -> None:
+    service, _, objects = make_service(storage_namespace="store-a")
+    client = _review_client(service)
+    headers = {"Authorization": "Bearer alice"}
+    context_path = "/api/v1/documents/jobs/job/review/context"
+    review_path = "/api/v1/documents/jobs/job/review"
+    unavailable, _, _ = make_service()
+    missing = _review_client(unavailable).get(context_path, headers=headers)
+    assert missing.status_code == 503
+    assert missing.json() == {"code": "REVIEW_CONTEXT_UNAVAILABLE"}
+    assert client.get(context_path).status_code == 401
+    response = client.get(context_path, headers=headers)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    body = response.json()
+    assert body["schema_version"] == 1
+    assert body["job_id"] == "job"
+    assert body["actor"] == "alice"
+    assert body["baseline"]["key"] == BASELINE.key
+    assert "receipt" not in body
+    context_id = body["context_id"]
+    assert len(context_id) == 64
+    writes = list(objects.writes)
+    mismatched = client.put(
+        review_path,
+        headers={**headers, "X-Review-Context": "b" * 64},
+        json={"expected_revision": None, "changes": [], "decisions": []},
+    )
+    assert mismatched.status_code == 409
+    assert mismatched.json() == {"code": "REVIEW_CONTEXT_CHANGED"}
+    assert objects.writes == writes
+    operation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    lookup_path = f"{review_path}/operations/{operation}"
+    assert client.get(lookup_path, headers=headers).status_code == 422
+    looked = client.get(lookup_path, headers={**headers, "X-Review-Context": context_id})
+    assert looked.status_code == 200
+    payload = looked.json()
+    assert payload["context"]["context_id"] == context_id
+    assert payload["reconciliation"]["status"] == "UNRESOLVED"
+    assert payload["reconciliation"]["receipt"] is None
+    assert objects.writes == writes
+    initial = client.get(review_path, headers=headers).json()
+    node_id = next(
+        node["node_id"] for node in initial["catalogue"]["nodes"] if node["page_number"] == 2
+    )
+    saved = client.put(
+        review_path,
+        headers={**headers, "X-Review-Context": context_id},
+        json={
+            "expected_revision": None,
+            "changes": [{"node_id": node_id, "text": "page two corrected"}],
+            "decisions": [],
+            "operation_id": operation,
+        },
+    )
+    assert saved.status_code == 200
+    parsed = ReviewState.model_validate(saved.json())
+    assert "receipt" not in saved.json()
+    assert parsed.status == "IN_REVIEW"
+    committed = client.get(lookup_path, headers={**headers, "X-Review-Context": context_id})
+    assert committed.json()["reconciliation"]["status"] == "COMMITTED"
+    assert committed.json()["reconciliation"]["receipt"]["revision_id"] == parsed.revision_id
+    malformed = client.get(
+        f"{review_path}/operations/not-a-uuid",
+        headers={**headers, "X-Review-Context": context_id},
+    )
+    assert malformed.status_code == 422
+    other = client.get(
+        "/api/v1/documents/jobs/missing/review/context",
+        headers=headers,
+    )
+    assert other.status_code == 404
+
+
+def test_api_lookup_unauthorized_does_not_read_history() -> None:
+    service, heads, _ = make_service(storage_namespace="store-a")
+    client = _review_client(service)
+    calls = {"count": 0}
+    original_get = heads.get
+
+    def counting_get(job_id: str) -> ReviewHead | None:
+        calls["count"] += 1
+        return original_get(job_id)
+
+    heads.get = counting_get  # type: ignore[method-assign]
+    path = "/api/v1/documents/jobs/job/review/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    assert client.get(path).status_code == 401
+    assert (
+        client.get(
+            path,
+            headers={"Authorization": "Bearer bob", "X-Review-Context": "a" * 64},
+        ).status_code
+        == 401
+    )
+    assert calls["count"] == 0

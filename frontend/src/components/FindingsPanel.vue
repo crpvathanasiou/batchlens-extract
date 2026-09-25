@@ -28,7 +28,7 @@ const emit = defineEmits<{
   decide: [findingId: string, action: DecisionAction]
   replace: [findingId: string, nodeId: string, text: string, expectedHash: string]
 }>()
-const scope = ref<'all' | 'page'>('all')
+const scope = ref<'all' | 'page'>('page')
 const collapsed = ref(false)
 
 const documentFindingsCount = computed(() => props.findings.length)

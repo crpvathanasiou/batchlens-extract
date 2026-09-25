@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { loadProtectedContent, pageLoadErrors, reviewExtensions } from '../src/extensions'
 import { editableTextMap, projectPage, sparseChanges, structuralSignature, validateSkeleton } from '../src/mapping'
 import { createReviewState } from '../src/state'
-import { reviewFixture } from './fixture'
+import { memoryPendingStore } from '../src/pendingSave'
+import { reviewContextFixture, reviewFixture, inReviewState, FIXTURE_REVISION_1 } from './fixture'
 import type { ReviewApi } from '../src/api'
 
 function makeEditor(content: JSONContent) {
@@ -50,16 +51,21 @@ describe('actual editor round trip', () => {
 
   it('saves a cell edit from actual editor JSON through the real state layer', async () => {
     const server = reviewFixture()
-    const save = vi.fn().mockResolvedValue({ ...server, status: 'IN_REVIEW', revision_id: 'revision-1' })
+    const save = vi.fn().mockResolvedValue(inReviewState(server, FIXTURE_REVISION_1, 1))
     const api: ReviewApi = {
       load: vi.fn().mockResolvedValue(server),
+      context: vi.fn().mockResolvedValue(reviewContextFixture(server)),
+      lookup: vi.fn().mockResolvedValue({
+        context: reviewContextFixture(server),
+        reconciliation: { status: 'UNRESOLVED', head_revision_id: null, head_generation: 0, receipt: null },
+      }),
       save,
       approvePage: vi.fn().mockResolvedValue(server),
       approve: vi.fn().mockResolvedValue(server),
       exportUrl: vi.fn().mockResolvedValue('/export'),
       fetchSource: vi.fn(),
     }
-    const review = createReviewState(api)
+    const review = createReviewState(api, { pendingStore: memoryPendingStore(), scope: 'editor-scope' })
     await review.load()
     const editor = makeEditor(review.state.drafts[1])
     replaceNodeText(editor, 'n-cell-2', 'edited-cell')
@@ -68,7 +74,7 @@ describe('actual editor round trip', () => {
     review.setDraft(json)
     await review.save()
     expect(save).toHaveBeenCalledTimes(1)
-    expect(save).toHaveBeenCalledWith(null, [{ node_id: 'n-cell-2', text: 'edited-cell' }], [])
+    expect(save.mock.calls[0].slice(0, 3)).toEqual([null, [{ node_id: 'n-cell-2', text: 'edited-cell' }], []])
     editor.destroy()
   })
 

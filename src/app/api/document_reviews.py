@@ -4,17 +4,23 @@ Every handler depends on ``owner`` from the documents API, so review access
 uses the same ownership-hiding job lookup as conversion downloads.
 """
 
+import re
 from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Path, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.api.documents import Owner, owner
 from app.document_review.contracts import (
+    FINGERPRINT_PATTERN,
+    REVIEW_CONTEXT_HEADER,
+    REVISION_PATTERN,
     FinalApprovalBody,
+    OperationLookup,
     PageApprovalBody,
+    ReviewContext,
     ReviewError,
     ReviewState,
     UpdateReviewBody,
@@ -22,6 +28,7 @@ from app.document_review.contracts import (
 from app.document_review.service import ReviewService
 
 router = APIRouter()
+_CONTEXT_ID = re.compile(FINGERPRINT_PATTERN)
 
 
 def service(request: Request) -> ReviewService:
@@ -29,6 +36,29 @@ def service(request: Request) -> ReviewService:
 
 
 Service = Annotated[ReviewService, Depends(service)]
+ContextHeader = Annotated[str | None, Header(alias=REVIEW_CONTEXT_HEADER)]
+
+
+def _no_store(model: ReviewContext | OperationLookup | ReviewState) -> JSONResponse:
+    return JSONResponse(model.model_dump(mode="json"), headers={"Cache-Control": "no-store"})
+
+
+def _parsed_context_header(value: str | None, *, required: bool) -> str | None:
+    if value is None or value == "":
+        if required:
+            raise ReviewError("INVALID_REVIEW", 422)
+        return None
+    if _CONTEXT_ID.fullmatch(value) is None:
+        raise ReviewError("INVALID_REVIEW", 422)
+    return value
+
+
+def _guard_context(
+    svc: ReviewService, job_id: str, user: str, header: str | None, *, required: bool
+) -> None:
+    context_id = _parsed_context_header(header, required=required)
+    if context_id is not None:
+        svc.require_matching_context(job_id, user, context_id)
 
 
 @router.get("/api/v1/documents/jobs/{job_id}/review")
@@ -36,8 +66,37 @@ def get_review(job_id: str, svc: Service, user: Owner) -> ReviewState:
     return svc.get(job_id, user)
 
 
+@router.get("/api/v1/documents/jobs/{job_id}/review/context")
+def get_review_context(job_id: str, svc: Service, user: Owner) -> JSONResponse:
+    return _no_store(svc.review_context(job_id, user))
+
+
+@router.get("/api/v1/documents/jobs/{job_id}/review/operations/{operation_id}")
+def lookup_save_operation(
+    job_id: str,
+    svc: Service,
+    user: Owner,
+    x_review_context: ContextHeader,
+    operation_id: Annotated[str, Path(pattern=REVISION_PATTERN)],
+) -> JSONResponse:
+    _guard_context(svc, job_id, user, x_review_context, required=True)
+    return _no_store(
+        OperationLookup(
+            context=svc.review_context(job_id, user),
+            reconciliation=svc.reconcile_save_operation(job_id, user, operation_id),
+        )
+    )
+
+
 @router.put("/api/v1/documents/jobs/{job_id}/review")
-def update_review(job_id: str, body: UpdateReviewBody, svc: Service, user: Owner) -> ReviewState:
+def update_review(
+    job_id: str,
+    body: UpdateReviewBody,
+    svc: Service,
+    user: Owner,
+    x_review_context: ContextHeader = None,
+) -> ReviewState:
+    _guard_context(svc, job_id, user, x_review_context, required=False)
     return svc.update(job_id, user, body)
 
 
@@ -48,12 +107,21 @@ def approve_page(
     body: PageApprovalBody,
     svc: Service,
     user: Owner,
+    x_review_context: ContextHeader = None,
 ) -> ReviewState:
+    _guard_context(svc, job_id, user, x_review_context, required=False)
     return svc.approve_page(job_id, user, page_number, body)
 
 
 @router.post("/api/v1/documents/jobs/{job_id}/review/approve")
-def approve_review(job_id: str, body: FinalApprovalBody, svc: Service, user: Owner) -> ReviewState:
+def approve_review(
+    job_id: str,
+    body: FinalApprovalBody,
+    svc: Service,
+    user: Owner,
+    x_review_context: ContextHeader = None,
+) -> ReviewState:
+    _guard_context(svc, job_id, user, x_review_context, required=False)
     return svc.approve(job_id, user, body)
 
 

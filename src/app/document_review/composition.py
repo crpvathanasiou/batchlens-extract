@@ -8,6 +8,7 @@ import boto3
 from app.document_conversion.aws import BoundedSdkClient, sdk_config
 from app.document_jobs.contracts import JobStore
 from app.document_jobs.settings import DocumentSettings
+from app.document_review.contracts import production_storage_namespace
 from app.document_review.service import ReviewService
 from app.document_review.storage import DynamoReviewStore, S3ObjectStore
 
@@ -27,4 +28,11 @@ def build_review_service(
         jobs,
         DynamoReviewStore(BoundedSdkClient(dynamo, gate), settings.table),
         S3ObjectStore(BoundedSdkClient(s3, gate), settings),
+        storage_namespace=production_storage_namespace(
+            region=settings.region,
+            table=settings.table,
+            bucket=settings.bucket,
+            prefix=settings.prefix,
+            cognito_pool_id=settings.cognito_pool_id,
+        ),
     )

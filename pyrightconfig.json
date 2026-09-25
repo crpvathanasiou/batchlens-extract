@@ -3,5 +3,6 @@
   "typeCheckingMode": "strict",
   "venvPath": ".",
   "venv": ".venv",
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "scripts/prepare_lexical_knowledge_sqlite.py", "merge_files.py", "merge_files1.py", "merge_files2.py", "extract_chebi_materials.py", "compare_material_names.py"],
+  "extraPaths": ["src", "scripts"]
 }
