@@ -1,0 +1,1 @@
+"""Lexical-extraction contract tests."""

@@ -1,0 +1,169 @@
+{
+  "schema_version": "batchlens.lexical-record.v1",
+  "run": {
+    "schema_version": "batchlens.lexical-record.v1",
+    "run_id": "fixture-run-l01",
+    "requested_presets": [],
+    "requested_components": [
+      "parameter_names",
+      "units",
+      "quantity_expressions",
+      "parameter_value_expressions",
+      "materials"
+    ],
+    "resolved_components": [
+      "parameter_names",
+      "units",
+      "quantity_expressions",
+      "parameter_value_expressions",
+      "materials"
+    ],
+    "fuzzy_requested": false,
+    "input_html_sha256": "4fc6da769f8ff764fa10b02f657e60c1838f1ed37ec807e49527c0ce4df5e544",
+    "knowledge": {
+      "snapshot_id": "fixture-snapshot",
+      "database_sha256": "568d324fb0b12f1ef2255b2f45ce051da1a8bd53258e303f5d53edac81944495",
+      "manifest_sha256": "35c53b7986dfb2897e7e2e9cdf56c69a49d2c1bcccaea7c310d60b11b59c9397",
+      "schema_user_version": 1,
+      "preparation_version": "flat-sqlite-1"
+    },
+    "configuration_sha256": "41ed2a46e9c075dc9c6f98fb4f34c9784178884e77ef065f2d5ea6800d96704e",
+    "rules_version": "lexical-internal-rules-v1",
+    "rules_sha256": "60c79d146bd50add20e3265090ab8789bd5d26f6f7de82106a7769e9b58e0cd2",
+    "engine_version": "not-executed",
+    "dependency_versions": [
+      {"name": "lexical-extraction", "version": "contracts-only"}
+    ]
+  },
+  "validated_input": {
+    "html_sha256": "4fc6da769f8ff764fa10b02f657e60c1838f1ed37ec807e49527c0ce4df5e544",
+    "html_contract_version": 1,
+    "job_id": "fixture-lexical-job",
+    "review_revision_id": "fixture-revision-0001",
+    "review_generation": 1,
+    "conversion_status": "SUCCEEDED"
+  },
+  "extraction": {
+    "overall": "partial",
+    "components": [
+      {"component": "parameter_names", "outcome": "completed", "match_count": 1},
+      {"component": "units", "outcome": "completed", "match_count": 1},
+      {"component": "quantity_expressions", "outcome": "completed", "match_count": 1},
+      {"component": "parameter_value_expressions", "outcome": "completed", "match_count": 1},
+      {
+        "component": "materials",
+        "outcome": "failed",
+        "error": {
+          "code": "COMPONENT_FAILED",
+          "message": "synthetic material coverage failed",
+          "component": "materials",
+          "retryable": false
+        }
+      },
+      {"component": "equipment", "outcome": "not_requested"},
+      {"component": "unit_operations", "outcome": "not_requested"},
+      {"component": "process_steps", "outcome": "not_requested"}
+    ]
+  },
+  "publication": {
+    "status": "completed",
+    "final_manifest": {
+      "manifest_id": "fixture-publication-manifest",
+      "publication_status": "completed"
+    }
+  },
+  "pages": [
+    {
+      "page": {"page_number": 1, "order": 0, "coverage": "complete"},
+      "blocks": [
+        {
+          "block": {
+            "node_id": "node-fixture-line-1",
+            "kind": "line",
+            "text": "Impeller speed: 120 rpm",
+            "page_number": 1,
+            "order": 0,
+            "ocr_references": [{"block_id": "ocr-fixture-1", "order": 0}]
+          },
+          "occurrences": [
+            {
+              "kind": "dictionary",
+              "occurrence_id": "occ-parameter-name",
+              "block_node_id": "node-fixture-line-1",
+              "location": {"start_char": 0, "end_char": 14, "matched_text": "Impeller speed"},
+              "applies_to": ["parameter_names"],
+              "candidates": [
+                {
+                  "candidate_kind": "parameter_name",
+                  "matched_term": "Impeller speed",
+                  "canonical_display_name": "Impeller speed",
+                  "ambiguity": "none",
+                  "snapshot_id": "fixture-snapshot",
+                  "row_id": "eq-row-1",
+                  "evidence": {"method": "exact", "rule_id": "lexical-v1-exact"},
+                  "table": "equipment",
+                  "source_field": "Operating parameter (EN)",
+                  "parameter_id": "param-1",
+                  "catalogue_equipment_type_id": "type-a",
+                  "catalogue_equipment_type_label": "Bioreactor"
+                },
+                {
+                  "candidate_kind": "parameter_name",
+                  "matched_term": "Impeller speed",
+                  "ambiguity": "unresolved",
+                  "snapshot_id": "fixture-snapshot",
+                  "row_id": "eq-row-2",
+                  "evidence": {"method": "exact", "rule_id": "lexical-v1-exact"},
+                  "table": "equipment",
+                  "source_field": "Operating parameter (EN)",
+                  "parameter_id": "param-2",
+                  "catalogue_equipment_type_id": "type-b"
+                }
+              ]
+            },
+            {
+              "kind": "unit",
+              "occurrence_id": "occ-unit",
+              "block_node_id": "node-fixture-line-1",
+              "mention": {
+                "literal_text": "rpm",
+                "span": {"start_char": 20, "end_char": 23, "matched_text": "rpm"},
+                "rule_id": "lexical-v1-unit",
+                "controlled_spelling": "rpm",
+                "controlled_identity": "revolutions-per-minute",
+                "provenance": {
+                  "kind": "equipment_unit_record",
+                  "row_id": "eq-unit-1",
+                  "source_section": "Equipment / units"
+                },
+                "evidence": {"method": "exact", "rule_id": "lexical-v1-exact"}
+              }
+            },
+            {
+              "kind": "value",
+              "occurrence_id": "occ-value",
+              "block_node_id": "node-fixture-line-1",
+              "recognition_rule": {"rule_id": "lexical-v1-value"},
+              "expression": {
+                "form": "scalar_with_unit",
+                "raw_expression": "120 rpm",
+                "span": {"start_char": 16, "end_char": 23, "matched_text": "120 rpm"},
+                "number": {"kind": "exact_decimal", "text": "120"},
+                "source_unit_spelling": "rpm",
+                "unit_span": {"start_char": 20, "end_char": 23, "matched_text": "rpm"},
+                "controlled_unit_spelling": "rpm",
+                "controlled_unit_identity": "revolutions-per-minute",
+                "number_unit_group": {
+                  "number_span": {"start_char": 16, "end_char": 19, "matched_text": "120"},
+                  "unit_span": {"start_char": 20, "end_char": 23, "matched_text": "rpm"},
+                  "group_span": {"start_char": 16, "end_char": 23, "matched_text": "120 rpm"}
+                }
+              },
+              "applies_to": ["quantity_expressions", "parameter_value_expressions"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

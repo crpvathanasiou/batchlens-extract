@@ -66,6 +66,8 @@ src/app/
 │   ├── composition.py               bounded production AWS adapters plus opaque storage namespace
 │   ├── static/                      reproducible ignored Vite output
 │   └── README.md                    review contract and consumer boundary
+├── lexical_extraction/
+│   └── contracts.py                 L01 evidence, candidate, value, and outcome records
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -73,6 +75,9 @@ frontend/
 ├── tests/                           editor/mapping/state/API/round-trip/build-output/pending-save tests
 ├── package.json / package-lock.json pinned Node dependencies
 └── vite.config.ts                   library output under document_review/static
+
+tests/lexical_extraction/
+└── test_contracts.py                L01 public record and coherence tests
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -109,6 +114,7 @@ Inspect when:
 | `src/app/document_review/service.py` | Save/decision/approval/export use cases; `update` remains `ReviewState`; receipts are `update_with_receipt` / `reconcile_save_operation`; additive `review_context` | Mapping + storage → immutable revisions | Changing revision/CAS/approval invalidation, Save replay, or context derivation |
 | `src/app/document_review/storage.py` | Dynamo head + versioned S3 objects | Service persist → reachable head | Changing CAS conditions or object keys |
 | `src/app/document_review/rendering.py` | Deterministic reviewed HTML. Attribute contract v1 on `<html>` (`data-review-html-version`, `data-job-id`, `data-review-revision-id`, `data-review-generation`, `data-conversion-status`); catalogue `data-element-id` / `data-node-id` / `data-table-id`; ordered deduped `data-source-id` on text-bearing nodes; `data-generated="true"` on the summary header, partial banner, and `Page N` headings | `ReviewRevision` catalogue plus current document text → export HTML | Changing approved HTML heading/table markup or provenance attributes |
+| `src/app/lexical_extraction/contracts.py` | L01 lexical evidence, candidate, unit/value, provenance, extraction-outcome, and publication-claim records | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, span checks, outcome coherence, or publication claims |
 | `src/app/document_review/composition.py` | Production Dynamo/S3 wiring plus opaque storage namespace | Document settings → `ReviewService` | Changing production adapters; not used by harness |
 | `frontend/src/mapping.ts` | Page projection, sparse text, skeleton | Canonical page → TipTap JSON | Changing heading/table projection or IDs |
 | `frontend/src/extensions.ts` | Protected TipTap schema and load | Projection JSON → editor transactions | Changing structure lock, table attrs, page load |
@@ -147,12 +153,18 @@ current final CSVs (`materials_fda_ema`, `materials_chebi`, `equipment`, `unit_o
 Schema version 1 stores original columns as `TEXT` with source `row_id` as the primary key.
 It does not normalize terms, entries, or links. The consumer contract is
 `docs/FLAT_SQLITE_CONTRACT.md`. Synthetic tests:
-`tests/test_prepare_lexical_knowledge_sqlite.py`. The lexical engine is not implemented.
-Pytest imports the script through `pythonpath = ["scripts"]` in `pyproject.toml`.
-Pyright `extraPaths` includes `src` and `scripts`.
+`tests/test_prepare_lexical_knowledge_sqlite.py`. Pytest imports the script through
+`pythonpath = ["scripts"]` in `pyproject.toml`. Pyright `extraPaths` includes `src` and `scripts`.
 
-Pharmaceutical extraction, graph views, and a rules/Audit layer have no implementation modules
-yet. Do not invent those directories.
+`src/app/lexical_extraction/contracts.py` is the L01 record boundary: reviewed-HTML v1 input
+identity, page/block/span evidence, catalogue candidates, independent unit and value records,
+run provenance, extraction outcomes, and publication claims. Importing the package does no I/O.
+It does not read HTML, query the snapshot, normalize, match, parse values, or publish artifacts.
+Focused tests: `tests/lexical_extraction/test_contracts.py`. Synthetic fixture:
+`examples/lexical_extraction/result-example.json`. The lexical engine is not implemented.
+
+Graph views and a rules/Audit layer have no implementation modules yet. Do not invent those
+directories.
 
 ## Conversion and review boundaries
 

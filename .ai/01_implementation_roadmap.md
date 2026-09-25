@@ -190,3 +190,9 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md).
 **Current:** Conversion and HITL review slices are implemented in the working tree. Local harness visual/functional acceptance is complete for the behaviours listed in 03. AWS/production integration remains unverified.
 
 **Next:** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Extraction M-Design remains later.
+
+**L01 progress (2026-09-25, awaiting user acceptance):** lexical evidence, candidate, unit/value,
+and outcome contracts are implemented in `src/app/lexical_extraction/contracts.py`, including the
+correction pass for span coherence, source-backed dictionary hits, combined preset lists, resolved
+coverage, value-rule identity, and bounded fuzzy claims. Parsing, search, monitoring, and
+publication are not implemented. This is not acceptance of L01 and does not authorize L02.

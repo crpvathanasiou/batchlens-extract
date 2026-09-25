@@ -1,6 +1,49 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-25 Flat knowledge SQLite
+## 1. Current state — 2026-09-25 L01 lexical contracts
+
+**Implemented** in `src/app/lexical_extraction/contracts.py` only. These are typed evidence,
+candidate, unit/value, provenance, extraction-outcome, and publication-claim records.
+The lexical engine is **not implemented**. Parsing, search, real-data performance, monitoring,
+and artifact publication are **unimplemented** and **unverified**.
+
+- Reviewed HTML v1 input requires the HTML SHA-256, contract version 1, and producer root
+  metadata (`job_id`, `review_revision_id`, `review_generation`, `conversion_status`). An
+  external document id may be absent. A pre-validation failure has no validated-input record.
+- Character spans are zero-based half-open Unicode code points. Slice equality is checked only
+  with the block. Empty block text and missing OCR references are valid.
+- A dictionary occurrence needs at least one source-backed candidate. Exact evidence must
+  repeat the span text. Normalized-exact and fuzzy claims are stored, not computed. Fuzzy
+  evidence is one alphabetic word of at least six characters and a recorded edit distance of
+  at most one. Chemicals, UNII, and units cannot be fuzzy. No confidence score is stored.
+- Value `raw_expression`, unit spelling, and nested spans must agree. A unit mention checks
+  its own literal against its span. Value occurrences carry fixed rule `lexical-v1-value`.
+- Run provenance stores requested presets separately from requested and resolved components.
+  `rules_sha256` is a supplied digest. Resolved components must each have one executed outcome.
+- Extraction outcomes are `not_requested`, `completed` (including a measured zero), `partial`,
+  and `failed`. Publication is separate: a final manifest claim is valid only with completed
+  publication. The contract does not prove files were written.
+- Preset expansion is not implemented.
+- Synthetic example: `examples/lexical_extraction/result-example.json`. It is not a real extraction.
+
+Material alias text is stored as supplied. FDA/EMA and ChEBI column rules do not filter aliases
+by language. Equipment and Unit Operations dedicated-Greek-field exclusions are unchanged.
+
+**Test-verified** in this documentation correction: `scripts/quality.ps1` passed — Ruff check,
+Ruff format check (73 files already formatted), Pyright 0 errors / 0 warnings / 0 informations,
+pytest **289 passed**. Focused `tests/lexical_extraction/test_contracts.py` is included (19 tests).
+Pyright printed no missing-file notices.
+
+**Not done:** HTML reading, snapshot queries, normalization, matching, value parsing, fuzzy
+distance, aggregation, run control, monitoring, and publication. User acceptance of L01 is pending.
+
+**Next safe step:** user review of the L01 contracts. Do not implement L02 or later lexical work
+from this pass. Unrelated pending work remains the reviewed-HTML provenance browser check and the
+Findings default manual verify below.
+
+---
+
+## 1f. Prior current state — 2026-09-25 Flat knowledge SQLite
 
 **Implemented** as a standalone preparation utility. The earlier normalized design
 (`terms`, `lexical_entries`, `entry_sources`, `source_records`) was not built and is
@@ -28,9 +71,8 @@ pytest **270 passed**. Focused `tests/test_prepare_lexical_knowledge_sqlite.py` 
 (10 tests). A read-only smoke test of the published snapshot opened `mode=ro` with
 `PRAGMA query_only=ON`, read two batches of five rows from each table, and matched each
 chosen `row_id` lookup to that scan row. Database hash and companion hashes were unchanged
-and no WAL sidecar appeared. Pyright also printed the pre-existing missing-file notices for
-`merge_files.py`, `merge_files1.py`, `merge_files2.py`, `extract_chebi_materials.py`, and
-`compare_material_names.py`; those notices did not fail the gate. The production build below
+and no WAL sidecar appeared. Pyright also printed pre-existing missing-file notices for scripts later removed from the
+repository; those notices did not fail the gate. The production build below
 was not rerun. Human acceptance of the snapshot remains pending.
 
 Published snapshot (sources unchanged; content digests match; `PRAGMA integrity_check` ok;
@@ -93,9 +135,8 @@ The lexical engine itself is **not implemented**.
 **Test-verified** in this pass: `scripts/quality.ps1` passed — Ruff check, Ruff format check
 (67 files already formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **260 passed**.
 Focused `tests/document_review/test_rendering.py` plus `tests/document_review/test_backend_review.py`
-were green before the full gate (24 tests). Pyright also printed pre-existing missing-file notices
-for `merge_files.py`, `merge_files1.py`, `merge_files2.py`, `extract_chebi_materials.py`, and
-`compare_material_names.py`; those notices did not fail the gate. Manual browser acceptance of the
+were green before the full gate (24 tests). Pyright also printed pre-existing missing-file notices for scripts later removed from the
+repository; those notices did not fail the gate. Manual browser acceptance of the
 new attributes is **unverified**.
 
 **Not done:** lexical extraction, highlighting, search JavaScript, review JSON schema changes,
