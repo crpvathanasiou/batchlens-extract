@@ -191,8 +191,49 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md).
 
 **Next:** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Extraction M-Design remains later.
 
-**L01 progress (2026-09-25, awaiting user acceptance):** lexical evidence, candidate, unit/value,
-and outcome contracts are implemented in `src/app/lexical_extraction/contracts.py`, including the
-correction pass for span coherence, source-backed dictionary hits, combined preset lists, resolved
-coverage, value-rule identity, and bounded fuzzy claims. Parsing, search, monitoring, and
-publication are not implemented. This is not acceptance of L01 and does not authorize L02.
+**L01 progress (2026-09-25; user-accepted):** lexical evidence, candidate, unit/value, and
+outcome contracts are implemented in `src/app/lexical_extraction/contracts.py`.
+
+**L02 progress (2026-09-28; user-accepted):** execution-configuration loading and fixed preset
+resolution are implemented in `src/app/lexical_extraction/configuration.py`.
+
+**L03 progress (2026-09-28; user-accepted):** reviewed HTML v1 reader corrected for
+bounded `iter_pages` streaming, final digest only on completed read, fail-closed silent source
+omissions, exact version `"1"`, and duplicate provenance attributes
+(`src/app/lexical_extraction/html_reader.py`).
+
+**L04 progress (2026-09-28; user-accepted):** read-only flat SQLite snapshot
+preflight, pinned `mode=ro` access, bounded single-table `rowid` paging, and source
+`row_id` lookup are implemented in `src/app/lexical_extraction/knowledge_snapshot.py`.
+
+**L05 progress (2026-09-28; user-accepted):** fixed V1 source-field mapping from
+L04 `SourceRow` values to eligible search-term records is implemented in
+`src/app/lexical_extraction/field_mapping.py`.
+
+**L06 progress (2026-09-28; user-accepted):** fixed V1 comparison
+normalization, comparison→original offset projection, and role-aware boundaries
+(including compound-unit and hyphen corrections) are implemented in
+`src/app/lexical_extraction/comparison.py`.
+
+**L07 progress (2026-09-28; user-accepted):** bounded Aho–Corasick
+exact/normalized-exact raw discoveries over L05 terms and replayable L03 blocks
+are implemented in `src/app/lexical_extraction/dictionary_matcher.py`.
+
+**L08 progress (2026-09-28; treated as accepted baseline for L09 per L09
+authorization):** bounded dictionary aggregation from L07 raw discoveries into
+L01 `BlockRecord` values is implemented in
+`src/app/lexical_extraction/dictionary_aggregation.py`, with additive optional
+`supporting_row_ids` on the shared L01 candidate base.
+
+**L09 progress (2026-09-28; user-accepted as baseline for L10):** early
+full-Materials feasibility measurement helper and recorded dual-shard runs over
+real reviewed HTML v1 + production flat snapshot. Helper:
+`tests/lexical_extraction/acceptance.py`. Integrity-reporting correction is
+test-verified.
+
+**L10 progress (2026-09-28; implemented / test-verified; awaiting user
+acceptance):** independent parameter names, units, and value expressions in
+`unit_value_rules.py`, `unit_aggregation.py`, `value_expressions.py`, and
+`parameter_unit_value.py`, with additive optional `supporting_row_ids` on L01
+`EquipmentUnitRecord`. Fuzzy matching, runner/CLI product surface, monitoring,
+and publication remain unimplemented. Do not start L11 from this progress note.

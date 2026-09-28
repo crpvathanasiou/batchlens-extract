@@ -1,0 +1,17 @@
+schema_version: 1
+input:
+  reviewed_html_path: ./inputs/reviewed.html
+knowledge:
+  snapshot_directory: ./knowledge/flat-v1
+output:
+  directory: ./results
+extraction:
+  presets: [materials_with_quantities]
+  components: []
+  fuzzy_enabled: false
+resources:
+  sqlite_read_batch_rows: 5000
+  sqlite_cache_kib: 65536
+  max_terms_per_shard: 2000000
+  max_term_codepoints_per_shard: 50000000
+  result_buffer_records: 50000

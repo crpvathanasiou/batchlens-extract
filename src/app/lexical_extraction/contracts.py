@@ -299,7 +299,16 @@ class _CandidateBase(LexicalModel):
     ambiguity: AmbiguityQualification = AmbiguityQualification.NONE
     snapshot_id: NonEmptyText
     row_id: NonEmptyText
+    supporting_row_ids: tuple[NonEmptyText, ...] = ()
     evidence: MatchEvidence
+
+    @model_validator(mode="after")
+    def supporting_row_ids_are_distinct(self) -> Self:
+        if self.row_id in self.supporting_row_ids:
+            raise ValueError("supporting_row_ids must not include the representative row_id")
+        if len(set(self.supporting_row_ids)) != len(self.supporting_row_ids):
+            raise ValueError("supporting_row_ids must not contain duplicates")
+        return self
 
 
 class FdaEmaMaterialCandidate(_CandidateBase):
@@ -443,11 +452,25 @@ class FixedUnitVocabulary(LexicalModel):
 
 
 class EquipmentUnitRecord(LexicalModel):
-    """Eligible ``equipment.Unit`` source cell. Not a parameter or equipment identity."""
+    """Eligible ``equipment.Unit`` source cell. Not a parameter or equipment identity.
+
+    When multiple denormalized equipment rows share the same unit spelling at one
+    span, ``row_id`` is the representative and ``supporting_row_ids`` retains the
+    remaining source references without multiplying the textual hit.
+    """
 
     kind: Literal["equipment_unit_record"] = "equipment_unit_record"
     row_id: NonEmptyText
+    supporting_row_ids: tuple[NonEmptyText, ...] = ()
     source_section: str | None = None
+
+    @model_validator(mode="after")
+    def supporting_row_ids_are_distinct(self) -> Self:
+        if self.row_id in self.supporting_row_ids:
+            raise ValueError("supporting_row_ids must not include the representative row_id")
+        if len(set(self.supporting_row_ids)) != len(self.supporting_row_ids):
+            raise ValueError("supporting_row_ids must not contain duplicates")
+        return self
 
 
 UnitProvenance = Annotated[

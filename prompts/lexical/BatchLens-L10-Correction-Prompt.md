@@ -1,0 +1,27 @@
+# BatchLens — L10 focused correction: bounded stream and unit/value evidence
+
+## Baseline and stop boundary
+
+L01–L09 are user-accepted. L10 is implemented and Cursor-reported test-verified (12 focused, 213 lexical, 483 total), but **not user-accepted**. Correct the concrete L10 issues below only. Read current `AGENTS.md`, `.ai/03_common_handoff.md`, relevant `.ai/05_pipeline_contracts.md`, and the current L10 modules/tests plus the accepted L07/L08 interfaces. Preserve L01–L09 production behavior, the read-only snapshot, and historical L09 reports. Do not start L11, runner/CLI, publication, or review UI.
+
+## 1. Make the L10 block stream actually bounded
+
+In `parameter_unit_value.py`, `iter_parameter_unit_value_block_records` currently turns arbitrary term iterables into tuples; `_collect_parameter_occurrences` and `_collect_unit_occurrences` turn complete L07 discovery streams into lists and then retain all document occurrences in dictionaries before the final replay. This defeats the intended bounded block-stream API. Compose the already ordered L08 dictionary blocks, L10 unit blocks, and per-block value recognition incrementally (or use a bounded, disk-backed equivalent). Keep all occurrences, document order, stable IDs, and explicit page/block identity checks. No whole-document discoveries/results containers and no silent truncation. Do not change accepted L07/L08 matching semantics.
+
+`result_buffer_records` must bound one block's buffered discoveries/occurrences, not the cumulative number across the document. Fix the cumulative check in `ParameterUnitValueStream` and the cumulative `unit_occurrences` check in `UnitBlockStream`. Cumulative counts remain in completed coverage. Add a regression with multiple blocks whose **total** occurrences exceed a deliberately small buffer limit while each block remains within it; all blocks must be returned. Add a meaningful early-close/incomplete-replay test and ensure upstream streams, temporary spools, and iterators close on success, failure, and early close. Completed coverage must become available only after successful full consumption **and cleanup**; a cleanup failure must not leave a completed-coverage claim.
+
+Avoid `list(unit_terms)` in the public unit path for arbitrary iterables. Stream terms or explicitly enforce a justified small, finite bound for the equipment table/vocabulary without silently losing any eligible term. L02 finite limits remain configuration safeguards; do not add hardware/RAM introspection or automatic shard sizing.
+
+## 2. Correct unit source and normalization behavior
+
+An equipment `Unit` hit must be checked against the pinned L04 snapshot and L05 mapping. If no snapshot is available for an equipment-backed discovery, fail explicitly; the fixed vocabulary needs no snapshot. Do not silently accept an unchecked catalogue `row_id`. Require the known equipment table/field semantics and preserve every supporting row reference when duplicates collapse.
+
+For a unit span backed by both fixed vocabulary and equipment rows (such as `rpm`), keep the fixed controlled spelling/identity **and** the equipment row references in the final unit evidence, using the smallest compatible representation. Do not let source/shard order choose a different representative's `Source / section`: select the section from the deterministic representative `row_id`, and test reversed input order. A mixture of an exact fixed-vocabulary hit and a normalized-exact equipment spelling must not raise `EXACT_EVIDENCE_MISMATCH` merely because the normalized alternative differs in case; evidence method and original span must remain truthful. Preserve the accepted atomic-unit boundaries and L08's unit-discovery rejection.
+
+Value recognition currently compares unit spellings case-sensitively in `_match_unit_at`, unlike L06/L07 normalized matching. Make fixed and eligible equipment unit recognition consistent with the fixed V1 comparison/boundary rules, preserving the exact source substring and code-point spans. Cover `120 RPM` (and a representative case-folded unit) alongside `120 rpm`, with no short-unit hits inside `rpm/min`, `min⁻¹`, `mL·min⁻¹`, or `kg²`. Ensure `recognize_block_values` and the block-stream path return the same controlled identity for an equipment spelling that is also in the fixed vocabulary. Add focused identifier-prefix negatives for unit-bearing ranges/tolerances and a cue embedded in another word; do not infer a value from those substrings.
+
+## 3. Strengthen verification and report precisely
+
+Replace permissive assertions in `test_multiple_parameter_candidates_without_equipment_inference` (`len(...) == 1 or 2` and `... or True`) with assertions that both distinct `parameter_id` candidates remain, while no detected equipment mention is created. Add targeted tests for each corrected invariant above, including source-order invariance and the successful multi-block stream. Keep tests small and do not mirror implementation logic.
+
+Run focused L10 tests, `tests/lexical_extraction/`, and `scripts/quality.ps1`; report actual results. Update `.ai/03_common_handoff.md` as the execution-state anchor and adjust `.ai/05_pipeline_contracts.md`/`.ai/04_code_map.md` only where behavior or files truly change. Distinguish direct tests from the earlier real-HTML smoke; no new full Materials benchmark is required. Return exact changed files, the corrected public behavior, concrete test evidence, remaining limitations, and **stop for L10 user review**. Do not claim L10 acceptance or start L11.

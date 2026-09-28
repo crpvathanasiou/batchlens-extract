@@ -1,8 +1,42 @@
 # 07 — Extraction Evaluation
 
-**Status:** Evaluation strategy to define. No extraction dataset, accuracy result, or acceptance threshold exists yet unless independently confirmed locally (none confirmed for this repository).
+**Status:** Evaluation strategy still largely open. No pharmaceutical accuracy
+dataset, field-level acceptance threshold, or reviewer-effort study exists yet.
+An early **Materials lexical feasibility** measurement was recorded under L09
+(resource/stability evidence only — not content accuracy).
 
 Owner of extraction-quality and reviewer-effort evaluation. Software unit/integration tests: [02_code_quality_standards.md](02_code_quality_standards.md). Check-specific value measurement: [08_check_selection_strategy.md](08_check_selection_strategy.md). Product hypotheses: [00_project_reference.md](00_project_reference.md).
+
+---
+
+## 0. L09 early full-Materials feasibility (2026-09-28)
+
+Read-only measurement helper: `tests/lexical_extraction/acceptance.py`. Uses
+accepted L03→L08 APIs unchanged. Component `materials` only; fuzzy disabled; no
+publication. Post-run integrity boundary (same date, reporting correction): hash
+or sidecar failures use `status=integrity_failed` with
+`HTML_INPUT_CHANGED` / `KNOWLEDGE_WRITE_DETECTED`; HTML-only changes do not set
+`knowledge_write_detected`. Historical A/B JSON values below were not rewritten.
+
+| Item | Value |
+|------|-------|
+| Host | MSI MS-7D25; Windows 11 Pro 10.0.26200; Python 3.11.4; ~128 GiB RAM |
+| Declared peak-process budget | 32 GiB (`windows_psapi_peak_working_set`) |
+| Reviewed HTML v1 | provenance export revision `f489826a-37bc-45e8-a13c-b648caf28b27`; 158,317 bytes; 18 pages / 728 blocks; SHA-256 `e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5` |
+| Snapshot | `flat-v1-a39c0b393ffdbd4e97ed`; DB 441,327,616 bytes; SHA-256 `cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2` |
+| Fixed limits | batch 5000; cache 65536 KiB; max term codepoints/shard 50_000_000; result buffer 50_000 |
+| Configured shard settings | A: `max_terms_per_shard=500_000`; B: `2_000_000` (separate processes). Configured values differed; **actual effective shard counts were not measured**. |
+| Eligible terms | 4,345,238 (both runs) |
+| Raw discoveries / occurrences / candidates / blocks | 4,058 / 472 / 4,058 / 728 |
+| Semantic digest | `b785ba207f6442b2736593eb93472af4bd6ad8f8627703b034e1345448290f5c` (identical A/B) |
+| Peak WS | A 502,824,960 bytes; B 503,087,104 bytes (both under budget) |
+| Match+aggregation time | A ~162.9 s; B ~163.7 s |
+| Input/snapshot integrity | hashes unchanged; no WAL/SHM/journal; no knowledge write |
+| Unavailable metrics | temporary spool peak bytes; indexing/search/aggregation phase split; effective shard counts |
+
+Reports: `out/lexical-l09/run-a-shard-500000.json`,
+`out/lexical-l09/run-b-shard-2000000.json`. Not pharmaceutical accuracy, not
+manual extraction acceptance, not a final extraction manifest.
 
 ---
 

@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01 lexical record contracts **are implemented** and **test-verified**; they are not a working extractor. Parsing, search, monitoring, and publication remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction orchestration remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L10 lexical building blocks (contracts through dictionary aggregation, plus independent unit/value recognition) **are implemented** and **test-verified**; they are not a working end-to-end extractor. Fuzzy matching, runner/CLI product surface, monitoring, and publication remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction orchestration remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -208,3 +208,357 @@ inside an overall `partial`. Unavailable measurements are omitted, not stored as
 **Publication.** Completed publication requires a final-manifest claim. Failed or interrupted
 publication must not carry that claim. Partial extraction may be paired with completed
 publication. The claim does not prove that files were written.
+
+## 10. L02 execution configuration (implemented loader, not an extractor)
+
+Code: `src/app/lexical_extraction/configuration.py`. Synthetic example:
+`examples/lexical_extraction/execution-config.example.yaml`.
+
+**Root YAML shape (schema_version exactly 1).** Required mappings `input`, `knowledge`,
+`output`, `extraction`, and `resources`. Unknown keys are rejected. Paths are nonempty
+strings resolved against the configuration file's parent directory to absolute `Path`
+values; existence and creation are later concerns.
+
+**Fixed preset map.** `unit_operations` → unit_operations; `unit_operations_with_steps` →
+unit_operations + process_steps; `materials` → materials; `materials_with_quantities` →
+materials + quantity_expressions + units; `equipment` → equipment;
+`equipment_with_parameters` → equipment + parameter_names + parameter_value_expressions +
+units; `full` → all eight components. Resolved output is always the canonical order
+`unit_operations`, `process_steps`, `materials`, `equipment`, `parameter_names`, `units`,
+`quantity_expressions`, `parameter_value_expressions`. `with` means co-execution only.
+
+**User switches.** Only `fuzzy_enabled` (strict bool, default `false` when omitted). No
+policy file, algorithm selector, field selector, stage list, or LLM option.
+
+**Resources (safeguards, not performance claims).** Defaults/max: `sqlite_read_batch_rows`
+5000/100000; `sqlite_cache_kib` 65536/1048576; `max_terms_per_shard` 2000000/10000000;
+`max_term_codepoints_per_shard` 50000000/500000000; `result_buffer_records` 50000/1000000.
+
+**Overrides and provenance.** Typed `SelectionOverride` replaces YAML selection fields
+entirely before resolution. Effective SHA-256 uses UTF-8 canonical JSON with sorted
+request sets so selection order does not change operational provenance. Compatible with
+`RunProvenance.configuration_sha256`. L04 consumes `knowledge.snapshot_directory`,
+`sqlite_read_batch_rows`, and `sqlite_cache_kib`. Field mapping, matching, monitoring,
+runner, and publication remain unimplemented.
+
+## 11. L03 reviewed HTML v1 reader (implemented reader, not a matcher)
+
+Code: `src/app/lexical_extraction/html_reader.py`.
+
+**Input.** Reviewed HTML file path (optionally via L02 `reviewed_html_path`). Production
+`iter_pages` streams finite byte chunks with incremental UTF-8 decoding and hashes the exact
+bytes parsed. Root version must be exactly `"1"`. Duplicate provenance attributes are
+rejected. Root fields are checked when `<html>` is seen. Final `ReviewedHtmlV1Input`
+(including whole-file SHA-256) exists only after successful full iteration (`completed`).
+
+**Pages and blocks.** Physical `section.page` elements emit in DOM order and are released;
+the reader does not retain the whole HTML text or all pages. Generated ancestors and page
+labels are skipped. Source-bearing `p`/`h2`/`h3`/`h4`/`footer`/`td`/`th` must sit under
+`article.element` with `data-node-id` (including empty cells). Bare non-whitespace article
+text, unsupported/void tags with `data-node-id`, out-of-page `data-node-id`, mismatched
+`data-table-id` vs owning `data-element-id`, and unexpected nested markup inside a source
+block fail closed. Text preserves source whitespace; `<br>` becomes newline. Page HTML
+coverage `complete` is not PDF/OCR completeness.
+
+**OCR references.** `data-source-id` is split on ASCII spaces. Block IDs that contain spaces
+cannot be recovered from the joined attribute; L03 records this limitation and does not
+alter the producer or invent a PDF/JSON lookup.
+
+**Memory limits.** Retained: current page/block, short page queue, decode chunk, and
+duplicate page/node identity sets (grow with distinct IDs). `read_all_pages` is a
+small/test convenience only.
+
+**Completion.** Early stop or late structural failure ⇒ not complete and no final digest.
+Matching and publication remain unimplemented. Read-only snapshot access is L04.
+
+## 12. L04 read-only flat snapshot access (implemented reader, not a field mapper)
+
+Code: `src/app/lexical_extraction/knowledge_snapshot.py`.
+
+**Preflight.** `open_knowledge_snapshot` takes an L02 snapshot directory plus
+`sqlite_read_batch_rows` and `sqlite_cache_kib`.
+`open_knowledge_snapshot_from_configuration` reads those from an effective
+configuration. Success returns one handle and an L01 `KnowledgeSnapshotIdentity`:
+`snapshot_id`, streamed `database_sha256`, exact `manifest_sha256`, schema/user
+version 1, and preparation version `flat-sqlite-1`.
+
+All four companions must exist and be readable: `knowledge.sqlite`, `manifest.json`,
+`validation_report.json`, and a nonempty snapshot `FLAT_SQLITE_CONTRACT.md`. The
+stored contract text and producer hash are not compared with later repository files.
+Manifest and report are JSON objects. `completion_status` must be the string
+`complete`. Schema and database `user_version` must be the exact JSON integer
+`1`; Booleans, floats, and numeric strings are rejected even when Python would
+compare them to `1`. Preparation version, database file name, size, and hash
+must agree. Stringified counts and truthy non-booleans are not proof.
+`snapshot_id` must equal the producer derivation from the validated
+`snapshot_identity` (`flat-v1-` plus the first 20 lowercase hex characters of
+SHA-256 over UTF-8 compact sorted JSON). Identity sources must be the four
+expected names and hashes in producer order; a reordered list is rejected and
+does not keep the original ID. The filesystem directory name need not equal
+`snapshot_id`. The report must record `integrity_check` `ok`,
+boolean true for content-digest, source-preservation, and WAL-absence, and table
+names, columns, column counts, and imported row counts that match the fixed v1
+headers and the manifest row counts.
+
+The database is opened with an encoded `file:` URI and `mode=ro`, then
+`PRAGMA query_only=ON`. Preflight requires journal mode `delete`, user version 1,
+`PRAGMA integrity_check` of `ok`, exactly the four rowid tables, `TEXT NOT NULL`
+columns in contract order, `row_id` as the only primary key, and database row
+counts equal to the manifest. A WAL header or `-wal`, `-shm`, or `-journal`
+sidecar is rejected. The database hash is streamed in finite chunks. CSV paths
+named in the manifest are not required. The reader does not repair, import, or
+prepare a snapshot.
+
+**Reads.** Callers name one of `materials_fda_ema`, `materials_chebi`, `equipment`,
+or `unit_operations`. `read_batch` and `iter_batches` use
+`rowid > after_rowid ORDER BY rowid LIMIT batch_size`, starting at zero, and never
+exceed the validated batch limit. An empty page ends the scan.
+`lookup` uses that table's source `row_id` primary key and returns the row or
+`None` when it is absent. `scan_cursor` is this file's SQLite `rowid`, not
+`row_id`. Cells stay stored strings, including blanks, repeated non-key values,
+and Unicode. There are no joins, added indexes, normalized tables, or field rules.
+
+**Lifecycle.** One connection stays open for the handle. After preflight, database
+changes are detected by size and modification time, and the three small companions
+are re-hashed before each read. A detectable change is `SNAPSHOT_CHANGED`: the
+connection closes and no rows are returned under the previous identity.
+`SnapshotReadError` maps to `SafeStructuredError`. Scans before a successful open
+and after close fail. Validation failure does not claim success.
+
+Normalization, matching, fuzzy matching, value parsing, orchestration, runner/CLI,
+monitoring, and publication remain unimplemented. Fixed search-field mapping is L05.
+
+## 13. L05 fixed V1 source-field mapping (implemented mapper, not a matcher)
+
+Code: `src/app/lexical_extraction/field_mapping.py`.
+
+**Input.** An L04 `SourceRow` plus the independently selected L01/L02 components.
+Optional `snapshot_id` is attached for later candidate provenance. The mapper does
+not open or rebuild the snapshot by itself; `iter_eligible_terms` may page an
+already validated L04 handle and requests only tables needed by those components.
+
+**Output.** Zero or more compact `EligibleSearchTerm` records per row: original
+literal spelling, component, term role, source table/field/`row_id`, optional
+`lexical_term_id` / snapshot id, selected native IDs/display/qualification/
+traceability, and fixed internal `boundary_hint` / `fuzzy_allowed` hints. Blank or
+whitespace-only search cells yield no term. Empty optional IDs stay `None`. Exact
+case-insensitive unavailable markers (`N/A`, `NA`, `unknown`, `None`) are excluded
+from UNII code search and from optional native ID attributes; they are not applied
+to Materials names or aliases, and naming rows are retained. Distinct rows and
+repeated spellings stay separate. No global vocabulary, persistent index,
+normalized comparison key, document span, match evidence, or L01 candidate is
+created.
+
+**Fixed V1 fields.**
+
+| Source table | Eligible search cells → component | Notes |
+|---|---|---|
+| `materials_fda_ema` | `material_name`, `alias_name`, `UNII` → `materials` | Display `material_name`; optional UNII and SMS_ID identities; `alias_type`; `source`. UNII is whole-code and not fuzzy. Unavailable UNII markers are not code-search terms. No CAS or SMS_ID search. |
+| `materials_chebi` | `material_name`, `alias_name` → `materials` | Display `material_name`; optional CHEBI_ID; preserve `alias_type` (exact vs related). No CAS or CHEBI_ID search; no cross-catalogue merge. |
+| `equipment` | `Equipment type (EN)` → `equipment`; `Operating parameter (EN)` → `parameter_names`; eligible atomic `Unit` → `units` | Equipment identity `equipment_type_id`; parameter identity `parameter_id` plus catalogue equipment scope only. No Greek, brand, model, manufacturer/model ids, or Published range terms. |
+| `unit_operations` | `Search term (EN)` → `unit_operations` when `Index this row` is exact `TRUE`; `Process step (EN)` → `process_steps` independently | Preserve known `Match policy` / `record_type` roles. Support/inspection/step-cue become `generic_cue` without inventing `Operation ID`. Unrecognized nonempty policy/record-type values raise `FieldMappingError` with a ≤200-character diagnostic (truncated `row_id` context only; source keys unchanged). |
+
+**Unit eligibility.** Equipment `Unit` is vocabulary only. The fixed conservative rule
+rejects placeholders/uncertainty prose, alternatives (` or `, spaced `/`),
+semicolons, dash prose, footnote `*` / bare `¹`, embedded whitespace, pure
+numerics, and numeric ranges. Compact tokens, slash compounds without spaces, and
+mathematical reciprocal forms such as `min⁻¹` remain eligible. Original spelling is
+preserved. Quantity/parameter-value components have no catalogue search fields here.
+
+**Fuzzy hint.** `fuzzy_allowed` is an internal V1 shape/scope hint only: eligible
+natural-language roles with one alphabetic word of length ≥6 may be true;
+chemicals/UNII/units, phrases, short words, and context/support/inspection/generic
+cues stay false. L05 does not calculate edit distance.
+
+**Limits.** Matching, normalization, fuzzy distance, value parsing, occurrence
+aggregation, runner/CLI, monitoring, and publication remain unimplemented at L05.
+Normalization helpers are L06.
+
+## 14. L06 fixed V1 comparison normalization, offsets, and boundaries
+
+Code: `src/app/lexical_extraction/comparison.py`.
+
+**Input.** One L05 `EligibleSearchTerm` and/or one L03 `BlockEvidence` (or raw
+literal text with the same `term_role` / `boundary_hint`). Helpers are pure and
+do not scan the snapshot, HTML file, or a document-wide index.
+
+**Output.** An immutable `ComparisonSurface`: temporary `comparison_text` plus
+ordered `ComparisonUnit` provenance linking each comparison span to a half-open
+original code-point range. `project_comparison_range` / `project_against_block`
+return an L01 `CharSpan` whose `matched_text` equals the original slice.
+Empty/whitespace-only term keys and misaligned or boundary-rejected ranges raise
+`ComparisonError` (bounded code/message → `SafeStructuredError`).
+
+**Fixed V1 comparison rules.** Each normalization unit is a Unicode starter plus
+any immediately following combining marks; that unit is NFC'd then
+`casefold`'d. This is **not** a whole-string NFC pass: adjacent Hangul Jamo such
+as `가` remain uncomposed under V1 even though `unicodedata.normalize('NFC', …)`
+would compose them. Natural-language roles (`equipment_type`, `parameter_name`,
+`unit_operation`, `generic_cue`, `process_step`) also collapse each whitespace
+run (including CR/LF) to one separator. Materials names/aliases, UNII
+(`whole_code`), and units (`atomic_unit`) do not collapse whitespace and preserve
+chemical punctuation, signs, digits, stereochemistry, unit slashes, and
+superscripts. No stemming, NFKC, accent stripping, OCR hyphen repair, lookalike
+transliteration, or cross-block joining. Projection must cover complete
+normalization units (including case-fold expansions such as `ß` → `ss`);
+normalized indices are never used as original offsets.
+
+**Fixed V1 boundaries** (checked on original exteriors):
+
+- `default`: rejects embedded hits beside letters/marks/decimal digits/connector
+  punctuation **or hyphen-minus**, so shorter material names are not accepted
+  inside hyphen-connected forms (`glucose-6-phosphate`, `water-soluble`). A full
+  punctuation-bearing chemical term still matches as itself. Space-separated
+  phrase overlaps at a word edge remain valid.
+- `whole_code`: same continuation set as `default` for exterior checks (including
+  `-`), so a UNII is not found inside a longer alphanumeric/hyphen/underscore
+  identifier.
+- `atomic_unit`: continuation includes letters/marks/connectors, `/`, middle dot
+  `·`, hyphen-minus, superscript signs, and numeric characters in categories
+  `Nd` and `No`. Shorter hits inside `min⁻¹`, `mL·min⁻¹`, `kg²`, and `rpm/min`
+  are rejected; complete compounds remain eligible. Left number-adjacent
+  permission uses ordinary decimal digits (`Nd`) only (`37°C`, `120rpm`), not
+  superscript/`No` numbers.
+
+**Limits.** Fuzzy distance, value parsing, occurrence/candidate aggregation,
+runner/CLI, monitoring, and publication remain unimplemented. Bounded exact /
+normalized-exact matching is L07.
+
+## 15. L07 bounded Aho–Corasick raw discoveries (implemented matcher core, not aggregation)
+
+Code: `src/app/lexical_extraction/dictionary_matcher.py`. Dependency: `pyahocorasick`.
+
+**Input.** An iterable of L05 `EligibleSearchTerm` records, a replayable
+`BlockReplaySource` of L03 `BlockEvidence` (synthetic `StaticBlockSource` or
+`ReviewedHtmlBlockReplay`), and L02 `ResourceLimits`. `fuzzy_enabled` is ignored;
+L07 always performs exact/normalized-exact matching only.
+
+**Output.** Streamed intermediate `RawDiscovery` records: method
+`exact` / `normalized_exact`, fixed L01 rule ids, component/role, source
+table/field/`row_id`, optional `lexical_term_id` / snapshot id, original
+dictionary spelling, block `node_id`, and L01 `CharSpan` with
+`block.text[start:end] == matched_text`. Not an L01 `DictionaryOccurrence`,
+candidate, or publication claim.
+
+**Shard / replay lifecycle.** Terms are consumed once into finite shards counted
+by source references (`max_terms_per_shard`) and retained string code points
+(`max_term_codepoints_per_shard`). Each shard indexes distinct L06 comparison
+keys with Aho–Corasick (all colliding source references retained), partitions by
+whitespace-collapse profile, rescans every block, emits through a buffer of at
+most `result_buffer_records`, then releases automata and shard-local maps.
+Shards may rescan blocks. For reviewed HTML, each pass reopens the file; the
+first complete pass pins `html_sha256`; a changed or incomplete identity fails
+closed. Discovery multisets for identical pinned inputs are independent of shard
+limits; emission order may follow shard order.
+
+**Failures.** Oversized single references, shard construction failures,
+block-read failures, and identity mismatches raise bounded
+`DictionaryMatchError` (→ `SafeStructuredError`). Projection skips only
+`BOUNDARY_REJECTED` and `PARTIAL_NORMALIZATION_UNIT` as normal non-hits; other
+L06 `ComparisonError` codes become `PROJECTION_FAILED`. Exceptions while
+creating or consuming the Aho–Corasick iterator are `MATCH_FAILED` (not
+`BLOCK_READ_FAILED`). Early generator close releases shard state. Hits are never
+silently truncated; references are never last-write-wins deduplicated.
+
+**Limits.** Aggregation of same-span discoveries, canonical result order, fuzzy
+matching, value parsing, runner/CLI, monitoring, and publication remain
+unimplemented. Bounded dictionary aggregation is L08.
+
+## 16. L08 bounded dictionary aggregation (implemented aggregator core, not a runner)
+
+Code: `src/app/lexical_extraction/dictionary_aggregation.py`. Optional L01 field:
+`supporting_row_ids` on the shared candidate base (default empty).
+
+**Input.** An iterable of L07 `RawDiscovery` records (dictionary components only),
+a replayable `BlockReplaySource`, an open L04 `SnapshotLookup` /
+`KnowledgeSnapshot`, and L02 `ResourceLimits`. Required
+`expected_source_identity` must equal the pinned L07 document identity after
+replay (`SOURCE_IDENTITY_REQUIRED` when omitted).
+
+**Output.** `AggregatedBlockStream` yielding L01 `BlockRecord` values in document
+order (empty-match blocks preserved). After complete successful consumption
+**and** successful spool cleanup, `coverage` reports block/occurrence/candidate/
+discovery counts and the final source identity. Emitted records before that point
+are provisional. Not a whole-run tree, final outcome, or published artifact.
+
+**Spool / grouping lifecycle.** Discoveries are written to a run-local temporary
+SQLite spool (`PRAGMA temp_store=FILE`), then regrouped by block and original
+span. Per-block capacity uses a disk-backed `block_hit_counts` primary-key
+counter updated with each discovery insert (same deferred transaction /
+rollback), plus fetch `LIMIT result_buffer_records + 1` as a defensive read
+guard. Capacity checks do not repeatedly `COUNT(*)` the discoveries table.
+Hits loaded for an
+emitted block are marked consumed; leftover unconsumed hits after replay raise
+`UNMATCHED_SPOOL_HITS`. Same-span source references keep `exact` over
+`normalized_exact`. Equivalent mapped candidate interpretations collapse to one
+candidate with lexicographic representative `row_id` and sorted
+`supporting_row_ids`. Optional interpretation-key fields sort with a deterministic
+comparable form (`None` before strings) without changing grouping equality.
+Candidates are rehydrated by single-table L04 `lookup` plus L05 `map_source_row`.
+Unit raw discoveries are rejected. Spool connection close precedes directory
+delete (Windows-safe); cleanup failure is `SPOOL_CLEANUP_FAILED` and does not set
+coverage. Final spool `commit()` failure is `SPOOL_WRITE_FAILED` (not a raw
+sqlite error). Early ingest failure closes a closable upstream discovery iterator.
+
+**Failures.** Missing/mismatched lookup or snapshot identity, unexpected unit
+input, missing required source identity, replay identity change, unmatched spool
+hits, spool I/O/cleanup errors, and per-block/group overflow of
+`result_buffer_records` raise bounded `DictionaryAggregationError`. Failures do
+not claim completed coverage.
+
+**Limits.** Fuzzy matching, runner/CLI, monitoring, review-UI projection, and
+publication remain unimplemented. Independent unit/`UnitOccurrence` aggregation
+and value-expression recognition are L10 (not this module). Full-Materials
+time/peak-memory feasibility requires a local reviewed HTML v1 export and is
+recorded separately when run.
+
+## 17. L10 independent parameter names, units, and value expressions
+
+Code: `unit_value_rules.py`, `unit_aggregation.py`, `value_expressions.py`,
+`parameter_unit_value.py`.
+
+**Public API.** `iter_parameter_unit_value_block_records` streams per-block
+`BlockRecord` values for independently selected `parameter_names`, `units`,
+`quantity_expressions`, and/or `parameter_value_expressions`.
+`recognize_block_values` is the per-block value-only helper. The stream composes
+ordered L08 dictionary blocks, L10 unit blocks, and per-block value recognition
+incrementally (no whole-document discovery/result containers). Early `close()`
+releases owned spool/stream resources; coverage is available only after complete
+successful consumption and child-stream cleanup. Value-only selection without
+parameter/unit streams may drive a fresh `ReviewedHtmlBlockReplay` when an
+expected full-file SHA-256 is supplied: blocks stream without an all-document
+buffer, the unpinned first pass is permitted for that case only, and the
+finalized replay identity is checked after full consumption before coverage is
+published. Wrong digest, read failure, or early close leaves coverage
+unpublished (`STREAM_INCOMPLETE` / explicit identity failure). Already-pinned
+sources keep immediate identity checks.
+
+**Parameter names.** Stay on the accepted L05→L07→L08 path. Equipment detection
+is never required or performed when only parameter-name terms are supplied.
+
+**Units.** L07 raw discoveries for `Component.UNITS` are aggregated by L10 unit
+aggregation, not L08. L08 continues to reject unit discoveries with
+`UNEXPECTED_UNIT_DISCOVERY`. Equipment `Unit` rows require a pinned snapshot and
+L05 mapping; they use `EquipmentUnitRecord` with additive optional
+`supporting_row_ids` when denormalized rows repeat one spelling, and
+deterministic representative `Source / section`. Fixed quantity units use
+`FixedUnitVocabulary` and the versioned vocabulary in `unit_value_rules.py`
+(`lexical-unit-vocabulary-v1` / `lexical-unit-value-rules-v1`). Dual
+fixed+equipment hits keep controlled spelling/identity and equipment row refs.
+`result_buffer_records` is per-block.
+
+**Values.** Controlled scalar-with-unit, range, comparison, symmetric-tolerance,
+categorical (`OFF`, `under vacuum`), and cued-unitless (`Speed:`) forms. Exact
+original spans and nested number/unit/group agreement are required. Unit
+recognition inside values is casefold-consistent with L06/L07 while preserving
+the exact source substring. Selecting a value component may recognize a unit
+inside an expression without emitting a standalone `UnitOccurrence` unless
+`units` is also selected. Both value components together emit one occurrence
+with both `applies_to` values. Ambiguous `1,000` stays unresolved
+(`AmbiguousNumber`); free-standing page/date/identifier/step-label quantities,
+identifier-prefixed range/tolerance tails, and embedded cues are rejected. No
+unit conversion, parent binding, or catalogue Published-range substitution.
+
+**Limits.** Not a CLI, publisher, review UI, or LLM workflow. Fuzzy matching,
+runner orchestration beyond this callable capability, monitoring, and
+publication remain unimplemented.

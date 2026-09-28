@@ -67,7 +67,18 @@ src/app/
 │   ├── static/                      reproducible ignored Vite output
 │   └── README.md                    review contract and consumer boundary
 ├── lexical_extraction/
-│   └── contracts.py                 L01 evidence, candidate, value, and outcome records
+│   ├── contracts.py                 L01 evidence, candidate, value, and outcome records
+│   ├── configuration.py             L02 YAML load, preset resolution, effective digest
+│   ├── html_reader.py               L03 reviewed HTML v1 reader → PageRecord/BlockEvidence
+│   ├── knowledge_snapshot.py        L04 read-only flat SQLite snapshot paging and row_id lookup
+│   ├── field_mapping.py             L05 fixed V1 SourceRow → eligible search-term mapping
+│   ├── comparison.py                L06 fixed V1 comparison normalize / offset map / boundaries
+│   ├── dictionary_matcher.py        L07 bounded Aho–Corasick exact/normalized-exact raw discoveries
+│   ├── dictionary_aggregation.py    L08 bounded dictionary occurrence aggregation → BlockRecord
+│   ├── unit_value_rules.py          L10 fixed V1 quantity-unit vocabulary and categorical/cue rules
+│   ├── unit_aggregation.py          L10 unit-mention aggregation (not L08)
+│   ├── value_expressions.py         L10 controlled value-expression recognition
+│   └── parameter_unit_value.py      L10 independent parameter/unit/value block-stream API
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -77,7 +88,17 @@ frontend/
 └── vite.config.ts                   library output under document_review/static
 
 tests/lexical_extraction/
-└── test_contracts.py                L01 public record and coherence tests
+├── acceptance.py                    L09 read-only Materials feasibility measurement helper
+├── test_acceptance.py               L09 helper synthetic fail-closed / digest checks
+├── test_contracts.py                L01 public record and coherence tests
+├── test_configuration.py            L02 configuration load/resolve/digest tests
+├── test_html_reader.py              L03 reviewed HTML reader and evidence mapping tests
+├── test_knowledge_snapshot.py       L04 flat snapshot preflight, paging, and row_id lookup tests
+├── test_field_mapping.py            L05 fixed V1 field-mapping and eligibility tests
+├── test_comparison.py               L06 comparison normalization, projection, and boundary tests
+├── test_dictionary_matcher.py       L07 Aho–Corasick shard matching and raw-discovery tests
+├── test_dictionary_aggregation.py   L08 dictionary aggregation and supporting-ref tests
+└── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -115,6 +136,11 @@ Inspect when:
 | `src/app/document_review/storage.py` | Dynamo head + versioned S3 objects | Service persist → reachable head | Changing CAS conditions or object keys |
 | `src/app/document_review/rendering.py` | Deterministic reviewed HTML. Attribute contract v1 on `<html>` (`data-review-html-version`, `data-job-id`, `data-review-revision-id`, `data-review-generation`, `data-conversion-status`); catalogue `data-element-id` / `data-node-id` / `data-table-id`; ordered deduped `data-source-id` on text-bearing nodes; `data-generated="true"` on the summary header, partial banner, and `Page N` headings | `ReviewRevision` catalogue plus current document text → export HTML | Changing approved HTML heading/table markup or provenance attributes |
 | `src/app/lexical_extraction/contracts.py` | L01 lexical evidence, candidate, unit/value, provenance, extraction-outcome, and publication-claim records | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, span checks, outcome coherence, or publication claims |
+| `src/app/lexical_extraction/configuration.py` | L02 strict execution YAML load, fixed preset→component union, resource safeguards, effective SHA-256 | Config file path (+ optional typed selection override) → `EffectiveExecutionConfiguration`; no I/O beyond reading the YAML file | Changing YAML shape, preset map, path resolution, override semantics, resource bounds, or digest material |
+| `src/app/lexical_extraction/html_reader.py` | L03 streaming reviewed HTML v1 reader; fail-closed provenance; final digest only on completed read | File path → chunked `iter_pages` → `PageRecord`/`BlockEvidence`; final `ReviewedHtmlV1Input` only when `completed` | Changing streaming/completion semantics, exact version `"1"`, duplicate-attribute rejection, or silent-omission failures |
+| `src/app/lexical_extraction/knowledge_snapshot.py` | L04 read-only flat SQLite snapshot preflight, pinned connection, single-table `rowid` paging, and source `row_id` lookup | Snapshot directory + L02 batch/cache limits → `KnowledgeSnapshotIdentity` and raw source rows | Changing companion validation, read-only pinning, allowlisted paging, or `row_id` lookup |
+| `src/app/lexical_extraction/field_mapping.py` | L05 fixed V1 per-table search-field mapping and eligibility over L04 `SourceRow` | Raw source rows + selected components → compact `EligibleSearchTerm` stream; no matching | Changing eligible fields, UNII/unit boundary hints, `Index this row` authorization, or unit-token eligibility |
+| `src/app/lexical_extraction/comparison.py` | L06 fixed V1 per-term/per-block comparison normalization, comparison→original projection, and role-aware boundaries | One term or block text → temporary `ComparisonSurface` and optional `CharSpan`; no matcher | Changing NFC/casefold/whitespace rules, unit alignment, or `default` / `whole_code` / `atomic_unit` boundaries |
 | `src/app/document_review/composition.py` | Production Dynamo/S3 wiring plus opaque storage namespace | Document settings → `ReviewService` | Changing production adapters; not used by harness |
 | `frontend/src/mapping.ts` | Page projection, sparse text, skeleton | Canonical page → TipTap JSON | Changing heading/table projection or IDs |
 | `frontend/src/extensions.ts` | Protected TipTap schema and load | Projection JSON → editor transactions | Changing structure lock, table attrs, page load |
@@ -161,7 +187,64 @@ identity, page/block/span evidence, catalogue candidates, independent unit and v
 run provenance, extraction outcomes, and publication claims. Importing the package does no I/O.
 It does not read HTML, query the snapshot, normalize, match, parse values, or publish artifacts.
 Focused tests: `tests/lexical_extraction/test_contracts.py`. Synthetic fixture:
-`examples/lexical_extraction/result-example.json`. The lexical engine is not implemented.
+`examples/lexical_extraction/result-example.json`.
+
+`src/app/lexical_extraction/configuration.py` is the L02 execution-configuration boundary:
+strict SafeLoader YAML with duplicate-key/merge/anchor/unsafe-tag rejection, fixed preset
+resolution to the canonical component union, finite resource defaults/bounds, typed per-run
+selection overrides, and effective-configuration SHA-256. Paths resolve against the config
+file directory and are not created or required to exist. Focused tests:
+`tests/lexical_extraction/test_configuration.py`. Synthetic example:
+`examples/lexical_extraction/execution-config.example.yaml`.
+
+`src/app/lexical_extraction/html_reader.py` is the L03 reviewed HTML v1 reader: chunked byte
+streaming with incremental UTF-8 decode, SHA-256 of exact bytes parsed, exact root version
+`"1"`, duplicate-attribute rejection, fail-closed missing `data-node-id` / out-of-page source
+nodes / nested source markup, and page emission without retaining the whole file or all pages.
+Final `ReviewedHtmlV1Input` exists only when `completed` is True. `data-source-id` is
+space-split; IDs containing spaces are not round-trippable. Focused tests:
+`tests/lexical_extraction/test_html_reader.py`. Matching is not implemented.
+
+`src/app/lexical_extraction/knowledge_snapshot.py` is the L04 read-only flat snapshot
+boundary. It validates the four snapshot companions once, opens `knowledge.sqlite`
+with `mode=ro` and `PRAGMA query_only=ON`, and returns an L01
+`KnowledgeSnapshotIdentity`. Callers page one allowlisted table by SQLite `rowid`
+or look up one source `row_id`. Cells stay stored text. The reader does not map
+search fields, normalize, match, or publish. Focused tests:
+`tests/lexical_extraction/test_knowledge_snapshot.py`.
+
+`src/app/lexical_extraction/field_mapping.py` is the L05 fixed V1 source-field mapper.
+It interprets allowlisted L04 `SourceRow` cells into compact `EligibleSearchTerm`
+records for selected components, including UNII whole-code / unit atomic-token hints
+and UO `Index this row` authorization. It does not normalize, match, parse values, or
+emit L01 candidates. Focused tests: `tests/lexical_extraction/test_field_mapping.py`.
+
+`src/app/lexical_extraction/comparison.py` is the L06 fixed V1 comparison helper.
+It builds temporary per-term/per-block `ComparisonSurface` text with original-offset
+provenance, projects comparison ranges to L01 `CharSpan` values, and applies
+`default` / `whole_code` / `atomic_unit` boundaries. It does not match documents,
+run Aho–Corasick, or aggregate occurrences. Focused tests:
+`tests/lexical_extraction/test_comparison.py`.
+
+`src/app/lexical_extraction/dictionary_matcher.py` is the L07 bounded matching core.
+It shards L05 eligible terms under L02 resource limits, indexes comparison keys with
+`pyahocorasick`, replays L03 blocks via `StaticBlockSource` or
+`ReviewedHtmlBlockReplay` (pinned HTML SHA-256), and streams `RawDiscovery` records
+with original spans and all colliding source references. Fuzzy matching, occurrence
+aggregation, and publication are out of scope. Focused tests:
+`tests/lexical_extraction/test_dictionary_matcher.py`.
+
+`src/app/lexical_extraction/dictionary_aggregation.py` is the L08 dictionary aggregator.
+It rejects unit discoveries (`UNEXPECTED_UNIT_DISCOVERY`). Focused tests:
+`tests/lexical_extraction/test_dictionary_aggregation.py`.
+
+`src/app/lexical_extraction/unit_value_rules.py`, `unit_aggregation.py`,
+`value_expressions.py`, and `parameter_unit_value.py` are the L10 independent
+parameter-name / unit / value capability. Parameter names reuse L05→L07→L08.
+Units use L07 plus L10 unit aggregation (not L08). Values use the shared V1 parser.
+Fixed quantity-unit vocabulary and narrow categorical/cue rules live in
+`unit_value_rules.py`. Focused tests:
+`tests/lexical_extraction/test_parameter_unit_value.py`.
 
 Graph views and a rules/Audit layer have no implementation modules yet. Do not invent those
 directories.

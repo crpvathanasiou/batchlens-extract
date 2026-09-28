@@ -872,3 +872,57 @@ def test_fuzzy_evidence_is_a_bounded_single_word_claim() -> None:
             row_id="fda-row-9",
             evidence=FuzzyEvidence(dictionary_term="Glucose", edit_distance=1),
         )
+
+
+def test_supporting_row_ids_are_optional_and_exclude_representative() -> None:
+    legacy = FdaEmaMaterialCandidate.model_validate(
+        {
+            "matched_term": "water",
+            "source_field": "material_name",
+            "snapshot_id": "fixture-snapshot",
+            "row_id": "fda-row-1",
+            "evidence": {"method": "exact", "rule_id": "lexical-v1-exact"},
+        }
+    )
+    assert legacy.supporting_row_ids == ()
+    dumped = _round_trip(legacy)
+    assert dumped["supporting_row_ids"] == []
+
+    supported = FdaEmaMaterialCandidate(
+        matched_term="water",
+        source_field="material_name",
+        snapshot_id="fixture-snapshot",
+        row_id="fda-row-1",
+        supporting_row_ids=("fda-row-2", "fda-row-3"),
+        evidence=_exact(),
+    )
+    assert supported.supporting_row_ids == ("fda-row-2", "fda-row-3")
+    with pytest.raises(ValidationError):
+        FdaEmaMaterialCandidate(
+            matched_term="water",
+            source_field="material_name",
+            snapshot_id="fixture-snapshot",
+            row_id="fda-row-1",
+            supporting_row_ids=("fda-row-1",),
+            evidence=_exact(),
+        )
+    with pytest.raises(ValidationError):
+        FdaEmaMaterialCandidate(
+            matched_term="water",
+            source_field="material_name",
+            snapshot_id="fixture-snapshot",
+            row_id="fda-row-1",
+            supporting_row_ids=("fda-row-2", "fda-row-2"),
+            evidence=_exact(),
+        )
+
+    unit_legacy = EquipmentUnitRecord.model_validate(
+        {"kind": "equipment_unit_record", "row_id": "eq-unit-1"}
+    )
+    assert unit_legacy.supporting_row_ids == ()
+    unit_supported = EquipmentUnitRecord(row_id="eq-a", supporting_row_ids=("eq-b", "eq-c"))
+    assert unit_supported.supporting_row_ids == ("eq-b", "eq-c")
+    with pytest.raises(ValidationError):
+        EquipmentUnitRecord(row_id="eq-a", supporting_row_ids=("eq-a",))
+    with pytest.raises(ValidationError):
+        EquipmentUnitRecord(row_id="eq-a", supporting_row_ids=("eq-b", "eq-b"))

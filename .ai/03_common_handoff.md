@@ -1,6 +1,697 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-25 L01 lexical contracts
+## 1. Current state — 2026-09-28 L10 value-only reviewed-HTML replay correction
+
+**Implemented** focused correction in `parameter_unit_value.py` and focused L10
+tests only. L01–L09 production behavior is unchanged. Historical L09 reports are
+retained. Fuzzy matching, runner/CLI, monitoring, review-UI projection, and
+publication remain **unimplemented**.
+
+- Value-only runs (`quantity_expressions` / `parameter_value_expressions`
+  without parameter or unit streams) may use a fresh `ReviewedHtmlBlockReplay`
+  with a caller-supplied expected full-file SHA-256. Blocks stream without an
+  all-document buffer; the unpinned first pass is allowed only in that case.
+  Finalized replay identity is verified **after full consumption** before
+  coverage is published. Wrong digest, read failure, or early close yields an
+  explicit failure / `STREAM_INCOMPLETE` with no completed coverage.
+  Already-pinned sources keep immediate identity checks.
+- Prior L10 bounded lockstep stream, per-block `result_buffer_records`, unit
+  provenance/normalization, and early-close cleanup remain in force.
+
+**Test-verified:** focused `tests/lexical_extraction/test_parameter_unit_value.py`
+**18 passed**; combined `tests/lexical_extraction/` **219 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (94 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **489 passed**.
+
+**L09 status:** user-accepted baseline for L10.
+**L10 status:** value-only replay corrected, **implemented** and
+**test-verified**; still **awaiting user acceptance**.
+**Next safe step:** user review of corrected L10. Do not start L11.
+
+---
+
+## 1v. Prior current state — 2026-09-28 L10 bounded-stream and unit/value evidence correction
+
+**Implemented** correction in L10 modules only:
+`parameter_unit_value.py`, `unit_aggregation.py`, `value_expressions.py`,
+`unit_value_rules.py`, plus focused tests. L01–L09 production behavior is
+unchanged. Historical L09 reports are retained. Fuzzy matching, runner/CLI,
+monitoring, review-UI projection, and publication remain **unimplemented**.
+
+- Block stream composes ordered L08 dictionary blocks, L10 unit blocks, and
+  per-block value recognition incrementally (lockstep). No whole-document
+  discovery/result dictionaries. Equipment unit terms for dual unit/value use
+  are retained only under explicit finite bound `_MAX_EQUIPMENT_UNIT_TERMS`
+  (fail closed). Parameter/unit term streams feed L07 without an intermediate
+  unbounded `list(...)`.
+- `result_buffer_records` bounds **per-block** discoveries/occurrences.
+  Cumulative counts remain coverage-only. Unit aggregation and the L10 stream
+  set coverage only after successful full consumption **and** spool/stream
+  cleanup.
+- Equipment `Unit` discoveries require a pinned L04 snapshot + L05 mapping;
+  fixed vocabulary does not. Dual fixed+equipment hits keep controlled
+  spelling/identity and deterministic representative `supporting_row_ids` /
+  `Source / section`. Exact fixed + normalized-exact equipment coexistence no
+  longer raises `EXACT_EVIDENCE_MISMATCH` for case-only alternatives.
+- Value unit recognition is casefold-consistent with L06/L07 while preserving
+  exact source substrings (`120 RPM` → controlled `rpm`). Identifier-prefixed
+  range/tolerance tails and embedded cues (`MaxSpeed:`) are rejected.
+
+**Test-verified (historical):** focused
+`tests/lexical_extraction/test_parameter_unit_value.py` **17 passed**; combined
+`tests/lexical_extraction/` **218 passed**; `scripts/quality.ps1` passed —
+Ruff check, Ruff format check (94 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **488 passed**.
+
+Earlier real-HTML smoke (fixed vocabulary only) remains historical smoke only
+and was not re-run as an L09-style Materials benchmark in this correction.
+
+**L09 status:** user-accepted baseline for L10.
+**L10 status:** corrected, **implemented** and **test-verified**; still
+**awaiting user acceptance**.
+**Next safe step:** user review of corrected L10. Do not start L11.
+
+---
+
+## 1u. Prior current state — 2026-09-28 L10 independent parameter names, units, and values
+
+**Implemented** in `src/app/lexical_extraction/` as L10-only modules plus one
+minimal L01 additive contract field. L01–L09 remain the accepted baseline (L09
+measurement/helper integrity boundary included). Fuzzy matching, runner/CLI
+product surface, monitoring, review-UI projection, and publication remain
+**unimplemented**.
+
+- Public entry points: `iter_parameter_unit_value_block_records` and
+  `recognize_block_values` in `parameter_unit_value.py`. Parameter names reuse
+  L05→L07→L08 without selecting or detecting equipment. Units use L07 plus L10
+  `unit_aggregation` (L08 still rejects unit discoveries). Values use
+  `value_expressions.recognize_value_expressions`.
+- Fixed V1 rules/vocabulary in `unit_value_rules.py`
+  (`lexical-unit-value-rules-v1` / `lexical-unit-vocabulary-v1`): quantity units
+  such as `kg`, `g`, `mg`, `µg`/`ug`, `L`, `mL`/`ml`, `µL`/`uL`/`ul`, `%`, `°C`/`C`,
+  `°F`/`F`, `K`, `Pa`, `kPa`, `bar`, `atm`, `mol`, `mmol`, `IU`, `CFU`, `rpm`,
+  `min`, `s`, `h`; categoricals `OFF` and `under vacuum`; cue `Speed:`.
+- Compatible contract change: optional `supporting_row_ids` on
+  `EquipmentUnitRecord` (default empty) so repeated equipment-unit rows retain
+  references without multiplying one textual hit.
+- Component selection suppresses unrequested output. Value selection may
+  recognize a unit inside an expression without emitting `UnitOccurrence` unless
+  `units` is selected. Both value components together emit once with both
+  `applies_to` values. No entity association is asserted.
+
+**Test-verified** in the initial L10 pass: focused
+`tests/lexical_extraction/test_parameter_unit_value.py` **12 passed**; combined
+`tests/lexical_extraction/` **213 passed**; `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (94 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **483 passed**.
+
+**Optional real-HTML smoke (not a substitute for tests; not L09-style full
+measurement):** reviewed HTML v1
+`.local-review-data/html-provenance-20260925/.../document.html` (SHA-256
+`e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5`), components
+`units` + both value components, fixed vocabulary only (no equipment snapshot
+terms): **18 pages / 728 blocks**, **86** unit occurrences, **54** value
+occurrences. Marked smoke only; not pharmaceutical content validation.
+
+Bounded-stream / unit-evidence corrections followed in current §1.
+
+---
+
+## 1t. Prior current state — 2026-09-28 L09 integrity reporting boundary correction
+
+**Implemented** correction in `tests/lexical_extraction/acceptance.py` and focused
+helper tests only. Accepted L01–L08 production modules were **not** changed.
+Historical L09 A/B Materials measurement JSON under `out/lexical-l09/` is retained
+unchanged as recorded evidence; this pass did **not** rerun full Materials.
+
+- Post-run integrity: changed reviewed-HTML or snapshot companion/database hashes,
+  or a detected SQLite WAL/SHM/journal sidecar, yield
+  `status=integrity_failed` with stable codes `HTML_INPUT_CHANGED` or
+  `KNOWLEDGE_WRITE_DETECTED`. Those reports must not claim completed integrity.
+- HTML-only hash change does **not** set `knowledge_write_detected=true`.
+  Snapshot hash change or sidecar does.
+- `compare_measurement_digests` requires both sides to claim completed integrity
+  (`status=completed`, `hashes_unchanged=true`, no knowledge write, no
+  `error_code`); integrity-failed reports cannot compare as success.
+
+**Shard-setting precision (prior L09 A/B evidence):** configured
+`max_terms_per_shard` differed (500,000 vs 2,000,000). Actual effective shard
+counts were **not measured** and must not be inferred from the configured limits
+alone. Digests/counts matched across those configured settings.
+
+**Prior L09 real measurement (historical, observed values unchanged):** see §1s.
+Helper remains the recorded early-feasibility path; pharmaceutical content
+validation was out of scope for L09.
+
+**Test-verified** in this integrity-boundary correction: focused
+`tests/lexical_extraction/test_acceptance.py` **11 passed**; combined
+`tests/lexical_extraction/` **201 passed**; `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (89 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **471 passed**.
+
+**L09 status at that date:** measurement recorded; helper integrity boundary
+**implemented** and **test-verified**. Per L10 authorization, L01–L09 are now the
+accepted baseline (see current §1).
+
+---
+
+## 1s. Prior current state — 2026-09-28 L09 early full-Materials feasibility measurement
+
+**Implemented** read-only measurement helper `tests/lexical_extraction/acceptance.py`
+with focused synthetic tests. Accepted L01–L08 production modules were **not**
+changed. L09 is a measurement/acceptance task, not another extraction engine.
+Fuzzy matching, value parsing, unit aggregation, runner/CLI product surface,
+monitoring, review-UI projection, and publication remain **unimplemented**.
+Integrity reporting was corrected in the following pass (current §1).
+
+- Helper path: finalize L03 HTML identity → open L04 snapshot → L05 Materials
+  terms (`materials_fda_ema` + `materials_chebi`, including UNII under the fixed
+  L05 rule) → L07 `iter_raw_discoveries` → L08 `iter_aggregated_block_records`.
+  Fuzzy stays disabled. Streaming semantic digest over emitted `BlockRecord`
+  values; full result tree is not retained. Peak process memory uses Windows
+  `GetProcessMemoryInfo` (`windows_psapi_peak_working_set`). Temporary L08 spool
+  peak size and indexing/search/aggregation phase splits are recorded as
+  **unavailable** (would require instrumenting accepted modules).
+- Declared peak-process-memory budget before runs: **32 GiB**
+  (`34359738368` bytes), justified by host ~128 GiB physical RAM and ~93–95 GiB
+  free at measurement time (MSI MS-7D25 / Windows 11 Pro / Python 3.11.4).
+
+**Real measurement inputs (local):**
+
+- Reviewed HTML v1:
+  `.local-review-data/html-provenance-20260925/objects/local-fexofenadine/revisions/f489826a-37bc-45e8-a13c-b648caf28b27/exports/document.html`
+  (158,317 bytes; L03 pages **18** / blocks **728**; SHA-256
+  `e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5`).
+  Conversion `document.html` was **not** substituted.
+- Snapshot:
+  `C:\Users\User\Desktop\MBR_core\RAG-Core-data\Agregate-Items\Prepared\flat-sqlite\flat-v1-a39c0b393ffdbd4e97ed`
+  (`snapshot_id` `flat-v1-a39c0b393ffdbd4e97ed`; database 441,327,616 bytes;
+  SHA-256 `cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2`).
+
+**Two complete Materials measurements** (separate processes; other resource
+limits held fixed at L02 defaults except configured `max_terms_per_shard`).
+Configured values differed; **actual effective shard counts were not measured**.
+
+| Setting | configured `max_terms_per_shard` | Preflight s | Match+agg s | Total s | Peak WS bytes | Baseline WS |
+|---|---:|---:|---:|---:|---:|---:|
+| A | 500,000 | 2.755 | 162.901 | 166.413 | 502,824,960 (~480 MiB) | 39,550,976 |
+| B | 2,000,000 | 2.659 | 163.672 | 167.096 | 503,087,104 (~480 MiB) | 39,309,312 |
+
+Shared stable counts/digest (both runs): eligible terms **4,345,238**; raw
+discoveries **4,058**; blocks emitted **728**; dictionary occurrences **472**;
+candidates **4,058**; semantic digest SHA-256
+`b785ba207f6442b2736593eb93472af4bd6ad8f8627703b034e1345448290f5c`. Peak memory
+was under the 32 GiB budget (`budget_exceeded=false`). HTML/database/manifest/
+validation-report/contract hashes unchanged before/after; no WAL/SHM/journal
+sidecars; no knowledge write; no publication claim. OS cache notes: remeasure
+runs after earlier warm passes (file cache likely warm). JSON reports under
+`out/lexical-l09/` (historical observed values retained).
+
+This is **early feasibility**, not pharmaceutical content validation, final
+end-to-end extraction, or manual review acceptance of extracted Materials.
+
+**Test-verified** helper/gates in that L09 measurement pass: focused
+`tests/lexical_extraction/test_acceptance.py` **6 passed**; combined
+`tests/lexical_extraction/` **196 passed**; `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (89 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **466 passed**.
+
+---
+
+## 1r. Prior current state — 2026-09-28 L08 final spool correction
+
+**Implemented** correction in `src/app/lexical_extraction/dictionary_aggregation.py`
+and focused tests only. L01–L07 behavior is unchanged. Prior L08 ordering/bounds/
+completion correction remains in force. L07 remains **user-accepted**. Corrected
+L08 remains **implemented** and **test-verified**. Per L09 authorization,
+L01–L08 are treated as the accepted baseline for the L09 measurement above.
+Fuzzy matching, value parsing, unit aggregation, runner/CLI, monitoring,
+review-UI projection, and publication remain **unimplemented**.
+
+- Final spool `commit()` failures translate to bounded
+  `DictionaryAggregationError(SPOOL_WRITE_FAILED)` with rollback; they do not
+  escape as raw `sqlite3.Error` or claim completed coverage. Upstream L07 /
+  lookup / field-mapping failures keep their own codes.
+- Per-block capacity uses a disk-backed `block_hit_counts` primary-key counter in
+  the same temporary spool (upserted with each discovery insert in the deferred
+  transaction). Capacity no longer issues per-hit `COUNT(*)` against
+  `discoveries`. `_load_block_hits` still uses `LIMIT result_buffer_records + 1`.
+  Insert and counter stay aligned via rollback on error.
+
+**Test-verified** in this L08 final spool correction: `scripts/quality.ps1`
+passed — Ruff check, Ruff format check (87 files already formatted), Pyright
+0 errors / 0 warnings / 0 informations, pytest **460 passed**. Focused
+`tests/lexical_extraction/test_dictionary_aggregation.py` **20 passed**. Combined
+`tests/lexical_extraction/` **190 passed**.
+
+**Early full-Materials feasibility check:** completed in current §1 (L09).
+
+**Not done:** fuzzy matching, value parsing, unit/`UnitOccurrence` aggregation,
+component orchestration, runner/CLI, monitoring, publication.
+
+---
+
+## 1q. Prior current state — 2026-09-28 L08 ordering/bounds/completion correction
+
+**Implemented** correction in `src/app/lexical_extraction/dictionary_aggregation.py`
+and focused tests only. L01–L07 behavior is unchanged. The optional L01
+`supporting_row_ids` field is unchanged. L07 remains **user-accepted**. Corrected
+L08 remained **implemented** and **test-verified**, and was **not user-accepted**;
+commit-error translation and disk-backed block counters were corrected in the
+following pass (prior §1r / current §1).
+
+---
+
+## 1p. Prior current state — 2026-09-28 L08 bounded dictionary aggregation
+
+**Implemented** in `src/app/lexical_extraction/dictionary_aggregation.py`, with the
+minimal additive L01 field `supporting_row_ids` on the shared candidate base in
+`contracts.py`. L01–L07 behavior is otherwise unchanged. L07 (including the
+projection/search-error correction) is **user-accepted**. L08 was **implemented**
+and **test-verified**, and is **not user-accepted**; ordering, bounds, unmatched
+spool completion, and cleanup were corrected in the following pass (current §1).
+
+---
+
+## 1o. Prior current state — 2026-09-28 L07 projection/search-error correction
+
+**Implemented** correction in `src/app/lexical_extraction/dictionary_matcher.py`
+only. L01–L06 behavior is unchanged. L06 remains **user-accepted**. L07 matching
+core remains **implemented** and **test-verified** after this correction, and was
+subsequently **user-accepted** as the L07 baseline before L08 (see current §1).
+
+- `_project_discovery` skips only L06 `BOUNDARY_REJECTED` and
+  `PARTIAL_NORMALIZATION_UNIT` as normal non-hits (for example substring `s`
+  inside the `ß` → `ss` expansion). Other `ComparisonError` codes, including
+  `INVALID_COMPARISON_RANGE`, `OFFSET_MISMATCH`, `BLOCK_SLICE_MISMATCH`, and
+  `SURFACE_BLOCK_MISMATCH`, raise `DictionaryMatchError(PROJECTION_FAILED)` so
+  broken coherence is not reported as successful coverage.
+- Exceptions while creating **or consuming** the Aho–Corasick hit iterator are
+  `MATCH_FAILED` with a bounded message. Block-source failures stay
+  `BLOCK_READ_FAILED`. `GeneratorExit` is not treated as a match failure. Shard
+  cleanup and replay-identity pinning are unchanged.
+
+**Test-verified** in this L07 correction: `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (85 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **439 passed**. Focused
+`tests/lexical_extraction/test_dictionary_matcher.py` **11 passed**. Combined
+`tests/lexical_extraction/` **169 passed**. Coverage includes the `ß`/`s`/`ss`
+regression, injected `PROJECTION_FAILED` / `MATCH_FAILED`, ordinary boundary
+skip, and release-on-failure.
+
+**Not done:** occurrence/candidate aggregation, fuzzy matching, value parsing,
+component orchestration, runner/CLI, monitoring, publication. Manual
+pharmaceutical extraction acceptance is not applicable.
+
+**Next safe step:** user review of corrected L07. Do not implement L08 from this
+pass. Unrelated pending work remains the reviewed-HTML provenance browser check
+and the Findings default manual verify below.
+
+---
+
+## 1n. Prior current state — 2026-09-28 L07 bounded Aho–Corasick raw discoveries
+
+**Implemented** in `src/app/lexical_extraction/dictionary_matcher.py`. L01–L06
+behavior is unchanged. L06 (including the compound-unit / hyphen boundary
+correction) is **user-accepted**. Fuzzy matching, value parsing,
+occurrence/candidate aggregation, runner/CLI, monitoring, and publication remain
+**unimplemented**. L07 was **not user-accepted**; projection/search-error
+boundary was corrected in the following pass (current §1).
+
+- `iter_raw_discoveries(terms, blocks, limits)` streams intermediate `RawDiscovery`
+  records (exact / normalized-exact) with original `CharSpan` values. It is not an
+  L01 `DictionaryOccurrence`, candidate, or execution claim.
+- Terms are sharded by L02 `max_terms_per_shard` (source references) and
+  `max_term_codepoints_per_shard` (literal + comparison key + retained reference
+  strings). Each shard builds real `pyahocorasick` automata partitioned by L06
+  whitespace-collapse behavior, rescans every block, then releases automata and
+  shard-local maps before the next shard. `result_buffer_records` bounds emission
+  buffering only.
+- Block input is a replayable `BlockReplaySource`: `StaticBlockSource` for synthetic
+  fixtures, or `ReviewedHtmlBlockReplay` which reopens L03 HTML per pass and pins
+  the finalized `html_sha256`. Changed or incomplete replay identity fails closed
+  (`REPLAY_IDENTITY_CHANGED` / `REPLAY_INCOMPLETE`). One-shot readers are not
+  silently exhausted.
+- Hits preserve all source references sharing a comparison key, repeated
+  occurrences, overlaps, and original dictionary spellings. Exact requires
+  `span.matched_text ==` the L05 literal; otherwise normalized-exact. L06 projection
+  and per-reference boundaries apply. `fuzzy_enabled` is ignored.
+- Oversized single references, shard construction failures, and block-read failures
+  raise bounded `DictionaryMatchError` and do not report successful complete
+  coverage. Early generator close releases shard state.
+
+**Test-verified** in the initial L07 pass: `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (85 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **435 passed**. Focused
+`tests/lexical_extraction/test_dictionary_matcher.py` **7 passed**. Combined
+`tests/lexical_extraction/` **165 passed**. Tiny fixtures use an independent
+exhaustive reference; shard multisets remain invariant under count and
+code-point limits.
+
+**Optional reviewed-HTML smoke:** not performed in that pass. Not presented as
+full-Materials time/peak-memory measurement.
+
+**Not done at that date:** occurrence/candidate aggregation, fuzzy matching, value
+parsing, component orchestration, runner/CLI, monitoring, publication.
+
+**Next safe step at that date:** user review of L07. Projection/search-error
+correction followed before acceptance.
+
+---
+
+## 1m. Prior current state — 2026-09-28 L06 boundary correction (compound units / hyphen)
+
+**Implemented** correction in `src/app/lexical_extraction/comparison.py` only.
+L01–L05 behavior is unchanged. L05 remains **user-accepted**. L06 helpers were
+**implemented** in that pass and are now **user-accepted** as the L06 baseline
+before L07 (see current §1). Matching beyond L07, fuzzy, value parsing,
+aggregation, runner/CLI, monitoring, and publication remain **unimplemented**.
+
+- `atomic_unit` continuation now includes `/`, middle dot `·`, hyphen-minus,
+  superscript signs (`⁻`/`⁺` and related), and numeric characters in categories
+  `Nd` and `No`, plus letters/marks/connectors. Shorter hits inside `min⁻¹`,
+  `mL·min⁻¹`, `kg²`, and `rpm/min` are rejected. Complete compounds such as
+  `min⁻¹` and `mL/min` still project. Left number-adjacent permission is ordinary
+  decimal `Nd` only (`37°C`, `120rpm`); superscript `No` is not a fresh numeric
+  boundary.
+- `default` treats an adjacent hyphen-minus as word/code continuation, so
+  `glucose` in `glucose-6-phosphate` and `water` in `water-soluble` are rejected,
+  while a full punctuation-bearing chemical term and space-separated phrase
+  overlaps (`granulation` / `wet granulation`) remain valid.
+- V1 composition scope is documented accurately: NFC of each
+  starter+combining-mark unit, then `casefold` — not a whole-string NFC pass
+  (adjacent Hangul Jamo stay uncomposed). Comparison text, offset projection,
+  complete-unit alignment, and `ComparisonError` behavior are otherwise unchanged.
+
+**Test-verified** in this L06 boundary correction: `scripts/quality.ps1` passed —
+Ruff check, Ruff format check (83 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **428 passed**. Focused
+`tests/lexical_extraction/test_comparison.py` **22 passed**. Combined
+`tests/lexical_extraction/` **158 passed**.
+
+**Not done at that date:** Aho–Corasick / document matching, fuzzy matching, value
+parsing, occurrence aggregation, component orchestration, runner/CLI, monitoring,
+publication. Manual pharmaceutical extraction acceptance is not applicable.
+
+**Next safe step at that date:** user review of corrected L06. The user
+subsequently accepted L06 (including this boundary correction). Unrelated pending
+work remains the reviewed-HTML provenance browser check and the Findings default
+manual verify below.
+
+---
+
+## 1l. Prior current state — 2026-09-28 L06 fixed V1 comparison normalization and boundaries
+
+**Implemented** in `src/app/lexical_extraction/comparison.py`. Pure helpers
+normalize one L05 term or one L03 block into temporary comparison text, map
+comparison ranges back to original Unicode code-point offsets, and apply
+role-aware boundary checks. L01–L05 behavior is unchanged. L05 is
+**user-accepted**. Document matching, Aho–Corasick, fuzzy distance, value
+parsing, occurrence aggregation, runner/CLI, monitoring, and publication remain
+**unimplemented**. L06 is **not user-accepted**. Boundary false positives for
+shorter units inside compounds and hyphen-connected materials were corrected in
+the following pass (current §1).
+
+- `normalize_term` / `normalize_block` / `normalize_literal` build an immutable
+  `ComparisonSurface` (comparison text + per-unit original provenance). L03/L05
+  source objects are not mutated. No global term list, normalized snapshot, or
+  persistent index.
+- Fixed V1 rules by L05 role/hint: per-unit NFC + `casefold`; natural-language
+  roles also collapse whitespace runs (including CR/LF) to one separator;
+  materials, UNII (`whole_code`), and units (`atomic_unit`) do not collapse
+  whitespace and do not strip chemical punctuation, signs, digits,
+  stereochemistry, unit slashes, or superscripts. No stemming, NFKC, accent
+  stripping, OCR hyphen repair, or lookalike transliteration.
+- `project_comparison_range` / `project_against_block` require complete
+  normalization units, return an L01 `CharSpan` with
+  `original[start:end] == matched_text`, and reject mid-expansion / off-by-one
+  projections. Empty or whitespace-only term keys and malformed ranges raise
+  bounded `ComparisonError`.
+- Boundaries check original exteriors (pre-correction wording retained here for
+  history; see current §1 for the corrected compound-unit and hyphen rules).
+
+**Test-verified** in the initial L06 pass: `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (83 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **423 passed**. Focused
+`tests/lexical_extraction/test_comparison.py` **17 passed**. Combined
+`tests/lexical_extraction/` **153 passed**.
+
+**Optional reviewed-HTML single-block probe:** not performed. No reviewed HTML v1
+sample with `data-review-html-version` was present in this workspace (local
+`out/comparison/fexofenadine-local-current/document.html` is unreviewed
+conversion HTML). This pass did not measure full-Materials matching or memory.
+
+**Not done at that date:** Aho–Corasick / document matching, fuzzy matching, value
+parsing, occurrence aggregation, component orchestration, runner/CLI, monitoring,
+publication.
+
+**Next safe step at that date:** user review of L06. Boundary correction followed
+before acceptance.
+
+---
+
+## 1k. Prior current state — 2026-09-28 L05 fixed V1 source-field mapping (user-accepted)
+
+**Implemented** in `src/app/lexical_extraction/field_mapping.py`. Maps L04 flat
+`SourceRow` cells to compact, source-backed eligible search-term records for
+independently selected lexical components. L01–L04 behavior is unchanged. L04 is
+**user-accepted**. Normalization (now L06), document matching, Aho–Corasick, fuzzy
+distance, value parsing, occurrence aggregation, runner/CLI, monitoring, and
+publication remain **unimplemented** relative to that pass. **User-accepted** as
+the L05 baseline before L06.
+
+- `map_source_row(row, components=..., snapshot_id=...)` is a pure per-row mapper
+  over the shared L04 `SourceRow`. It emits zero or more `EligibleSearchTerm`
+  records. It does not build L01 candidates or `DictionaryOccurrence`.
+- `iter_eligible_terms` streams terms from an already validated L04 handle and
+  scans only tables required by the selected components. No global vocabulary or
+  persistent index is built. Distinct source rows and same-spelling references
+  stay separate.
+- Fixed V1 field boundaries: FDA/EMA `material_name` / `alias_name` / `UNII`
+  (whole-code, no fuzzy); ChEBI `material_name` / `alias_name` only; Equipment
+  `Equipment type (EN)` / `Operating parameter (EN)` / eligible atomic `Unit`;
+  Unit Operations `Search term (EN)` only when `Index this row` is exact `TRUE`,
+  and independently eligible `Process step (EN)`. Excluded: CAS, SMS_ID/CHEBI_ID
+  search, Greek columns, brand/model/range, UO purpose/relationship/A-B/inference.
+- Compact terms carry original literal spelling, component/term role, source
+  table/field/`row_id`, optional `lexical_term_id` / snapshot id, selected native
+  IDs/display/qualification/traceability, and fixed internal boundary/fuzzy hints.
+  Blank optional IDs stay absent; usable naming rows are kept.
+- Exact case-insensitive unavailable markers (`N/A`, `NA`, `unknown`, `None`) are
+  excluded from UNII **code search** and from optional native ID attributes. They
+  are not applied to Materials names/aliases. L04 source cells stay unchanged;
+  naming rows remain when the native ID is unavailable.
+- Equipment `Unit` uses a fixed conservative atomic-token rule (placeholders,
+  alternatives, footnote `¹`, dash/semicolon prose, whitespace, pure numerics, and
+  ranges are ineligible; `min⁻¹` and slash compounds without spaces remain
+  eligible). Catalogue context does not fill document values.
+- UO `Match policy` / `record_type` distinctions are preserved for the five known
+  policies and two known record types. Support, inspection, and step-cue policies
+  map to `generic_cue` and do not attach an invented `Operation ID`. Unrecognized
+  nonempty policy/record-type values on an otherwise active UO search row raise
+  `FieldMappingError` instead of inventing a direct candidate. Diagnostic messages
+  keep stable error codes and stay ≤200 characters by truncating only the embedded
+  `row_id` context; source `row_id` values are not limited or mutated. Unknown
+  `Index this row` values do not authorize. `Index this row=FALSE` does not
+  suppress an independently eligible process-step term.
+- `fuzzy_allowed` is an internal hint only: natural-language roles with a single
+  alphabetic word of length ≥6 may be true; chemicals/UNII/units, phrases, short
+  words, and context/support/inspection/generic-cue policies stay false. No fuzzy
+  distance is calculated in L05.
+
+**Test-verified** in this L05 error-bounds correction: `scripts/quality.ps1` passed —
+Ruff check, Ruff format check (81 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **406 passed**. Focused
+`tests/lexical_extraction/test_field_mapping.py` **39 passed**. Combined
+`tests/lexical_extraction/` **136 passed**.
+
+**Bounded production mapping smoke (prior eligibility correction):** snapshot
+`flat-v1-a39c0b393ffdbd4e97ed`. Representative first-row mapping still produces the
+expected roles. First 5,000 FDA/EMA `UNII` cells: **0** exact unavailable markers
+(`N/A`/`NA`/`unknown`/`None`). First-row equipment/UO fuzzy hints were false for
+multiword phrases as expected. This error-bounds pass did not rerun that smoke.
+This is not pharmaceutical content acceptance and not human acceptance of the
+mapper.
+
+**Not done:** dictionary normalization, document matching, fuzzy matching, value
+parsing, occurrence aggregation, component orchestration, runner/CLI, monitoring,
+publication. Full Materials time/peak-memory measurement remains deferred until
+after matching and aggregation. Manual pharmaceutical extraction acceptance is
+not applicable.
+
+**Next safe step at that date:** user review of corrected L05. The user
+subsequently accepted L05. Unrelated pending work remains the reviewed-HTML
+provenance browser check and the Findings default manual verify below.
+
+---
+
+## 1j. Prior current state — 2026-09-28 L04 read-only flat SQLite snapshot access (user-accepted)
+
+**Implemented** in `src/app/lexical_extraction/knowledge_snapshot.py`. One preflight of an
+existing flat snapshot returns a pinned read-only handle and an L01
+`KnowledgeSnapshotIdentity`. L01/L02/L03 behavior is unchanged. Fixed field mapping was
+unimplemented at the end of that pass and is now L05. Normalization, matching, fuzzy,
+values, aggregation, runner/CLI, monitoring, and publication remain **unimplemented**.
+**User-accepted** as the L04 baseline before L05.
+
+- `open_knowledge_snapshot(snapshot_directory, read_batch_rows, cache_kib)` and
+  `open_knowledge_snapshot_from_configuration` validate once. Success yields
+  `KnowledgeSnapshot`. Direct construction is not open. `close` and the context manager
+  release the single connection. Reads before a successful open and after close raise
+  `SNAPSHOT_NOT_OPEN`.
+- Companions required: `knowledge.sqlite`, `manifest.json`, `validation_report.json`, and a
+  nonempty snapshot `FLAT_SQLITE_CONTRACT.md`. The stored contract text and producer hash
+  are not compared with the repository. Manifest `completion_status` must be the string
+  `complete`. Schema and database `user_version` must be the exact JSON integer `1`
+  (Booleans, floats, and numeric strings are rejected). Preparation version
+  `flat-sqlite-1`, database file name, size, and streamed SHA-256 must agree. Report
+  integrity, content-digest, source-preservation, and WAL-absence evidence must be strict
+  JSON types, and table names, headers, column counts, and imported row counts must match
+  the manifest and the fixed v1 headers. CSV paths named in the manifest are not opened.
+  No repair, import, or preparation.
+- `snapshot_id` must equal the producer derivation from the validated
+  `snapshot_identity`: `flat-v1-` plus the first 20 lowercase hex characters of SHA-256
+  over UTF-8 `json.dumps(..., sort_keys=True, separators=(",", ":"))`. Identity sources
+  must list the four expected names and hashes in producer order; a reordered list is
+  rejected and does not keep the original ID. The filesystem directory name need not equal
+  `snapshot_id`.
+- The database opens through a `file:` URI with `mode=ro`, then `PRAGMA query_only=ON`,
+  with the L02 cache size and an in-memory temp store. Preflight requires journal mode
+  `delete`, user version 1, `PRAGMA integrity_check` `ok`, exactly the four rowid tables,
+  `TEXT NOT NULL` columns, `row_id` as the only primary key, and `COUNT(*)` equal to the
+  manifest. A WAL header or `-wal`/`-shm`/`-journal` sidecar is `WAL_PRESENT`.
+- `read_batch` / `iter_batches` page one allowlisted table with
+  `rowid > after_rowid ORDER BY rowid LIMIT batch_size`, starting at zero, including the
+  empty final page. The batch cannot exceed the validated limit. `lookup` uses that table's
+  source `row_id` and returns the row or `None`. `scan_cursor` is this file's SQLite
+  `rowid`. Cells stay stored strings. No joins, extra indexes, or field interpretation.
+- Identity: `snapshot_id`, `database_sha256`, `manifest_sha256` of the exact manifest bytes,
+  `schema_user_version` 1, `preparation_version` `flat-sqlite-1`. The database hash is
+  streamed in finite chunks. After preflight, database changes are detected by size and
+  modification time; the three small companions are re-hashed before each read. A detectable
+  change is `SNAPSHOT_CHANGED`, the connection closes, and the previous identity is not
+  applied to the new bytes. `SnapshotReadError.to_structured_error()` maps to
+  `SafeStructuredError`.
+
+**Test-verified** in the L04 provenance correction: `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (79 files already formatted), Pyright 0 errors / 0 warnings /
+0 informations, pytest **367 passed**. Focused
+`tests/lexical_extraction/test_knowledge_snapshot.py` **40 passed** (Boolean schema/user
+version rejections, mismatched `snapshot_id`, reordered identity sources, producer-derived
+fixture IDs, and a production-manifest derivation check without opening the large database).
+Combined `tests/lexical_extraction/` **97 passed**.
+
+**Read-only production smoke check (L04 correction session):** snapshot
+`C:\Users\User\Desktop\MBR_core\RAG-Core-data\Agregate-Items\Prepared\flat-sqlite\flat-v1-a39c0b393ffdbd4e97ed`.
+Preflight 7.681 seconds. Two pages of five rows and one `row_id` lookup per table, 0.019
+seconds. Identity `snapshot_id` `flat-v1-a39c0b393ffdbd4e97ed`, preparation `flat-sqlite-1`,
+user version 1, database SHA-256
+`cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2` (matches the recorded
+build), manifest SHA-256 `c312cf8c455b0bcb816db906f7faaa3258dd9f28f9650ba12fa146049e390937`.
+Database size 441,327,616 bytes. Companion hashes unchanged. No WAL, SHM, or journal sidecar
+before or after. This is not pharmaceutical content acceptance and not human acceptance of
+the snapshot.
+
+**Not done at that date:** fixed per-table search-field mapping, dictionary normalization,
+matching, fuzzy matching, value parsing, component orchestration, runner/CLI, monitoring,
+publication. Field mapping was implemented later as L05.
+
+**Next safe step at that date:** user review of the corrected L04. The user subsequently
+accepted L04. Unrelated pending work remains the reviewed-HTML provenance browser check and
+the Findings default manual verify below.
+
+---
+
+## 1i. Prior current state — 2026-09-28 L03 reviewed HTML v1 reader (user-accepted)
+
+**Implemented** in `src/app/lexical_extraction/html_reader.py` (bounded streaming correction).
+Reads reviewed HTML v1 into L01 `PageRecord` / `BlockEvidence` with empty occurrences.
+L01/L02 and the reviewed HTML producer are unchanged. Matching, normalization, fuzzy,
+values, aggregation, runner/CLI, monitoring, and publication were **unimplemented** at the
+end of that pass. **User-accepted** as the L03 baseline before L04.
+
+- Production path: `iter_pages()` streams the file in finite byte chunks with incremental
+  UTF-8 decoding and hashes the exact bytes parsed. Completed pages are emitted and released;
+  the whole HTML text and a growing list of all pages are not retained. Retained state is the
+  current page/block, a short completed-page queue, the decode/feed chunk, and duplicate
+  identity sets for page numbers and node IDs (grow with distinct IDs, not file size alone).
+  `read_all_pages()` remains a small/test convenience only.
+- Root version must be the exact string `"1"` (`"01"`, `"+1"`, whitespace variants rejected).
+  Duplicate provenance attributes fail closed (`DUPLICATE_HTML_ATTRIBUTE`).
+- Root attributes are checked when `<html>` is seen. Final `ReviewedHtmlV1Input` (including
+  whole-file SHA-256) is available only after successful full iteration when `completed` is
+  True. Early stop or late error ⇒ `completed` False and no finalized validated-input digest.
+- Fail closed when source-bearing `p`/`h2`/`h3`/`h4`/`footer`/`td`/`th` inside
+  `article.element` lack `data-node-id`, appear outside `article.element` on a page,
+  when bare non-whitespace text sits directly in an article, when an unsupported/void tag
+  carries `data-node-id`, when `data-table-id` ≠ owning `data-element-id`, or when
+  unexpected nested markup appears inside a source block.
+- Skip `data-generated="true"` subtrees and head/style/script/nav. Kind mapping unchanged.
+  `data-source-id` space-split limitation unchanged.
+- No PDF/JSON/SQLite reads; no file creation; renderer unchanged.
+
+**Test-verified** in this L03 final structural correction: `scripts/quality.ps1` passed —
+Ruff check, Ruff format check (77 files already formatted), Pyright 0 errors / 0 warnings /
+0 informations, pytest **327 passed**. Focused
+`tests/lexical_extraction/test_html_reader.py` **19 passed**. Combined
+`tests/lexical_extraction/` **57 passed**.
+
+**Reviewed HTML sample smoke check:** no newly exported reviewed HTML v1 sample was available
+in this Cursor workspace. An independent prior scratch run reported 18 pages / 728 blocks and
+SHA-256 `e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5`; that is not
+re-executed here. Historical conversion `document.html` was not substituted. Smoke check in
+this session: **unverified** (sample absent).
+
+**Not done at that date:** snapshot access, catalogue field mapping, matching/normalization,
+fuzzy, values, aggregation, runner/CLI, monitoring, publication. Manual pharmaceutical
+extraction acceptance is not applicable. Snapshot access was implemented later as L04.
+
+**Next safe step at that date:** user review of the corrected L03 reader. The user
+subsequently accepted L03. Unrelated pending work remains the reviewed-HTML provenance
+browser check and the Findings default manual verify below.
+
+---
+
+## 1h. Prior current state — 2026-09-28 L02 execution configuration (user-accepted)
+
+**Implemented** in `src/app/lexical_extraction/configuration.py`. Strict YAML loading,
+fixed preset→component resolution, finite resource safeguards, and effective-configuration
+SHA-256. L01 contracts in `contracts.py` are unchanged. The lexical engine is **not
+implemented** beyond configuration and (now) HTML reading.
+
+- Root schema version is strict integer `1`. Required mappings: `input`, `knowledge`,
+  `output`, `extraction`, `resources`. Unknown keys are rejected at every level.
+- Relative paths resolve against the configuration file's parent directory, never the
+  process CWD. Resolved absolute `Path` values are returned. Paths are not required to
+  exist and are not created by the loader.
+- Presets and components use the locked L01 vocabularies. At least one preset or component
+  is required. Duplicates within each requested list are invalid. Overlap between a preset
+  and an independently requested component is valid. Resolved components are the
+  deterministic union in canonical order. Requested list order is preserved separately and
+  does not change the operational digest.
+- `fuzzy_enabled` is the only matching switch; it defaults to `false` when omitted. No
+  policy, algorithm, field-selector, or LLM settings are accepted.
+- Resource defaults (safeguards only): `sqlite_read_batch_rows` 5000 (max 100000),
+  `sqlite_cache_kib` 65536 (max 1048576), `max_terms_per_shard` 2000000 (max 10000000),
+  `max_term_codepoints_per_shard` 50000000 (max 500000000), `result_buffer_records` 50000
+  (max 1000000). Strict positive integers; string/bool coercion is rejected.
+- Typed `SelectionOverride` may replace YAML `presets`, `components`, and/or
+  `fuzzy_enabled` entirely before resolution; lists never append implicitly.
+- Effective digest is lower-case SHA-256 of UTF-8 canonical JSON (`sort_keys=True`, compact
+  separators, `ensure_ascii=False`, `allow_nan=False`), with sorted request sets. Suitable
+  for `RunProvenance.configuration_sha256`.
+- Synthetic example: `examples/lexical_extraction/execution-config.example.yaml`.
+
+**Test-verified** in the L02 pass: `scripts/quality.ps1` passed — Ruff check, Ruff format
+check (75 files already formatted), Pyright 0 errors / 0 warnings / 0 informations,
+pytest **308 passed**. Focused `tests/lexical_extraction/test_configuration.py` **19 passed**
+(parametrized preset coverage included). Combined `tests/lexical_extraction/` **38 passed**.
+
+**User-accepted** as the L02 baseline before L03.
+
+---
+
+## 1g. Prior current state — 2026-09-25 L01 lexical contracts
 
 **Implemented** in `src/app/lexical_extraction/contracts.py` only. These are typed evidence,
 candidate, unit/value, provenance, extraction-outcome, and publication-claim records.
@@ -23,23 +714,20 @@ and artifact publication are **unimplemented** and **unverified**.
 - Extraction outcomes are `not_requested`, `completed` (including a measured zero), `partial`,
   and `failed`. Publication is separate: a final manifest claim is valid only with completed
   publication. The contract does not prove files were written.
-- Preset expansion is not implemented.
+- Preset expansion is not implemented in L01; L02 owns fixed preset resolution.
 - Synthetic example: `examples/lexical_extraction/result-example.json`. It is not a real extraction.
 
 Material alias text is stored as supplied. FDA/EMA and ChEBI column rules do not filter aliases
 by language. Equipment and Unit Operations dedicated-Greek-field exclusions are unchanged.
 
-**Test-verified** in this documentation correction: `scripts/quality.ps1` passed — Ruff check,
+**Test-verified** in the L01 documentation correction: `scripts/quality.ps1` passed — Ruff check,
 Ruff format check (73 files already formatted), Pyright 0 errors / 0 warnings / 0 informations,
 pytest **289 passed**. Focused `tests/lexical_extraction/test_contracts.py` is included (19 tests).
 Pyright printed no missing-file notices.
 
-**Not done:** HTML reading, snapshot queries, normalization, matching, value parsing, fuzzy
-distance, aggregation, run control, monitoring, and publication. User acceptance of L01 is pending.
-
-**Next safe step:** user review of the L01 contracts. Do not implement L02 or later lexical work
-from this pass. Unrelated pending work remains the reviewed-HTML provenance browser check and the
-Findings default manual verify below.
+**Not done at that date:** HTML reading, snapshot queries, normalization, matching, value parsing,
+fuzzy distance, aggregation, run control, monitoring, and publication. L01 was later user-accepted
+as the baseline for L02.
 
 ---
 
