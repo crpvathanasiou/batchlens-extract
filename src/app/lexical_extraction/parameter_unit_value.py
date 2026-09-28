@@ -3,8 +3,10 @@
 Reusable by the later L12 runner. Parameter names stay on the accepted
 L05→L07→L08 dictionary path without selecting or detecting equipment. Units use
 L07 raw discovery plus L10 unit aggregation (not L08). Value expressions use the
-shared L10 parser. Component selection suppresses unrequested output. This is not
-a CLI, publisher, side-by-side review UI, or LLM workflow.
+shared L10 parser. Optional L11 ``fuzzy_enabled`` is honored only on the
+parameter-name dictionary seam; units and values remain non-fuzzy. Component
+selection suppresses unrequested output. This is not a CLI, publisher,
+side-by-side review UI, or LLM workflow.
 """
 
 from __future__ import annotations
@@ -113,6 +115,7 @@ class ParameterUnitValueStream:
     _equipment_unit_terms: Iterable[EligibleSearchTerm]
     _snapshot: SnapshotLookup | None
     _expected_source_identity: str | None = None
+    _fuzzy_enabled: bool = False
     _coverage: ParameterUnitValueCoverage | None = field(default=None, init=False, repr=False)
     _started: bool = field(default=False, init=False, repr=False)
     _iterator: Iterator[BlockRecord] | None = field(default=None, init=False, repr=False)
@@ -264,7 +267,12 @@ class ParameterUnitValueStream:
                 "SNAPSHOT_REQUIRED",
                 "parameter_names selection requires an open knowledge snapshot for L08 aggregation",
             )
-        discoveries = iter_raw_discoveries(self._parameter_terms, self._blocks, self._limits)
+        discoveries = iter_raw_discoveries(
+            self._parameter_terms,
+            self._blocks,
+            self._limits,
+            fuzzy_enabled=self._fuzzy_enabled,
+        )
         self._owned_closeables.append(discoveries)
         stream = iter_aggregated_block_records(
             discoveries,
@@ -282,7 +290,12 @@ class ParameterUnitValueStream:
         identity: str,
     ) -> UnitBlockStream:
         terms = chain(equipment_terms, fixed_vocabulary_unit_terms())
-        discoveries = iter_raw_discoveries(terms, self._blocks, self._limits)
+        discoveries = iter_raw_discoveries(
+            terms,
+            self._blocks,
+            self._limits,
+            fuzzy_enabled=False,
+        )
         self._owned_closeables.append(discoveries)
         stream = iter_aggregated_unit_block_records(
             discoveries,
@@ -327,6 +340,7 @@ def iter_parameter_unit_value_block_records(
     equipment_unit_terms: Iterable[EligibleSearchTerm] = (),
     snapshot: SnapshotLookup | None = None,
     expected_source_identity: str | None = None,
+    fuzzy_enabled: bool = False,
 ) -> ParameterUnitValueStream:
     """Stream per-block parameter-name, unit, and/or value evidence.
 
@@ -336,6 +350,9 @@ def iter_parameter_unit_value_block_records(
     discovery materialization. Equipment unit terms used for dual unit/value
     recognition are retained only under the explicit finite bound
     ``_MAX_EQUIPMENT_UNIT_TERMS`` (fail closed; no silent loss).
+
+    ``fuzzy_enabled`` is honored only for the parameter-name dictionary path.
+    Units and value expressions remain non-fuzzy.
 
     ``result_buffer_records`` bounds one block's buffered occurrences, not the
     cumulative document total. Coverage is available only after complete
@@ -376,6 +393,7 @@ def iter_parameter_unit_value_block_records(
         _equipment_unit_terms=equipment_unit_terms,
         _snapshot=snapshot,
         _expected_source_identity=identity,
+        _fuzzy_enabled=fuzzy_enabled,
     )
 
 

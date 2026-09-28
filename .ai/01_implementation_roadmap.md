@@ -231,9 +231,18 @@ real reviewed HTML v1 + production flat snapshot. Helper:
 `tests/lexical_extraction/acceptance.py`. Integrity-reporting correction is
 test-verified.
 
-**L10 progress (2026-09-28; implemented / test-verified; awaiting user
-acceptance):** independent parameter names, units, and value expressions in
-`unit_value_rules.py`, `unit_aggregation.py`, `value_expressions.py`, and
-`parameter_unit_value.py`, with additive optional `supporting_row_ids` on L01
-`EquipmentUnitRecord`. Fuzzy matching, runner/CLI product surface, monitoring,
-and publication remain unimplemented. Do not start L11 from this progress note.
+**L10 progress (2026-09-28; user-accepted as baseline for L11):** independent
+parameter names, units, and value expressions in `unit_value_rules.py`,
+`unit_aggregation.py`, `value_expressions.py`, and `parameter_unit_value.py`,
+with additive optional `supporting_row_ids` on L01 `EquipmentUnitRecord`.
+
+**L11 progress (2026-09-28; user-accepted as baseline for L12):** optional
+restricted fuzzy dictionary matching (`fuzzy_enabled` default false) via
+`fuzzy_matching.py` and minimal L07/L08/L10 bridges, including later fuzzy-evidence
+and edge-whitespace corrections.
+
+**L12 progress (2026-09-28; implemented / test-verified; awaiting user
+acceptance):** callable runner and compact monitoring in `runner.py` and
+`monitoring.py`. Streams evidence through a caller-owned sink; does not publish
+final artifacts, write a final manifest, implement a CLI, or build the review UI.
+Do not start L13 from this progress note.

@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L10 lexical building blocks (contracts through dictionary aggregation, plus independent unit/value recognition) **are implemented** and **test-verified**; they are not a working end-to-end extractor. Fuzzy matching, runner/CLI product surface, monitoring, and publication remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction orchestration remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L12 lexical building blocks (contracts through callable runner and compact monitoring) **are implemented** and **test-verified**; L12 is not a published end-to-end product surface. CLI, final-manifest publication, and review-UI projection remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -325,8 +325,9 @@ connection closes and no rows are returned under the previous identity.
 `SnapshotReadError` maps to `SafeStructuredError`. Scans before a successful open
 and after close fail. Validation failure does not claim success.
 
-Normalization, matching, fuzzy matching, value parsing, orchestration, runner/CLI,
-monitoring, and publication remain unimplemented. Fixed search-field mapping is L05.
+Normalization, matching, value parsing, orchestration, runner/CLI, monitoring, and
+publication remain unimplemented. Fixed search-field mapping is L05. Optional
+restricted fuzzy matching on the dictionary path is L11.
 
 ## 13. L05 fixed V1 source-field mapping (implemented mapper, not a matcher)
 
@@ -420,49 +421,65 @@ normalized indices are never used as original offsets.
   permission uses ordinary decimal digits (`Nd`) only (`37°C`, `120rpm`), not
   superscript/`No` numbers.
 
-**Limits.** Fuzzy distance, value parsing, occurrence/candidate aggregation,
-runner/CLI, monitoring, and publication remain unimplemented. Bounded exact /
-normalized-exact matching is L07.
+**Limits.** Value parsing, occurrence/candidate aggregation, runner/CLI,
+monitoring, and publication remain unimplemented. Bounded exact /
+normalized-exact matching is L07; optional restricted fuzzy matching is L11.
 
 ## 15. L07 bounded Aho–Corasick raw discoveries (implemented matcher core, not aggregation)
 
-Code: `src/app/lexical_extraction/dictionary_matcher.py`. Dependency: `pyahocorasick`.
+Code: `src/app/lexical_extraction/dictionary_matcher.py` (+ `fuzzy_matching.py` for L11).
+Dependency: `pyahocorasick`.
 
 **Input.** An iterable of L05 `EligibleSearchTerm` records, a replayable
 `BlockReplaySource` of L03 `BlockEvidence` (synthetic `StaticBlockSource` or
-`ReviewedHtmlBlockReplay`), and L02 `ResourceLimits`. `fuzzy_enabled` is ignored;
-L07 always performs exact/normalized-exact matching only.
+`ReviewedHtmlBlockReplay`), L02 `ResourceLimits`, and optional keyword-only
+`fuzzy_enabled` (default `False`). L02's YAML schema is not modified here; a later
+runner may pass the effective selection through this seam.
 
 **Output.** Streamed intermediate `RawDiscovery` records: method
-`exact` / `normalized_exact`, fixed L01 rule ids, component/role, source
-table/field/`row_id`, optional `lexical_term_id` / snapshot id, original
-dictionary spelling, block `node_id`, and L01 `CharSpan` with
-`block.text[start:end] == matched_text`. Not an L01 `DictionaryOccurrence`,
-candidate, or publication claim.
+`exact` / `normalized_exact` / optional `fuzzy`, fixed L01 rule ids, component/role,
+source table/field/`row_id`, optional `lexical_term_id` / snapshot id, original
+dictionary spelling, block `node_id`, L01 `CharSpan` with
+`block.text[start:end] == matched_text`, and optional `edit_distance` (fuzzy only).
+Not an L01 `DictionaryOccurrence`, candidate, or publication claim.
 
 **Shard / replay lifecycle.** Terms are consumed once into finite shards counted
 by source references (`max_terms_per_shard`) and retained string code points
-(`max_term_codepoints_per_shard`). Each shard indexes distinct L06 comparison
-keys with Aho–Corasick (all colliding source references retained), partitions by
-whitespace-collapse profile, rescans every block, emits through a buffer of at
-most `result_buffer_records`, then releases automata and shard-local maps.
-Shards may rescan blocks. For reviewed HTML, each pass reopens the file; the
-first complete pass pins `html_sha256`; a changed or incomplete identity fails
-closed. Discovery multisets for identical pinned inputs are independent of shard
-limits; emission order may follow shard order.
+(`max_term_codepoints_per_shard`, including deletion-signature storage when fuzzy
+is ON). Each shard indexes distinct L06 comparison keys with Aho–Corasick (all
+colliding source references retained), partitions by whitespace-collapse profile,
+optionally builds a fuzzy deletion-signature index over eligible keys, rescans
+every block, emits through a buffer of at most `result_buffer_records`, then
+releases automata, fuzzy index, and shard-local maps. When `fuzzy_enabled` is
+false, fuzzy state is not built. Shards may rescan blocks. For reviewed HTML,
+each pass reopens the file; the first complete pass pins `html_sha256`; a changed
+or incomplete identity fails closed. Discovery multisets for identical pinned
+inputs are independent of shard limits; emission order may follow shard order.
 
-**Failures.** Oversized single references, shard construction failures,
-block-read failures, and identity mismatches raise bounded
-`DictionaryMatchError` (→ `SafeStructuredError`). Projection skips only
-`BOUNDARY_REJECTED` and `PARTIAL_NORMALIZATION_UNIT` as normal non-hits; other
-L06 `ComparisonError` codes become `PROJECTION_FAILED`. Exceptions while
-creating or consuming the Aho–Corasick iterator are `MATCH_FAILED` (not
-`BLOCK_READ_FAILED`). Early generator close releases shard state. Hits are never
-silently truncated; references are never last-write-wins deduplicated.
+**Fuzzy rule (when ON).** Ordinary Levenshtein distance 1 on L06 comparison
+strings for eligible single alphabetic natural-language words of at least six
+Unicode code points (equipment type, parameter name, unit operation, independently
+eligible process step), gated by L05 `fuzzy_allowed` and fixed role/policy
+exclusions. Distance 0 is never fuzzy. Adjacent transposition alone costs two and
+is rejected. Materials/chemicals/UNII/units/generic cues/abbreviations/phrases/
+equipment codes remain available to exact/normalized-exact only. A document word
+one character shorter than an eligible term is still considered for deletion
+matches. Projection uses L06 default boundaries; partial units and invalid
+boundaries are non-hits or fail closed without silent misprojection.
 
-**Limits.** Aggregation of same-span discoveries, canonical result order, fuzzy
-matching, value parsing, runner/CLI, monitoring, and publication remain
-unimplemented. Bounded dictionary aggregation is L08.
+**Failures.** Oversized single references (including fuzzy signature cost), shard
+construction failures, fuzzy-index failures, block-read failures, and identity
+mismatches raise bounded `DictionaryMatchError` (→ `SafeStructuredError`).
+Projection skips only `BOUNDARY_REJECTED` and `PARTIAL_NORMALIZATION_UNIT` as
+normal non-hits; other L06 `ComparisonError` codes become `PROJECTION_FAILED`.
+Exceptions while creating or consuming the Aho–Corasick iterator are
+`MATCH_FAILED` (not `BLOCK_READ_FAILED`). Early generator close releases shard
+state. Hits are never silently truncated; references are never last-write-wins
+deduplicated.
+
+**Limits.** Aggregation of same-span discoveries, canonical result order,
+value parsing, runner/CLI, monitoring, and publication remain unimplemented.
+Bounded dictionary aggregation is L08.
 
 ## 16. L08 bounded dictionary aggregation (implemented aggregator core, not a runner)
 
@@ -490,7 +507,16 @@ guard. Capacity checks do not repeatedly `COUNT(*)` the discoveries table.
 Hits loaded for an
 emitted block are marked consumed; leftover unconsumed hits after replay raise
 `UNMATCHED_SPOOL_HITS`. Same-span source references keep `exact` over
-`normalized_exact`. Equivalent mapped candidate interpretations collapse to one
+`normalized_exact` over `fuzzy`. Fuzzy rows store verified integer `edit_distance=1`;
+L08 also requires the observed comparison text to be one alphabetic word within
+one-edit length of the source key (observed span edges are **not** stripped, so
+leading/trailing whitespace inside ``matched_text`` fails), and during block replay
+requires the fuzzy span to satisfy literal slice equality and the source term's
+fixed L06 boundary against `block.text`. Ineligible, non-word, distance-mismatched,
+or boundary-invalid fuzzy claims raise bounded errors (`FUZZY_NOT_ELIGIBLE` /
+`FUZZY_OBSERVED_NOT_WORD` / `FUZZY_DISTANCE_MISMATCH` / `FUZZY_BOUNDARY_REJECTED` /
+`INVALID_FUZZY_DISCOVERY`) instead of turning injected raw hits into evidence.
+Equivalent mapped candidate interpretations collapse to one
 candidate with lexicographic representative `row_id` and sorted
 `supporting_row_ids`. Optional interpretation-key fields sort with a deterministic
 comparable form (`None` before strings) without changing grouping equality.
@@ -502,15 +528,14 @@ sqlite error). Early ingest failure closes a closable upstream discovery iterato
 
 **Failures.** Missing/mismatched lookup or snapshot identity, unexpected unit
 input, missing required source identity, replay identity change, unmatched spool
-hits, spool I/O/cleanup errors, and per-block/group overflow of
-`result_buffer_records` raise bounded `DictionaryAggregationError`. Failures do
-not claim completed coverage.
+hits, invalid/ineligible fuzzy claims, spool I/O/cleanup errors, and
+per-block/group overflow of `result_buffer_records` raise bounded
+`DictionaryAggregationError`. Failures do not claim completed coverage.
 
-**Limits.** Fuzzy matching, runner/CLI, monitoring, review-UI projection, and
-publication remain unimplemented. Independent unit/`UnitOccurrence` aggregation
-and value-expression recognition are L10 (not this module). Full-Materials
-time/peak-memory feasibility requires a local reviewed HTML v1 export and is
-recorded separately when run.
+**Limits.** Runner/CLI, monitoring, review-UI projection, and publication remain
+unimplemented. Independent unit/`UnitOccurrence` aggregation and value-expression
+recognition are L10 (not this module). Full-Materials time/peak-memory feasibility
+requires a local reviewed HTML v1 export and is recorded separately when run.
 
 ## 17. L10 independent parameter names, units, and value expressions
 
@@ -535,6 +560,8 @@ sources keep immediate identity checks.
 
 **Parameter names.** Stay on the accepted L05→L07→L08 path. Equipment detection
 is never required or performed when only parameter-name terms are supplied.
+Optional `fuzzy_enabled` (default `False`) is forwarded only to that dictionary
+seam; units and value expressions remain non-fuzzy.
 
 **Units.** L07 raw discoveries for `Component.UNITS` are aggregated by L10 unit
 aggregation, not L08. L08 continues to reject unit discoveries with
@@ -559,6 +586,66 @@ with both `applies_to` values. Ambiguous `1,000` stays unresolved
 identifier-prefixed range/tolerance tails, and embedded cues are rejected. No
 unit conversion, parent binding, or catalogue Published-range substitution.
 
-**Limits.** Not a CLI, publisher, review UI, or LLM workflow. Fuzzy matching,
-runner orchestration beyond this callable capability, monitoring, and
-publication remain unimplemented.
+**Limits.** Not a CLI, publisher, review UI, or LLM workflow. L12 composes this
+capability into the callable runner; final-manifest publication remains L13.
+
+## 18. L12 callable extraction runner and operational monitoring
+
+Code: `runner.py`, `monitoring.py`.
+
+**Public API.** `run_lexical_extraction(config: EffectiveExecutionConfiguration,
+sink: EvidenceSink) -> LexicalRunResult`. Optional
+`run_lexical_extraction_from_config_path` loads L02 YAML then delegates.
+`fixed_rules_sha256()` digests the fixed V1 rules actually used (not a synthetic
+fixture digest).
+
+**Evidence sink lifecycle.** Caller-owned: `begin_run` → per-component
+`begin_component` → provisional component-scoped `write_page(component, page)` /
+`write_block` → `complete_component` or `abort_component` → `complete_run` or
+`abort_run`. Page skeletons are streamed from a fresh L03 reader per component
+(no retained all-page list); empty pages and identity checks are preserved.
+Writes before `complete_component` are provisional. A failed sink write is an
+execution/output failure (`SINK_WRITE_FAILED`). `abort_component` must not be
+called for an already completed component. `abort_run` after committed components
+is a run-level finalization signal and must leave those completed outcomes
+intact. `complete_run` failure preserves validated identities and committed
+outcomes and sets additive `LexicalRunResult.run_error`
+(`SINK_COMPLETE_RUN_FAILED`). L13 owns atomic publication; a successful L12
+stream is not itself a published result and does not construct a completed
+`PublicationRecord`.
+
+**Preflight.** One full L03 HTML validation (exact-byte SHA-256 + producer
+metadata; page/block counts only) and one L04 snapshot preflight before search.
+Failures before HTML validation use `PreValidationFailure` without fabricating
+job/revision/generation/hash. Snapshot preflight failure marks all requested
+components failed with validated HTML identity retained when available. Snapshot
+and streams close on success, failure, and early stop.
+
+**Execution grouping.** Exactly L02's resolved component union; `fuzzy_enabled`
+is the sole matching switch passed to dictionary and parameter-name search.
+Materials, UNII, and units remain non-fuzzy via accepted L05/L07/L10 rules.
+`unit_operations`, `process_steps`, `materials`, and `equipment` each run an
+independent L05→L07→L08 pass. Selected `parameter_names`, `units`,
+`quantity_expressions`, and `parameter_value_expressions` share one L10
+composition so values are not duplicated. Preset resolution is not reimplemented.
+Eligible term/row monitoring uses `EligibleTermCounter` (previous-key integer;
+no retained row-id set).
+
+**Outcomes.** Zero-hit requested components complete with count 0 only after full
+stream/replay success. Failed shards or incomplete child streams are not
+completed. Independent completed components remain usable when another fails
+(overall `partial`). Shared prerequisite failure fails all affected requested
+components.
+
+**Provenance and monitoring.** `RunProvenance` is emitted when HTML and snapshot
+identities are known, including effective configuration SHA-256, requested/
+resolved selection, fuzzy flag, engine/dependency versions, timings, measured
+values, and `rules_sha256`. Monitoring summarizes observed pages/blocks,
+completed/failed/zero-result components, matches by component/method, eligible
+terms/rows/candidates when accurately measured, stage elapsed times, configured
+resource limits, and peak process memory with method label when measurable;
+unavailable counters are omitted or marked unavailable, never guessed as zero.
+
+**Limits.** No CLI, dashboard, telemetry server, audit ledger, final manifest,
+or new monitoring-only dependency. Shard-phase splits that cannot be observed
+without changing accepted L07/L08 modules are omitted.

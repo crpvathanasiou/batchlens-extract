@@ -73,12 +73,15 @@ src/app/
 │   ├── knowledge_snapshot.py        L04 read-only flat SQLite snapshot paging and row_id lookup
 │   ├── field_mapping.py             L05 fixed V1 SourceRow → eligible search-term mapping
 │   ├── comparison.py                L06 fixed V1 comparison normalize / offset map / boundaries
-│   ├── dictionary_matcher.py        L07 bounded Aho–Corasick exact/normalized-exact raw discoveries
-│   ├── dictionary_aggregation.py    L08 bounded dictionary occurrence aggregation → BlockRecord
+│   ├── dictionary_matcher.py        L07/L11 bounded AC exact/normalized-exact + optional fuzzy raw discoveries
+│   ├── fuzzy_matching.py            L11 deletion-signature index and distance-1 helpers
+│   ├── dictionary_aggregation.py    L08 bounded dictionary occurrence aggregation → BlockRecord (incl. fuzzy)
 │   ├── unit_value_rules.py          L10 fixed V1 quantity-unit vocabulary and categorical/cue rules
 │   ├── unit_aggregation.py          L10 unit-mention aggregation (not L08)
 │   ├── value_expressions.py         L10 controlled value-expression recognition
-│   └── parameter_unit_value.py      L10 independent parameter/unit/value block-stream API
+│   ├── parameter_unit_value.py      L10 independent parameter/unit/value block-stream API (+ fuzzy flag)
+│   ├── monitoring.py                L12 compact in-memory operational monitoring helpers
+│   └── runner.py                    L12 callable run boundary + evidence-sink lifecycle
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -98,7 +101,9 @@ tests/lexical_extraction/
 ├── test_comparison.py               L06 comparison normalization, projection, and boundary tests
 ├── test_dictionary_matcher.py       L07 Aho–Corasick shard matching and raw-discovery tests
 ├── test_dictionary_aggregation.py   L08 dictionary aggregation and supporting-ref tests
-└── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
+├── test_fuzzy_matching.py           L11 optional fuzzy matching and L08/L10 bridge tests
+├── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
+└── test_runner.py                   L12 callable runner, sink lifecycle, and failure-boundary tests
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -141,6 +146,8 @@ Inspect when:
 | `src/app/lexical_extraction/knowledge_snapshot.py` | L04 read-only flat SQLite snapshot preflight, pinned connection, single-table `rowid` paging, and source `row_id` lookup | Snapshot directory + L02 batch/cache limits → `KnowledgeSnapshotIdentity` and raw source rows | Changing companion validation, read-only pinning, allowlisted paging, or `row_id` lookup |
 | `src/app/lexical_extraction/field_mapping.py` | L05 fixed V1 per-table search-field mapping and eligibility over L04 `SourceRow` | Raw source rows + selected components → compact `EligibleSearchTerm` stream; no matching | Changing eligible fields, UNII/unit boundary hints, `Index this row` authorization, or unit-token eligibility |
 | `src/app/lexical_extraction/comparison.py` | L06 fixed V1 per-term/per-block comparison normalization, comparison→original projection, and role-aware boundaries | One term or block text → temporary `ComparisonSurface` and optional `CharSpan`; no matcher | Changing NFC/casefold/whitespace rules, unit alignment, or `default` / `whole_code` / `atomic_unit` boundaries |
+| `src/app/lexical_extraction/runner.py` | L12 callable run boundary: HTML/snapshot preflight, component execution, component-scoped sink streaming, outcomes/provenance/`run_error` | `EffectiveExecutionConfiguration` + `EvidenceSink` → `LexicalRunResult` | Changing sink lifecycle, page scoping, failure boundaries, component grouping, or outcome honesty |
+| `src/app/lexical_extraction/monitoring.py` | L12 compact in-memory monitoring and nonprivileged peak-memory measurement | Runner accumulator → `RunMonitoringSummary` | Changing measured counters, unavailable semantics, or memory method labels |
 | `src/app/document_review/composition.py` | Production Dynamo/S3 wiring plus opaque storage namespace | Document settings → `ReviewService` | Changing production adapters; not used by harness |
 | `frontend/src/mapping.ts` | Page projection, sparse text, skeleton | Canonical page → TipTap JSON | Changing heading/table projection or IDs |
 | `frontend/src/extensions.ts` | Protected TipTap schema and load | Projection JSON → editor transactions | Changing structure lock, table attrs, page load |
@@ -226,25 +233,46 @@ provenance, projects comparison ranges to L01 `CharSpan` values, and applies
 run Aho–Corasick, or aggregate occurrences. Focused tests:
 `tests/lexical_extraction/test_comparison.py`.
 
-`src/app/lexical_extraction/dictionary_matcher.py` is the L07 bounded matching core.
-It shards L05 eligible terms under L02 resource limits, indexes comparison keys with
-`pyahocorasick`, replays L03 blocks via `StaticBlockSource` or
-`ReviewedHtmlBlockReplay` (pinned HTML SHA-256), and streams `RawDiscovery` records
-with original spans and all colliding source references. Fuzzy matching, occurrence
-aggregation, and publication are out of scope. Focused tests:
-`tests/lexical_extraction/test_dictionary_matcher.py`.
+`src/app/lexical_extraction/dictionary_matcher.py` is the L07/L11 bounded matching
+core. It shards L05 eligible terms under L02 resource limits, indexes comparison
+keys with `pyahocorasick`, optionally builds a deletion-signature fuzzy index when
+`fuzzy_enabled=True`, replays L03 blocks via `StaticBlockSource` or
+`ReviewedHtmlBlockReplay` (pinned HTML SHA-256), and streams `RawDiscovery`
+records with original spans and all colliding source references. Occurrence
+aggregation and publication are out of scope. Focused tests:
+`tests/lexical_extraction/test_dictionary_matcher.py` and
+`tests/lexical_extraction/test_fuzzy_matching.py`.
+
+`src/app/lexical_extraction/fuzzy_matching.py` holds the fixed V1 ordinary
+Levenshtein distance-1 helpers and deletion-signature candidate index used only
+when fuzzy is explicitly enabled.
 
 `src/app/lexical_extraction/dictionary_aggregation.py` is the L08 dictionary aggregator.
-It rejects unit discoveries (`UNEXPECTED_UNIT_DISCOVERY`). Focused tests:
+It rejects unit discoveries (`UNEXPECTED_UNIT_DISCOVERY`) and revalidates fuzzy
+claims before emitting L01 `FuzzyEvidence`. Focused tests:
 `tests/lexical_extraction/test_dictionary_aggregation.py`.
 
 `src/app/lexical_extraction/unit_value_rules.py`, `unit_aggregation.py`,
 `value_expressions.py`, and `parameter_unit_value.py` are the L10 independent
-parameter-name / unit / value capability. Parameter names reuse L05→L07→L08.
-Units use L07 plus L10 unit aggregation (not L08). Values use the shared V1 parser.
+parameter-name / unit / value capability. Parameter names reuse L05→L07→L08 and
+may pass `fuzzy_enabled` through that seam. Units use L07 plus L10 unit aggregation
+(not L08) and remain non-fuzzy. Values use the shared V1 parser.
 Fixed quantity-unit vocabulary and narrow categorical/cue rules live in
 `unit_value_rules.py`. Focused tests:
 `tests/lexical_extraction/test_parameter_unit_value.py`.
+
+`src/app/lexical_extraction/runner.py` and `monitoring.py` are the L12 callable
+run boundary. The runner validates reviewed HTML fully (counts only; no retained
+all-page list), prefights the flat snapshot once, executes exactly L02's resolved
+component union (dictionary components independently; co-selected L10 components
+in one composition), streams provisional component-scoped page/block evidence
+through a caller-owned `EvidenceSink` (`write_page(component, page)`), and returns
+`LexicalRunResult` with identities, `RunProvenance` when complete, outcomes,
+compact monitoring, and optional `run_error` for sink-finalization failure while
+preserving committed component outcomes. Eligible term/row counts use
+`EligibleTermCounter` (previous-key integer; no row-id set). It does not publish
+artifacts, write a final manifest, or implement a CLI/UI. Focused tests:
+`tests/lexical_extraction/test_runner.py`.
 
 Graph views and a rules/Audit layer have no implementation modules yet. Do not invent those
 directories.

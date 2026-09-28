@@ -1,6 +1,180 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-28 L10 value-only reviewed-HTML replay correction
+## 1. Current state — 2026-09-28 L12 bounded-count and sink-lifecycle correction
+
+**Implemented** focused L12 correction only: bounded eligible-row counting, streamed
+component-scoped page emission without an all-page retained list, and truthful
+sink finalization that preserves committed component outcomes. Accepted L01–L11
+matching/config/snapshot behavior and selected-component extraction are unchanged.
+Units remain non-fuzzy. L13 / CLI / final manifest / review UI were **not** started.
+
+- `EligibleTermCounter` counts eligible rows with a previous `(table, row_id)` key
+  and an integer; no retained set of row IDs. Rows that emit no terms are not
+  counted.
+- HTML validation counts pages/blocks without retaining `_PageMeta` for every page.
+  Each component streams page skeletons from a fresh L03 reader; empty pages and
+  identity checks are preserved. Incomplete/changed page replay fails the component.
+- `EvidenceSink.write_page(component, page)` is component-scoped. Combined L10 runs
+  emit each component's ordered pages exactly once.
+- L10 `complete_component` failure aborts only uncommitted components; already
+  completed siblings stay completed (overall `partial`).
+- `complete_run` failure keeps validated HTML/snapshot identities and committed
+  outcomes, sets additive `LexicalRunResult.run_error`, and calls `abort_run`
+  without retracting committed components. No completed publication claim.
+
+**Test-verified:** focused `tests/lexical_extraction/test_runner.py` **16 passed**;
+combined `tests/lexical_extraction/` **252 passed**; `scripts/quality.ps1`
+passed — Ruff check, Ruff format check (99 files already formatted), Pyright
+0 errors / 0 warnings / 0 informations, pytest **522 passed**.
+
+**L11 status:** user-accepted baseline for L12.
+**L12 status:** corrected, **implemented** and **test-verified**; still
+**awaiting user acceptance**.
+**Next safe step:** user review of corrected L12. Do not start L13.
+
+---
+
+## 1aa. Prior current state — 2026-09-28 L12 callable extraction runner
+
+**Implemented** L12 only: callable bounded runner composing accepted L02–L11 into
+one run boundary, with a caller-owned evidence sink, honest per-component /
+overall outcomes, `RunProvenance` when identities are known, and compact
+in-memory operational monitoring. Later corrected for bounded counts and sink
+lifecycle (see current §1).
+
+- Public API: `run_lexical_extraction(config, sink)` and optional
+  `run_lexical_extraction_from_config_path`; sink lifecycle
+  `begin_run` → `begin_component` → provisional `write_page` /
+  `write_block` → `complete_component` / `abort_component` →
+  `complete_run` / `abort_run`.
+- Failure boundaries: shared HTML validation + one snapshot preflight; each of
+  `unit_operations` / `process_steps` / `materials` / `equipment` is an
+  independent L05→L07→L08 pass; selected L10 components share one L10 composition
+  (no duplicate parameter/value output).
+- HTML is fully validated before search; snapshot prefights once; streams close
+  on success, failure, and early abort. Zero-hit components complete with count 0
+  only after full stream success. Independent completed components remain usable
+  under overall `partial`.
+- Monitoring records observed pages/blocks, completed/failed/zero-result
+  components, matches by component/method, eligible terms/rows and candidates when
+  measured, stage timings, configured limits, and peak process memory when a
+  supported nonprivileged method is available (otherwise unavailable).
+- Logs stay structured and small (`run_id`, stage/component, status, counts,
+  elapsed, error code); no document text or unrestricted paths.
+
+**Test-verified (historical):** focused `tests/lexical_extraction/test_runner.py`
+**12 passed**; combined `tests/lexical_extraction/` **248 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (99 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **518 passed**.
+
+**Real-input smoke:** not run (no local reviewed HTML v1 export + production
+snapshot pair present for a bounded L12 smoke in this workspace).
+
+**L11 status:** user-accepted baseline for L12 (including both fuzzy-evidence
+corrections).
+**L12 status:** **implemented** and **test-verified**; later corrected (see
+current §1); still **awaiting user acceptance**.
+**Next safe step (historical):** user review of L12. Do not start L13, CLI,
+final-manifest publication, or the review UI.
+
+---
+
+## 1z. Prior current state — 2026-09-28 L11 edge-whitespace fuzzy validation correction
+
+**Implemented** focused L11 correction only: observed fuzzy span normalization no
+longer strips edges in `dictionary_aggregation.py` and `fuzzy_matching.py`, plus
+focused regressions. Accepted L01–L10 behavior and prior L11 fuzzy rule/eligibility/
+OFF default remain unchanged. Units stay non-fuzzy. L12 was then implemented (see
+current §1).
+
+- Forged oversized spans such as `" Presure"` / `"Presure "` against `Pressure`
+  fail closed (`FUZZY_OBSERVED_NOT_WORD`) with no aggregation coverage.
+- Inner word span `[1, 8)` on block `" Presure "` still yields
+  `FuzzyEvidence(edit_distance=1)` with exact original offsets.
+- Prior rejections (`Fil ter`, `Filter!`, interior boundary failures, strict
+  integer distance) and genuine `Presure` behavior stay in force.
+
+**Test-verified (historical):** focused `tests/lexical_extraction/test_fuzzy_matching.py`
+**17 passed**; combined `tests/lexical_extraction/` **236 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (96 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **506 passed**.
+
+**L10 status:** user-accepted baseline for L11.
+**L11 status:** edge-whitespace corrected; later **user-accepted** as L12 baseline
+(see current §1).
+**Next safe step (historical):** user review of corrected L11. Do not start L12.
+
+---
+
+## 1y. Prior current state — 2026-09-28 L11 fuzzy evidence validation correction
+
+**Implemented** focused L11 correction in `dictionary_aggregation.py` and
+`fuzzy_matching.py`, plus focused regressions in
+`tests/lexical_extraction/test_fuzzy_matching.py`. Accepted L01–L10 behavior and
+L11's fixed one-edit rule, eligibility, OFF default, and exact/normalized path are
+unchanged. Runner/CLI, publisher, monitoring, review UI, and L12 remain
+**unimplemented**.
+
+- L08 fuzzy validation now requires an exact integer `edit_distance=1` (booleans
+  rejected), one alphabetic observed comparison word within one-edit length of the
+  eligible source key, and — during block replay — literal slice equality plus the
+  source term's fixed L06 boundary against `block.text`. Injected `Fil ter`,
+  `Filter!`, and interior `Presure` in `xPresure` fail closed with no coverage.
+- Signature-resource test charges deletion signatures meaningfully: a limit above
+  exact-only reference cost but below reference+signature cost succeeds with
+  `fuzzy_enabled=False` and fails `OVERSIZED_TERM` with fuzzy ON.
+
+**Test-verified (historical):** focused
+`tests/lexical_extraction/test_fuzzy_matching.py` **16 passed**; combined
+`tests/lexical_extraction/` **235 passed**; `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (96 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **505 passed**.
+
+**L10 status:** user-accepted baseline for L11.
+**L11 status:** corrected, **implemented** and **test-verified**; later corrected
+again for edge whitespace (see current §1); still **awaiting user acceptance**.
+**Next safe step (historical):** user review of corrected L11. Do not start L12.
+
+---
+
+## 1x. Prior current state — 2026-09-28 L11 optional restricted fuzzy dictionary matching
+
+**Implemented** in `src/app/lexical_extraction/` as L11-only additive fuzzy support on
+the existing dictionary path: `fuzzy_matching.py`, plus minimal compatible changes to
+`dictionary_matcher.py`, `dictionary_aggregation.py`, and `parameter_unit_value.py`.
+L01–L10 remain the accepted baseline. L02's user-facing configuration schema is
+unchanged. Runner/CLI, publisher, monitoring, review-UI projection, and L12 remain
+**unimplemented**.
+
+- Optional callable `fuzzy_enabled` (default `False`) on `iter_raw_discoveries` and
+  the L10 parameter-name seam. OFF preserves exact/normalized-exact outputs and does
+  not build fuzzy state. ON adds fixed V1 ordinary Levenshtein distance-1 hits only.
+- Eligibility: L05 `fuzzy_allowed` plus fixed role/policy gates. Fuzzy only for
+  single alphabetic natural-language words ≥6 Unicode code points (equipment type,
+  parameter name, unit operation, independently eligible process step). Materials,
+  chemicals/UNII, units, generic/context/support/inspection/step-cue terms,
+  abbreviations, phrases, and equipment codes/models stay non-fuzzy.
+- Candidate retrieval uses a per-shard deletion-signature index over eligible L06
+  comparison keys, then exact distance verification. Signature storage is charged
+  against `max_term_codepoints_per_shard` (fail closed / shard split; no truncation).
+- `RawDiscovery` carries optional `edit_distance`; L08 revalidates eligibility and
+  recomputes distance before emitting L01 `FuzzyEvidence`. Precedence:
+  `exact` > `normalized_exact` > `fuzzy`. Units/values remain non-fuzzy.
+
+**Test-verified (historical):** focused
+`tests/lexical_extraction/test_fuzzy_matching.py` **15 passed**; combined
+`tests/lexical_extraction/` **234 passed**; `scripts/quality.ps1` passed — Ruff
+check, Ruff format check (96 files already formatted), Pyright 0 errors /
+0 warnings / 0 informations, pytest **504 passed**.
+
+**L10 status:** user-accepted baseline for L11.
+**L11 status:** **implemented** and **test-verified**; later corrected (see
+current §1); still **awaiting user acceptance**.
+**Next safe step (historical):** user review of L11. Do not start L12.
+
+---
+
+## 1w. Prior current state — 2026-09-28 L10 value-only reviewed-HTML replay correction
 
 **Implemented** focused correction in `parameter_unit_value.py` and focused L10
 tests only. L01–L09 production behavior is unchanged. Historical L09 reports are
@@ -25,8 +199,8 @@ formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **489 passed*
 
 **L09 status:** user-accepted baseline for L10.
 **L10 status:** value-only replay corrected, **implemented** and
-**test-verified**; still **awaiting user acceptance**.
-**Next safe step:** user review of corrected L10. Do not start L11.
+**test-verified**; later accepted as L11 baseline (see current §1).
+**Next safe step (historical):** user review of corrected L10. Do not start L11.
 
 ---
 

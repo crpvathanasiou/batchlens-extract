@@ -3,8 +3,9 @@
 Consumes an L07 raw-discovery iterator, a replayable L03 block source, and an open
 L04 knowledge snapshot. Discoveries are regrouped through a run-local temporary
 SQLite spool, rehydrated via single-table lookup plus L05 mapping, and emitted as
-validated L01 ``BlockRecord`` values in document order. This is not fuzzy matching,
-value parsing, unit aggregation, a runner/CLI, or a published result.
+validated L01 ``BlockRecord`` values in document order. Optional L11 fuzzy hits are
+accepted only after source eligibility and distance revalidation. This is not value
+parsing, unit aggregation, a runner/CLI, or a published result.
 """
 
 from __future__ import annotations
@@ -18,9 +19,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal, Protocol, runtime_checkable
 
+from app.lexical_extraction.comparison import (
+    ComparisonError,
+    normalize_literal,
+    respects_boundary,
+)
 from app.lexical_extraction.configuration import ResourceLimits
 from app.lexical_extraction.contracts import (
     EXACT_RULE_ID,
+    FUZZY_MAX_EDIT_DISTANCE,
+    FUZZY_MIN_WORD_LENGTH,
+    FUZZY_RULE_ID,
     NORMALIZED_EXACT_RULE_ID,
     AmbiguityQualification,
     BlockEvidence,
@@ -32,6 +41,7 @@ from app.lexical_extraction.contracts import (
     EquipmentTypeCandidate,
     ExactEvidence,
     FdaEmaMaterialCandidate,
+    FuzzyEvidence,
     GenericCueCandidate,
     KnowledgeSnapshotIdentity,
     LexicalCandidate,
@@ -40,6 +50,7 @@ from app.lexical_extraction.contracts import (
     ProcessStepCandidate,
     SafeStructuredError,
     UnitOperationCandidate,
+    validate_match_against_block,
 )
 from app.lexical_extraction.dictionary_matcher import (
     BlockReplaySource,
@@ -50,6 +61,11 @@ from app.lexical_extraction.field_mapping import (
     EligibleSearchTerm,
     FieldMappingError,
     map_source_row,
+)
+from app.lexical_extraction.fuzzy_matching import (
+    fuzzy_role_policy_eligible,
+    is_fuzzy_index_eligible,
+    ordinary_levenshtein,
 )
 from app.lexical_extraction.knowledge_snapshot import SnapshotReadError, SourceRow
 
@@ -65,7 +81,11 @@ _DICTIONARY_COMPONENTS: Final[frozenset[Component]] = frozenset(
         Component.PARAMETER_NAMES,
     }
 )
-_METHOD_RANK: Final[Mapping[str, int]] = {"exact": 0, "normalized_exact": 1}
+_METHOD_RANK: Final[Mapping[str, int]] = {
+    "exact": 0,
+    "normalized_exact": 1,
+    "fuzzy": 2,
+}
 _COMPONENT_ORDER: Final[tuple[Component, ...]] = (
     Component.UNIT_OPERATIONS,
     Component.PROCESS_STEPS,
@@ -74,6 +94,7 @@ _COMPONENT_ORDER: Final[tuple[Component, ...]] = (
     Component.PARAMETER_NAMES,
 )
 _DEFAULT_ROW_CACHE: Final = 64
+MatchMethodName = Literal["exact", "normalized_exact", "fuzzy"]
 
 
 class DictionaryAggregationError(Exception):
@@ -122,7 +143,7 @@ class AggregationCoverage:
 
 @dataclass(frozen=True)
 class _SpooledHit:
-    method: Literal["exact", "normalized_exact"]
+    method: MatchMethodName
     dictionary_term: str
     component: Component
     term_role: str
@@ -134,13 +155,15 @@ class _SpooledHit:
     start_char: int
     end_char: int
     matched_text: str
+    edit_distance: int | None = None
 
 
 @dataclass
 class _GroupState:
-    method: Literal["exact", "normalized_exact"]
+    method: MatchMethodName
     term: EligibleSearchTerm
     row_ids: set[str]
+    edit_distance: int | None = None
 
 
 class AggregatedBlockStream:
@@ -356,6 +379,7 @@ def _open_spool(path: Path) -> sqlite3.Connection:
                 row_id TEXT NOT NULL,
                 lexical_term_id TEXT,
                 snapshot_id TEXT NOT NULL,
+                edit_distance INTEGER,
                 consumed INTEGER NOT NULL DEFAULT 0
             )
             """
@@ -460,15 +484,16 @@ def _ingest_discoveries(
                     "raw discovery snapshot identity does not match the open knowledge snapshot",
                 )
             _require_block_capacity(connection, discovery.block_node_id, limits)
-            _require_matching_term(discovery, snapshot, cache, row_cache_size=row_cache_size)
+            term = _require_matching_term(discovery, snapshot, cache, row_cache_size=row_cache_size)
+            edit_distance = _validated_edit_distance(discovery, term)
             try:
                 connection.execute(
                     """
                     INSERT INTO discoveries (
                         block_node_id, start_char, end_char, matched_text, method,
                         dictionary_term, component, term_role, source_table, source_field,
-                        row_id, lexical_term_id, snapshot_id, consumed
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        row_id, lexical_term_id, snapshot_id, edit_distance, consumed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                     """,
                     (
                         discovery.block_node_id,
@@ -484,6 +509,7 @@ def _ingest_discoveries(
                         discovery.row_id,
                         discovery.lexical_term_id,
                         discovery.snapshot_id,
+                        edit_distance,
                     ),
                 )
                 connection.execute(
@@ -613,7 +639,8 @@ def _load_block_hits(
         rows = connection.execute(
             """
             SELECT method, dictionary_term, component, term_role, source_table, source_field,
-                   row_id, lexical_term_id, snapshot_id, start_char, end_char, matched_text
+                   row_id, lexical_term_id, snapshot_id, start_char, end_char, matched_text,
+                   edit_distance
             FROM discoveries
             WHERE block_node_id = ?
             ORDER BY start_char, end_char, matched_text, source_table, source_field, row_id, method
@@ -639,6 +666,7 @@ def _load_block_hits(
                 "INVALID_SPOOL_RECORD",
                 "aggregation spool contains an unsupported match method",
             )
+        edit_distance = row[12]
         hits.append(
             _SpooledHit(
                 method=method,  # type: ignore[arg-type]
@@ -653,6 +681,7 @@ def _load_block_hits(
                 start_char=int(row[9]),
                 end_char=int(row[10]),
                 matched_text=row[11],
+                edit_distance=None if edit_distance is None else int(edit_distance),
             )
         )
     if hits:
@@ -714,15 +743,23 @@ def _build_occurrence(
     groups: dict[tuple[object, ...], _GroupState] = {}
     for hit in best_by_ref.values():
         term = _require_matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
+        if hit.method == "fuzzy":
+            _require_fuzzy_span_against_block(block=block, location=location, term=term)
         key = _interpretation_key(term, hit.dictionary_term)
         group = groups.get(key)
         if group is None:
-            groups[key] = _GroupState(method=hit.method, term=term, row_ids={hit.row_id})
+            groups[key] = _GroupState(
+                method=hit.method,
+                term=term,
+                row_ids={hit.row_id},
+                edit_distance=hit.edit_distance,
+            )
         else:
             group.row_ids.add(hit.row_id)
             if _METHOD_RANK[hit.method] < _METHOD_RANK[group.method]:
                 group.method = hit.method
                 group.term = term
+                group.edit_distance = hit.edit_distance
 
     if len(groups) > limits.result_buffer_records:
         raise DictionaryAggregationError(
@@ -737,7 +774,11 @@ def _build_occurrence(
         ordered_ids = tuple(sorted(group.row_ids))
         representative = ordered_ids[0]
         supporting = ordered_ids[1:]
-        evidence = _evidence_for(group.method)
+        evidence = _evidence_for(
+            group.method,
+            dictionary_term=group.term.literal,
+            edit_distance=group.edit_distance,
+        )
         if group.method == "exact" and group.term.literal != location.matched_text:
             raise DictionaryAggregationError(
                 "EXACT_EVIDENCE_MISMATCH",
@@ -785,8 +826,132 @@ def _require_matching_term(
         start_char=discovery.span.start_char,
         end_char=discovery.span.end_char,
         matched_text=discovery.span.matched_text,
+        edit_distance=discovery.edit_distance,
     )
     return _require_matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
+
+
+def _validated_edit_distance(
+    discovery: RawDiscovery,
+    term: EligibleSearchTerm,
+) -> int | None:
+    """Validate fuzzy claims; return stored distance or ``None`` for non-fuzzy."""
+
+    if discovery.method != "fuzzy":
+        if discovery.edit_distance is not None:
+            raise DictionaryAggregationError(
+                "INVALID_FUZZY_DISCOVERY",
+                "non-fuzzy raw discoveries must not carry edit_distance",
+            )
+        return None
+    # Booleans are subclasses of int; require an exact integer 1.
+    if (
+        type(discovery.edit_distance) is not int
+        or discovery.edit_distance != FUZZY_MAX_EDIT_DISTANCE
+    ):
+        raise DictionaryAggregationError(
+            "INVALID_FUZZY_DISCOVERY",
+            "fuzzy raw discoveries require edit_distance equal to the integer 1",
+        )
+    if discovery.rule_id != FUZZY_RULE_ID:
+        raise DictionaryAggregationError(
+            "INVALID_FUZZY_DISCOVERY",
+            "fuzzy raw discoveries require the fixed lexical-v1-fuzzy rule id",
+        )
+    if not term.fuzzy_allowed or not fuzzy_role_policy_eligible(
+        term_role=term.term_role,
+        match_policy=term.match_policy,
+    ):
+        raise DictionaryAggregationError(
+            "FUZZY_NOT_ELIGIBLE",
+            "fuzzy claim rejected because the source term is not fuzzy-eligible",
+        )
+    if not is_fuzzy_index_eligible(
+        fuzzy_allowed=True,
+        term_role=term.term_role,
+        comparison_key=discovery.dictionary_term,
+        match_policy=term.match_policy,
+    ):
+        # Dictionary term must still satisfy the fixed single-word alphabetic shape.
+        raise DictionaryAggregationError(
+            "FUZZY_NOT_ELIGIBLE",
+            "fuzzy claim rejected because the dictionary term fails the V1 shape gate",
+        )
+    try:
+        source_surface = normalize_literal(
+            discovery.dictionary_term,
+            term_role=term.term_role,
+            boundary_hint=term.boundary_hint,
+            strip_edges=True,
+        )
+        # Do not strip edges of the claimed span: leading/trailing whitespace inside
+        # matched_text must keep the observed comparison from being one alphabetic word.
+        observed_surface = normalize_literal(
+            discovery.span.matched_text,
+            term_role=term.term_role,
+            boundary_hint=term.boundary_hint,
+            strip_edges=False,
+        )
+    except ComparisonError as exc:
+        raise DictionaryAggregationError(
+            "FUZZY_OBSERVED_NOT_WORD",
+            "fuzzy claim failed L06 normalization of the observed span or source term",
+        ) from exc
+    source_key = source_surface.comparison_text
+    observed_key = observed_surface.comparison_text
+    if not observed_key or observed_key[0].isspace() or observed_key[-1].isspace():
+        raise DictionaryAggregationError(
+            "FUZZY_OBSERVED_NOT_WORD",
+            "fuzzy claim rejects leading or trailing whitespace inside the observed span",
+        )
+    min_observed = FUZZY_MIN_WORD_LENGTH - FUZZY_MAX_EDIT_DISTANCE
+    if (
+        not observed_key.isalpha()
+        or abs(len(observed_key) - len(source_key)) > FUZZY_MAX_EDIT_DISTANCE
+        or len(observed_key) < min_observed
+    ):
+        raise DictionaryAggregationError(
+            "FUZZY_OBSERVED_NOT_WORD",
+            "fuzzy claim requires one alphabetic observed word within one-edit length",
+        )
+    distance = ordinary_levenshtein(
+        observed_key,
+        source_key,
+        limit=FUZZY_MAX_EDIT_DISTANCE,
+    )
+    if distance != FUZZY_MAX_EDIT_DISTANCE:
+        raise DictionaryAggregationError(
+            "FUZZY_DISTANCE_MISMATCH",
+            "fuzzy claim failed recomputed ordinary Levenshtein distance-1 verification",
+        )
+    return FUZZY_MAX_EDIT_DISTANCE
+
+
+def _require_fuzzy_span_against_block(
+    *,
+    block: BlockEvidence,
+    location: CharSpan,
+    term: EligibleSearchTerm,
+) -> None:
+    """Reject fuzzy spans that fail literal slice equality or L06 boundaries."""
+
+    try:
+        validate_match_against_block(location, block)
+    except ValueError as exc:
+        raise DictionaryAggregationError(
+            "FUZZY_SPAN_MISMATCH",
+            "fuzzy span failed literal block slice equality during aggregation replay",
+        ) from exc
+    if not respects_boundary(
+        block.text,
+        location.start_char,
+        location.end_char,
+        boundary_hint=term.boundary_hint,
+    ):
+        raise DictionaryAggregationError(
+            "FUZZY_BOUNDARY_REJECTED",
+            "fuzzy span fails the source term's fixed L06 boundary against the block",
+        )
 
 
 def _require_matching_term_from_hit(
@@ -919,13 +1084,28 @@ def _ambiguity_for(term: EligibleSearchTerm) -> AmbiguityQualification:
 
 
 def _evidence_for(
-    method: Literal["exact", "normalized_exact"],
-) -> ExactEvidence | NormalizedExactEvidence:
+    method: MatchMethodName,
+    *,
+    dictionary_term: str,
+    edit_distance: int | None,
+) -> ExactEvidence | NormalizedExactEvidence | FuzzyEvidence:
     if method == "exact":
         return ExactEvidence(method="exact", rule_id=EXACT_RULE_ID)
-    return NormalizedExactEvidence(
-        method="normalized_exact",
-        rule_id=NORMALIZED_EXACT_RULE_ID,
+    if method == "normalized_exact":
+        return NormalizedExactEvidence(
+            method="normalized_exact",
+            rule_id=NORMALIZED_EXACT_RULE_ID,
+        )
+    if edit_distance != FUZZY_MAX_EDIT_DISTANCE:
+        raise DictionaryAggregationError(
+            "INVALID_FUZZY_DISCOVERY",
+            "fuzzy evidence requires verified edit_distance equal to one",
+        )
+    return FuzzyEvidence(
+        method="fuzzy",
+        rule_id=FUZZY_RULE_ID,
+        dictionary_term=dictionary_term,
+        edit_distance=edit_distance,
     )
 
 
@@ -935,7 +1115,7 @@ def _build_candidate(
     matched_term: str,
     row_id: str,
     supporting_row_ids: tuple[str, ...],
-    evidence: ExactEvidence | NormalizedExactEvidence,
+    evidence: ExactEvidence | NormalizedExactEvidence | FuzzyEvidence,
 ) -> LexicalCandidate:
     if term.snapshot_id is None:
         raise DictionaryAggregationError(
