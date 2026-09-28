@@ -40,6 +40,30 @@ manual extraction acceptance, not a final extraction manifest.
 
 ---
 
+## 0a. L13 published full-run evidence (2026-09-28)
+
+Operator CLI publication of the same reviewed HTML v1 + production snapshot pair
+used for L09. Selection `presets: [full]`, `fuzzy_enabled: false`, L09-style
+resource limits (`max_terms_per_shard=2_000_000`). Config recorded under
+`out/lexical-l13/execution-full.yaml`; CLI summary
+`out/lexical-l13/cli-summary.txt`.
+
+| Item | Value |
+|------|-------|
+| Run id | `5af7a352-8ed5-4621-b829-d8025b5eb870` |
+| Elapsed | 169.257 s (wall clock around CLI) |
+| Peak WS | 506,093,568 bytes (`windows_psapi_peak_working_set`) |
+| HTML / snapshot | unchanged vs L09 identities; no WAL/SHM/journal |
+| Outcomes | all eight components `completed`; publication `completed`; exit 0 |
+| Counts | UO 62; process_steps 9; materials 472; equipment 0; parameter_names 4; units 87; quantity 55; parameter_value 55 |
+| Integrity | all artifact SHA-256/size verified against final manifest |
+| Highlight check | programmatic: 472 materials spans equal published block slices; three sample page/node/span triples match original HTML text |
+
+Label: **programmatic inspection**, not human manual acceptance of lexical
+findings. Not pharmaceutical precision/recall. Review UI remains unimplemented.
+
+---
+
 ## 1. What to measure
 
 | Area | Intent |

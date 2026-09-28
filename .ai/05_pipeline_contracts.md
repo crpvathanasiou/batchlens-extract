@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L12 lexical building blocks (contracts through callable runner and compact monitoring) **are implemented** and **test-verified**; L12 is not a published end-to-end product surface. CLI, final-manifest publication, and review-UI projection remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented** and **test-verified**; L13 awaits user acceptance. Review-UI projection for lexical findings remains **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -648,4 +648,62 @@ unavailable counters are omitted or marked unavailable, never guessed as zero.
 
 **Limits.** No CLI, dashboard, telemetry server, audit ledger, final manifest,
 or new monitoring-only dependency. Shard-phase splits that cannot be observed
-without changing accepted L07/L08 modules are omitted.
+without changing accepted L07/L08 modules are omitted. Final-manifest publication
+and the operator CLI are L13.
+
+## 19. L13 CLI and atomic lexical-result publication
+
+Code: `publication.py`, `__main__.py`.
+
+**Operator entry.** `poetry run python -m app.lexical_extraction --config
+<path-to-execution.yaml>` loads strict L02 YAML and calls the same L12
+`run_lexical_extraction` used by tests, then `finalize_publication`. Exit codes:
+`0` extraction completed + publication completed; `1` extraction partial +
+publication completed; `2` extraction/pre-validation failure; `3` publication or
+CLI/config failure. Compact stdout summary: run id, extraction/publication
+status, per-component match counts or error codes, peak memory when measured,
+manifest path when present. No source block text or catalogue rows in logs.
+
+**Run directory.** Creates `{output.directory}/{run_id}/` and never replaces an
+earlier run or mutates input/snapshot. Staging lives under `.staging/`. Completed
+components commit `artifacts/component-<name>.json` (schema
+`batchlens.lexical-component-artifact.v1`) via temporary file + atomic replace.
+Each artifact retains ordered pages (including empty), original block text,
+`node_id`, OCR refs, exact spans, overlaps, ambiguous candidates, and
+`supporting_row_ids`. Zero-hit completed components still publish full
+page/block coverage.
+
+**Sink lifecycle.** L12 `complete_run` seals the sink but does not write the
+final manifest. Orchestration finalizes after `LexicalRunResult` returns.
+Requires sealed state, matching run id, no `run_error`, no provisional
+component, validated identities, and artifact/outcome agreement. Concurrent
+provisional components are allowed while L10 emits page skeletons before the
+shared block stream. `abort_component` discards that component's provisional
+output only.
+
+**Final manifest.** Written last as `manifest.json` (schema
+`batchlens.lexical-run-manifest.v1`) via temporary file + atomic replace. Carries
+validated HTML identity, snapshot identity, provenance (effective config/rules
+digests, engine/dependency versions, selection, fuzzy flag), extraction
+outcomes, compact monitoring, artifact relative paths/byte sizes/SHA-256, and an
+L01-compatible completed `PublicationRecord`. Partial extraction may claim
+publication `completed` while listing only completed-component artifacts. Failed
+or interrupted publication must not leave a final manifest claiming completed
+publication. The manifest is never hashed as though its own bytes were known.
+
+**Readers.** `load_final_manifest`, `verify_artifact_hashes`,
+`open_component_artifact_stream`, `iter_component_pages` /
+`iter_component_pages_from_stream`, and `locate_hit` support integrity checks and
+page/node/span navigation. Page/block iteration uses a compacting incremental
+UTF-8 JSON buffer (one value at a time; never a whole-file `json.loads`; retained
+lookahead does not grow with previously consumed records). Invalid UTF-8,
+truncated envelopes, trailing data after the root object, and `page_count`
+mismatches fail closed. `locate_hit` requires an exact occurrence span match.
+Early close of `iter_blocks()` still drains remaining block JSON so the next
+page stays aligned. Staging uses disk meta for page/block order; out-of-order
+blocks fail closed. Artifact bytes are write-all checked and hashed from the
+completed file. `output.directory` must not equal or lie inside the snapshot
+directory (resolved containment), enforced before `begin_run` creates paths.
+
+**Limits.** Not a review/approval UI, API, resume/retry service, cross-process
+run registry, or background cleanup worker. No new dependency without need.

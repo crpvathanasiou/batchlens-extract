@@ -81,7 +81,9 @@ src/app/
 │   ├── value_expressions.py         L10 controlled value-expression recognition
 │   ├── parameter_unit_value.py      L10 independent parameter/unit/value block-stream API (+ fuzzy flag)
 │   ├── monitoring.py                L12 compact in-memory operational monitoring helpers
-│   └── runner.py                    L12 callable run boundary + evidence-sink lifecycle
+│   ├── runner.py                    L12 callable run boundary + evidence-sink lifecycle
+│   ├── publication.py               L13 filesystem EvidenceSink, atomic artifacts, final manifest
+│   └── __main__.py                  L13 thin CLI: load L02 YAML → L12 run → finalize publication
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -103,7 +105,8 @@ tests/lexical_extraction/
 ├── test_dictionary_aggregation.py   L08 dictionary aggregation and supporting-ref tests
 ├── test_fuzzy_matching.py           L11 optional fuzzy matching and L08/L10 bridge tests
 ├── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
-└── test_runner.py                   L12 callable runner, sink lifecycle, and failure-boundary tests
+├── test_runner.py                   L12 callable runner, sink lifecycle, and failure-boundary tests
+└── test_publication.py              L13 filesystem publication, CLI, and atomic-manifest tests
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -148,6 +151,8 @@ Inspect when:
 | `src/app/lexical_extraction/comparison.py` | L06 fixed V1 per-term/per-block comparison normalization, comparison→original projection, and role-aware boundaries | One term or block text → temporary `ComparisonSurface` and optional `CharSpan`; no matcher | Changing NFC/casefold/whitespace rules, unit alignment, or `default` / `whole_code` / `atomic_unit` boundaries |
 | `src/app/lexical_extraction/runner.py` | L12 callable run boundary: HTML/snapshot preflight, component execution, component-scoped sink streaming, outcomes/provenance/`run_error` | `EffectiveExecutionConfiguration` + `EvidenceSink` → `LexicalRunResult` | Changing sink lifecycle, page scoping, failure boundaries, component grouping, or outcome honesty |
 | `src/app/lexical_extraction/monitoring.py` | L12 compact in-memory monitoring and nonprivileged peak-memory measurement | Runner accumulator → `RunMonitoringSummary` | Changing measured counters, unavailable semantics, or memory method labels |
+| `src/app/lexical_extraction/publication.py` | L13 filesystem EvidenceSink, streamed page/block staging, atomic artifacts, final-manifest-last publication, snapshot output guard | Output directory + L12 result → run directory artifacts + optional `manifest.json` | Changing staging bounds, streaming read/write, locate_hit, atomic replace, or snapshot path guard |
+| `src/app/lexical_extraction/__main__.py` | L13 thin CLI over L02 YAML + L12 runner + L13 finalize | `--config` path → exit code + compact summary | Changing exit codes, summary fields, or CLI surface |
 | `src/app/document_review/composition.py` | Production Dynamo/S3 wiring plus opaque storage namespace | Document settings → `ReviewService` | Changing production adapters; not used by harness |
 | `frontend/src/mapping.ts` | Page projection, sparse text, skeleton | Canonical page → TipTap JSON | Changing heading/table projection or IDs |
 | `frontend/src/extensions.ts` | Protected TipTap schema and load | Projection JSON → editor transactions | Changing structure lock, table attrs, page load |
@@ -270,9 +275,21 @@ through a caller-owned `EvidenceSink` (`write_page(component, page)`), and retur
 `LexicalRunResult` with identities, `RunProvenance` when complete, outcomes,
 compact monitoring, and optional `run_error` for sink-finalization failure while
 preserving committed component outcomes. Eligible term/row counts use
-`EligibleTermCounter` (previous-key integer; no row-id set). It does not publish
-artifacts, write a final manifest, or implement a CLI/UI. Focused tests:
+`EligibleTermCounter` (previous-key integer; no row-id set). Final artifact
+publication and CLI are L13. Focused tests:
 `tests/lexical_extraction/test_runner.py`.
+
+`src/app/lexical_extraction/publication.py` and `__main__.py` are the L13
+filesystem publisher and thin CLI. The sink stages page/block evidence under a
+new `{output.directory}/{run_id}/` tree with finite in-memory counters and
+per-page disk meta, commits one versioned JSON artifact per completed component
+via checked write-all + hash-from-file + atomic replace, seals on `complete_run`,
+and writes the final `manifest.json` only from `finalize_publication` after the
+runner returns. Concurrent provisional components are allowed for L10 shared
+composition. Streaming readers and exact `locate_hit` support integrity checks
+and page/node/span navigation. Output roots inside the snapshot are refused
+before directory creation. Focused tests:
+`tests/lexical_extraction/test_publication.py`.
 
 Graph views and a rules/Audit layer have no implementation modules yet. Do not invent those
 directories.

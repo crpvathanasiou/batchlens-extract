@@ -1,12 +1,151 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-28 L12 bounded-count and sink-lifecycle correction
+## 1. Current state — 2026-09-28 L13 streaming-reader correction
+
+**Implemented** focused L13 streaming-reader correction only: compacting UTF-8
+JSON buffer, complete envelope / page_count validation, and honest
+early-close drain of page block iterators. Writer, CLI exits, manifest-last /
+partial publication, output-path guard, short-write hashing, and L01–L12
+behavior are unchanged. Review UI was **not** started. The 169.257 s full
+real-input report remains historical evidence for older publisher code and does
+**not** verify this reader.
+
+- `_Utf8JsonStream` uses one incremental UTF-8 decoder across byte chunks;
+  invalid UTF-8 fails with `ARTIFACT_UTF8`. Consumed text is compacted after
+  each token so retained buffer length does not scale with previously parsed
+  pages/blocks (`peak_retained_chars` observed).
+- After `pages` closes, the reader requires the root `}`, only trailing
+  whitespace through EOF, and `page_count` equal to pages yielded. Leading /
+  trailing commas and truncated envelopes fail closed with structured codes.
+- `StreamedComponentPage.iter_blocks()` always finishes the underlying block
+  stream in `finally` (including early `close()`), so the next page parses from
+  a correct offset; `drained` reports completion.
+
+**Test-verified:** focused `tests/lexical_extraction/test_publication.py`
+**26 passed**; combined `tests/lexical_extraction/` **278 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (102 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **548 passed**.
+
+**L12 status:** **user-accepted** baseline for L13.
+**L13 status:** streaming-reader corrected, **implemented** and **test-verified**;
+still **awaiting user acceptance**.
+**Next safe step:** user review of corrected L13. Do **not** start the review UI,
+human finding approval, or semantic/vector/LLM retrieval.
+
+---
+
+## 1ad. Prior current state — 2026-09-28 L13 bounded publication / exact lookup correction
+
+**Implemented** focused L13 correction only: bounded page/block staging and
+streaming artifact write/read, checked write-all with hash-from-published-file,
+exact `locate_hit` span matching, and snapshot-path output guard. Accepted
+L01–L12 matching/config/snapshot/runner behavior and L13 CLI exit codes /
+manifest-last / partial publication semantics are unchanged. Review UI was
+**not** started. Later corrected again for compacting UTF-8 reader / envelope
+validation (see current §1). The prior 169.257 s full real-input report remains
+historical evidence for the pre-correction publisher, not verification of later
+reader fixes.
+
+- Staging keeps finite counters only (`page_count`); page index / last block
+  order live in per-page `.meta` files. Blocks must arrive in ascending
+  `(order, node_id)` (fail-closed); materialization streams one validated block
+  at a time without assembling a `PageRecord` or all-block list.
+- Component artifact writes use a checked write-all loop; descriptor size/SHA-256
+  come from the completed temporary file before atomic replace. Injected short
+  writes fail closed with no committed artifact.
+- `iter_component_pages` / `open_component_artifact_stream` parse the JSON
+  incrementally (header then one page/block value at a time); never
+  `json.loads` the whole file. `locate_hit` returns only on an exact occurrence
+  span match (including nested value/unit spans); wrong span / empty block →
+  `None`.
+- `guard_output_outside_snapshot` / sink `begin_run` refuse
+  `output.directory` equal to or inside the snapshot (resolved containment)
+  before creating any run directory. `publish_lexical_run` applies the same
+  guard.
+
+**Test-verified (historical):** focused `tests/lexical_extraction/test_publication.py`
+**22 passed**; combined `tests/lexical_extraction/` **274 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (102 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **544 passed**.
+
+**L12 status:** **user-accepted** baseline for L13.
+**L13 status:** corrected, later streaming-reader corrected (see current §1);
+still **awaiting user acceptance**.
+**Next safe step (historical):** user review of corrected L13.
+
+---
+
+## 1ac. Prior current state — 2026-09-28 L13 CLI and atomic lexical-result publication
+
+**L12 acceptance:** user explicitly authorized L13 on the accepted L01–L12 baseline
+(including the L12 bounded-count / sink-lifecycle correction). L12 is now
+**user-accepted**.
+
+**Implemented** L13 only: filesystem `EvidenceSink` publication, thin CLI module
+entry, atomic per-component artifacts, and final-manifest-last sealing. Accepted
+L01–L12 matching/config/snapshot/runner behavior is unchanged. Review UI, finding
+approval, vector/LLM retrieval were **not** started. Later corrected for bounded
+serialization/lookup/write/path guard and streaming-reader fixes (see current §1).
+
+- `src/app/lexical_extraction/publication.py`: `FilesystemEvidenceSink` stages
+  page skeletons and blocks under `{output.directory}/{run_id}/.staging/` with
+  bounded per-page files; supports concurrent provisional components (L10 shared
+  composition); `complete_component` atomically commits
+  `artifacts/component-<name>.json`; `complete_run` seals only;
+  `finalize_publication(result)` writes `manifest.json` last after outcome/
+  artifact agreement. Partial extraction may publish completed publication with
+  only completed-component artifacts. Failed/interrupted publication leaves no
+  completed publication claim.
+- `src/app/lexical_extraction/__main__.py`:
+  `poetry run python -m app.lexical_extraction --config <execution.yaml>`.
+  Exit codes: `0` completed+published, `1` partial+published, `2` failed
+  extraction / pre-validation, `3` publication or CLI/config failure. Compact
+  summary prints run id, statuses, per-component counts/error codes, peak memory,
+  manifest path — no source block text.
+- Reader helpers: `load_final_manifest`, `verify_artifact_hashes`,
+  `iter_component_pages`, `locate_hit`.
+- Compatible L12 note: `EvidenceSink` docstring clarifies concurrent provisional
+  component streams for L10 (behavior already used by the runner).
+
+**Test-verified (historical):** focused `tests/lexical_extraction/test_publication.py`
+**17 passed**; combined `tests/lexical_extraction/` **269 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (102 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **539 passed**.
+
+**Real-input E2E (historical programmatic; not human manual acceptance; not
+verification of later bounded-publication or streaming-reader corrections):**
+`full` preset, fuzzy OFF, L09 limits (batch 5000 / cache 65536 KiB /
+`max_terms_per_shard=2_000_000` / max term codepoints 50_000_000 / buffer 50_000).
+HTML revision `f489826a-37bc-45e8-a13c-b648caf28b27` SHA-256
+`e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5`; snapshot
+`flat-v1-a39c0b393ffdbd4e97ed` DB SHA-256
+`cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2`. Before/after
+HTML+DB+manifest hashes unchanged; no WAL/SHM/journal sidecars. Run
+`5af7a352-8ed5-4621-b829-d8025b5eb870`; elapsed **169.257 s**; peak process memory
+**506,093,568** bytes (`windows_psapi_peak_working_set`). Counts:
+unit_operations 62, process_steps 9, materials 472, equipment 0,
+parameter_names 4, units 87, quantity_expressions 55,
+parameter_value_expressions 55; extraction/publication `completed`; exit 0.
+All eight artifact SHA-256/size verified; 472 materials spans validated against
+published block text; three sample page/node/span locations matched original HTML
+slices (programmatic highlight-location usability). **Not** pharmaceutical
+precision/recall; review UI still unimplemented.
+
+**L12 status:** **user-accepted** baseline for L13.
+**L13 status:** **implemented** and **test-verified**; later corrected (see
+current §1); still **awaiting user acceptance**.
+**Next safe step (historical):** user review of L13 publication/CLI.
+
+---
+
+## 1ab. Prior current state — 2026-09-28 L12 bounded-count and sink-lifecycle correction
 
 **Implemented** focused L12 correction only: bounded eligible-row counting, streamed
 component-scoped page emission without an all-page retained list, and truthful
 sink finalization that preserves committed component outcomes. Accepted L01–L11
 matching/config/snapshot behavior and selected-component extraction are unchanged.
-Units remain non-fuzzy. L13 / CLI / final manifest / review UI were **not** started.
+Units remain non-fuzzy. L13 / CLI / final manifest / review UI were **not** started
+at that date (implemented later as prior §1ac / current §1).
 
 - `EligibleTermCounter` counts eligible rows with a previous `(table, row_id)` key
   and an integer; no retained set of row IDs. Rows that emit no terms are not
@@ -22,15 +161,14 @@ Units remain non-fuzzy. L13 / CLI / final manifest / review UI were **not** star
   outcomes, sets additive `LexicalRunResult.run_error`, and calls `abort_run`
   without retracting committed components. No completed publication claim.
 
-**Test-verified:** focused `tests/lexical_extraction/test_runner.py` **16 passed**;
-combined `tests/lexical_extraction/` **252 passed**; `scripts/quality.ps1`
-passed — Ruff check, Ruff format check (99 files already formatted), Pyright
-0 errors / 0 warnings / 0 informations, pytest **522 passed**.
+**Test-verified (historical):** focused `tests/lexical_extraction/test_runner.py`
+**16 passed**; combined `tests/lexical_extraction/` **252 passed**;
+`scripts/quality.ps1` passed — Ruff check, Ruff format check (99 files already
+formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **522 passed**.
 
 **L11 status:** user-accepted baseline for L12.
-**L12 status:** corrected, **implemented** and **test-verified**; still
-**awaiting user acceptance**.
-**Next safe step:** user review of corrected L12. Do not start L13.
+**L12 status:** corrected, later **user-accepted** as L13 baseline (see current §1).
+**Next safe step (historical):** user review of corrected L12. Do not start L13.
 
 ---
 

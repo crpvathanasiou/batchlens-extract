@@ -170,6 +170,11 @@ class EvidenceSink(Protocol):
     before ``complete_component`` are provisional and must not be treated as
     completed coverage. A failed write is an execution/output failure.
 
+    More than one component may be provisional at the same time when the L10
+    shared composition begins each selected component and emits page skeletons
+    before the shared block stream. ``write_page`` / ``write_block`` remain
+    component-scoped.
+
     ``abort_component`` must not be called for a component that already
     received ``complete_component``. ``abort_run`` after one or more committed
     components must leave those completed outcomes intact; it is a run-level

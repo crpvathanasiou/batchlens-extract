@@ -241,8 +241,14 @@ restricted fuzzy dictionary matching (`fuzzy_enabled` default false) via
 `fuzzy_matching.py` and minimal L07/L08/L10 bridges, including later fuzzy-evidence
 and edge-whitespace corrections.
 
-**L12 progress (2026-09-28; implemented / test-verified; awaiting user
-acceptance):** callable runner and compact monitoring in `runner.py` and
-`monitoring.py`. Streams evidence through a caller-owned sink; does not publish
-final artifacts, write a final manifest, implement a CLI, or build the review UI.
-Do not start L13 from this progress note.
+**L12 progress (2026-09-28; user-accepted as baseline for L13):** callable runner
+and compact monitoring in `runner.py` and `monitoring.py`, including the later
+bounded-count / sink-lifecycle correction. Streams evidence through a caller-owned
+sink.
+
+**L13 progress (2026-09-28; implemented / test-verified; awaiting user
+acceptance):** filesystem publication and thin CLI in `publication.py` and
+`__main__.py`. Atomic per-component artifacts under a new run directory; final
+manifest written last; partial extraction may publish completed publication.
+Does not build the review UI, finding approval, or LLM/vector retrieval.
+Do not start those from this progress note.
