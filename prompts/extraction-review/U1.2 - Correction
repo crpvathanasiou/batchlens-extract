@@ -1,0 +1,123 @@
+# U1.2 — Current Extraction-Review JSON Persistence
+
+## Authority and scope lock
+
+This is a focused Stage 3 task. Implement **only** local persistence for the already accepted U1.1 current-state model.
+
+Read before changing code:
+
+- `AGENTS.md`
+- `.ai/02_code_quality_standards.md`
+- `.ai/03_common_handoff.md`
+- `.ai/00_project_reference.md`
+- `.ai/04_code_map.md`
+- `src/app/extraction_review/contracts.py`
+- `src/app/extraction_review/transitions.py`
+- `tests/extraction_review/`
+
+This prompt is the authoritative Stage 3 scope for this task. If older Stage 3 notes conflict, follow this prompt.
+
+Do not produce a plan or an implementation proposal. Implement only the work below.
+
+## Locked Stage 3 MVP model
+
+Stage 3 stores one **current** extraction-review state per document:
+
+- read-only source HTML and Stage 2 provenance;
+- the complete current findings list;
+- one `current_revision_id`, used only for stale Save conflict detection;
+- `approval: null` or one current final extraction-result approval.
+
+The U1.1 contracts and pure transitions already implement this model.
+
+There is no Stage 3 revision history, version list, revision folders, approval ledger, delta chain, parent revision link, retry ledger, SQLite database, or generic persistence framework.
+
+A later effective Save replaces the current state and clears its approval. Older content and approval are intentionally discarded.
+
+## Required implementation
+
+Add a small local JSON store for the complete `ExtractionReviewState`.
+
+Use this exact on-disk shape:
+
+```text
+<data-dir>/
+  extraction-reviews/
+    <workspace-key>/
+      current-review.json
+```
+
+`workspace-key` must be a deterministic, filesystem-safe SHA-256 hex value derived solely from the Stage 3 document identity (`job_id`). Do not use an unsanitized identifier as a path.
+
+`current-review.json` is the only Stage 3 persisted state file. It contains the full current `ExtractionReviewState` serialized as JSON.
+
+Implement a small, explicit store/service in `src/app/extraction_review/`. Keep it proportionate: one public class or module is sufficient.
+
+It must support:
+
+1. Create a new current state for a document.
+   - Write one `current-review.json`.
+   - Refuse to overwrite an already existing current state.
+
+2. Load the current state for a document.
+   - Parse and validate it through `ExtractionReviewState`.
+   - Return an explicit not-found result/error when no current file exists.
+
+3. Save edits.
+   - Load current state.
+   - Call the existing pure `save_review_edits(...)` transition.
+   - Write the new full state only when the transition outcome is `changed`.
+   - On conflict, validation error, or unchanged result, do not alter file bytes.
+
+4. Approve extraction result.
+   - Load current state.
+   - Call the existing pure `approve_extraction_result(...)` transition.
+   - Write the new full state only when the transition outcome is `changed`.
+   - On conflict, validation error, or unchanged result, do not alter file bytes.
+
+5. Reload/restart recovery.
+   - A new store instance using the same data directory must load the latest saved or approved state.
+
+Use atomic replacement for successful writes: write a sibling temporary file, flush it, then replace `current-review.json`. Do not leave temporary files after a successful write.
+
+This is a single-local-process store. Do not add inter-process locks, a worker, queues, retry receipts, or a concurrency framework. The existing revision token remains the stale-write protection within this scope.
+
+## Boundaries
+
+Do not change:
+
+- Stage 1 document review, exports, or approvals;
+- Stage 2 / L13 lexical extraction;
+- U1.1 contracts or transitions;
+- API routes, frontend, workers, background jobs, Docker, SQLite, graph/association work;
+- `.ai/` documents or `AGENTS.md`.
+
+Documentation is updated only after the complete U1 work is implemented, reviewed, and accepted.
+
+Do not add `revisions/`, `approvals/`, `history`, `list_versions()`, snapshots of prior states, or a generic storage abstraction.
+
+## Tests
+
+Add focused tests for:
+
+- create then load;
+- Save persists the complete new state and clears approval;
+- Approve persists only the current approval and leaves findings unchanged;
+- a fresh store instance reloads the latest state;
+- stale Save / stale Approve / validation error / unchanged result leave stored bytes unchanged;
+- a state containing 1,000 findings saves and reloads correctly;
+- no historical revision or approval files are created.
+
+Use temporary test directories. Do not change unrelated tests.
+
+## Completion
+
+Run the required checks and stop with the completion report.
+
+Report:
+
+- exact files changed;
+- exact persisted file layout;
+- what is and is not persisted;
+- actual focused-test and full quality-command results;
+- confirmation that no API, UI, Stage 1/2, SQLite, history, or documentation work was added.

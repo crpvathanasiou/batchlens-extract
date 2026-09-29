@@ -84,6 +84,10 @@ src/app/
 │   ├── runner.py                    L12 callable run boundary + evidence-sink lifecycle
 │   ├── publication.py               L13 filesystem EvidenceSink, atomic artifacts, final manifest
 │   └── __main__.py                  L13 thin CLI: load L02 YAML → L12 run → finalize publication
+├── extraction_review/
+│   ├── contracts.py                 U1 current-state models: findings, provenance, revision id, approval
+│   ├── transitions.py               pure initialize / save / approve over current state
+│   └── store.py                     U1.2 atomic current-review.json under extraction-reviews/<sha256(job_id)>/
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -107,6 +111,11 @@ tests/lexical_extraction/
 ├── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
 ├── test_runner.py                   L12 callable runner, sink lifecycle, and failure-boundary tests
 └── test_publication.py              L13 filesystem publication, CLI, and atomic-manifest tests
+
+tests/extraction_review/
+├── test_contracts.py                U1 current-state contract validation
+├── test_transitions.py              U1 pure initialize/save/approve transitions
+└── test_store.py                    U1.2 create/load/save/approve/reload and byte-stability
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -143,6 +152,12 @@ Inspect when:
 | `src/app/document_review/service.py` | Save/decision/approval/export use cases; `update` remains `ReviewState`; receipts are `update_with_receipt` / `reconcile_save_operation`; additive `review_context` | Mapping + storage → immutable revisions | Changing revision/CAS/approval invalidation, Save replay, or context derivation |
 | `src/app/document_review/storage.py` | Dynamo head + versioned S3 objects | Service persist → reachable head | Changing CAS conditions or object keys |
 | `src/app/document_review/rendering.py` | Deterministic reviewed HTML. Attribute contract v1 on `<html>` (`data-review-html-version`, `data-job-id`, `data-review-revision-id`, `data-review-generation`, `data-conversion-status`); catalogue `data-element-id` / `data-node-id` / `data-table-id`; ordered deduped `data-source-id` on text-bearing nodes; `data-generated="true"` on the summary header, partial banner, and `Page N` headings | `ReviewRevision` catalogue plus current document text → export HTML | Changing approved HTML heading/table markup or provenance attributes |
+| `src/app/extraction_review/contracts.py` | U1 current-state review models: complete finding list, per-finding provenance, one revision id, null-or-one approval | L01 provenance types + published run facts → versioned review contracts; no I/O | Changing current-state shape, finding provenance, approval semantics, or command shapes |
+| `src/app/extraction_review/transitions.py` | Pure initialize / save / approve over one current state; Save clears approval and requires a new revision id | Commands + `ExtractionReviewState` → outcomes | Changing stale conflict, no-op, Add uniqueness, provenance stamping, or discard-on-save behavior |
+| `src/app/extraction_review/store.py` | U1.2 local atomic JSON: one `current-review.json` per `sha256(job_id)` workspace | Data dir + job_id / commands → durable current `ExtractionReviewState` | Changing path layout, atomic write, create/load/save/approve persistence rules |
+| `tests/extraction_review/test_contracts.py` | Contract validation for current-state models and provenance | Pydantic validation cases | Changing allowed finding/approval/command shapes |
+| `tests/extraction_review/test_transitions.py` | Pure transition coverage for initialize/save/approve | In-memory state transitions | Changing Save/Approve semantics |
+| `tests/extraction_review/test_store.py` | Local JSON create/load/save/approve/reload and non-changed byte stability | Temp directories only | Changing store persistence behavior |
 | `src/app/lexical_extraction/contracts.py` | L01 lexical evidence, candidate, unit/value, provenance, extraction-outcome, and publication-claim records | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, span checks, outcome coherence, or publication claims |
 | `src/app/lexical_extraction/configuration.py` | L02 strict execution YAML load, fixed preset→component union, resource safeguards, effective SHA-256 | Config file path (+ optional typed selection override) → `EffectiveExecutionConfiguration`; no I/O beyond reading the YAML file | Changing YAML shape, preset map, path resolution, override semantics, resource bounds, or digest material |
 | `src/app/lexical_extraction/html_reader.py` | L03 streaming reviewed HTML v1 reader; fail-closed provenance; final digest only on completed read | File path → chunked `iter_pages` → `PageRecord`/`BlockEvidence`; final `ReviewedHtmlV1Input` only when `completed` | Changing streaming/completion semantics, exact version `"1"`, duplicate-attribute rejection, or silent-omission failures |

@@ -41,6 +41,8 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations
 | D — Five-file documentation init | `.ai/` 00–04 reflect BatchLens Extract | MUST | DONE |
 | D2 — Nine-document documentation set | Align 00–04; create 05–08 design docs | MUST | DONE (docs implemented/checked; awaiting user review / Git commit) |
 | Conversion + HITL review slices | Textract/Textractor conversion, review workspace, local harness | MUST | DONE in working tree for local acceptance; not cloud-verified (see [03](03_common_handoff.md)) |
+| U1.1 — Stage 3 extraction-review contracts | Current-state contracts + pure transitions: complete finding list with per-finding provenance, one current revision id, null-or-one approval | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
+| U1.2 — Stage 3 local persisted review service | One atomic `current-review.json` per document under `extraction-reviews/<sha256(job_id)>/` | MUST | DONE / test-verified (see [03](03_common_handoff.md)); API/UI unauthorized |
 | M-Design — Pipeline & contracts design | Remaining extraction-pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
 | LLM wrapper hardening / redesign | Harden/redesign for extraction integration | — | DEFERRED |
 

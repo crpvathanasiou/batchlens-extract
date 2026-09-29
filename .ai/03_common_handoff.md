@@ -1,6 +1,49 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-28 L13 streaming-reader correction
+## 1. Current state — 2026-09-29 Stage 3 U1 complete
+
+**Implemented** and **test-verified** Stage 3 U1:
+
+- **U1.1** — current-state extraction-review contracts and pure transitions
+  (`src/app/extraction_review/contracts.py`, `transitions.py`).
+- **U1.2** — one local atomic JSON file for the current extraction-review state
+  (`src/app/extraction_review/store.py`).
+
+**Stage 3 model**
+
+- Stage 2 remains an independent lexical extraction engine.
+- Stage 3 approves an extraction result, never the Stage 1 source HTML.
+- One final action: **Approve extraction result** (`not_approved` / `approved` only).
+- A review stores one complete current finding list, immutable source/run/Stage 2 provenance,
+  one `current_revision_id` (stale Save conflict detection only), and null-or-one current approval.
+- Save applies edits to the complete list, assigns a new current revision token, and clears approval.
+- Approve applies only to the current saved state and changes no findings.
+- Latest state only: no Stage 3 revision history, version list, approval ledger, delta chain,
+  parent link, retry ledger, or historical result retrieval.
+- Per-finding current-state provenance: lexical original matched text and evidence;
+  `added_by_user`, `changed_by_user`, and `removed_by_user`. Removal is a current-state
+  tombstone, not a rejection workflow.
+
+**Persisted layout (U1.2)**
+
+```text
+<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json
+```
+
+Stores the complete `ExtractionReviewState`, uses atomic replacement, and supports one local
+process only.
+
+**Test-verified:** `poetry run pytest tests/extraction_review/ -q` → **53 passed**;
+`powershell -File scripts/quality.ps1` → Ruff checks passed, Pyright 0 errors, pytest **601 passed**.
+
+**Remaining boundaries (not implemented):** API routes, frontend/UI, workers, background jobs,
+runtime L13 import/execution, SQLite, graph/association work, automatic approval.
+
+**Next safe step:** user review and authorization before any API/UI/extraction integration work.
+
+---
+
+## 1ae. Prior current state — 2026-09-28 L13 streaming-reader correction
 
 **Implemented** focused L13 streaming-reader correction only: compacting UTF-8
 JSON buffer, complete envelope / page_count validation, and honest

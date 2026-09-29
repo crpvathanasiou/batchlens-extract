@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented** and **test-verified**; L13 awaits user acceptance. Review-UI projection for lexical findings remains **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 extraction-review **U1 is implemented** and **test-verified** (current-state contracts/transitions + local `current-review.json` persistence). API/UI/workers/runtime L13 import/execution/SQLite/graph work remain **unimplemented**. Review-UI projection for lexical findings remains **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -208,6 +208,50 @@ inside an overall `partial`. Unavailable measurements are omitted, not stored as
 **Publication.** Completed publication requires a final-manifest claim. Failed or interrupted
 publication must not carry that claim. Partial extraction may be paired with completed
 publication. The claim does not prove that files were written.
+
+## 9a. Stage 3 — Extraction Review Workspace (U1 complete)
+
+Code: `src/app/extraction_review/contracts.py`, `transitions.py`, `store.py`. Schema
+`batchlens.extraction-review.v1`.
+
+**Boundary.** Stage 2/L13 remains the independent lexical extraction engine. Stage 1 document
+approval is unchanged. Stage 3 approves an **extraction result**, never the Stage 1 source HTML.
+One final action: **Approve extraction result**, with states `not_approved` and `approved` only.
+Execution/publication outcomes stay independent of human approval; fuzzy extraction defaults off
+(`fuzzy_extraction_default_enabled()`).
+
+**Current state.** A review stores: immutable source/run/Stage 2 provenance (`WorkspaceBinding`);
+one complete current finding list; one `current_revision_id` used only for stale Save conflict
+detection; and `approval` null or one current `ExtractionResultApproval` (actor, server timestamp,
+exact current saved revision id). Latest state only—no Stage 3 revision history, version list,
+approval ledger, delta chain, parent link, retry ledger, or historical result retrieval.
+
+**Identity.** Optional Stage 1 `document_hash` (never fabricated from HTML SHA-256); mandatory
+reviewed-HTML byte SHA-256; completed Stage 3-reviewable runs require `published_manifest` with
+`manifest_id` and `manifest_sha256` (recorded provenance; U1 does not verify artifact bytes).
+
+**Findings and provenance.** Origins: `lexical` (immutable Stage 2 evidence +
+`original_matched_text`) vs `user_added`. User-facing values use `page_assignment` and
+`evidence_status`; `AssignedPage` + `no_document_evidence` is valid. Current-state edit provenance:
+`added_by_user`, `changed_by_user`, `removed_by_user` (Save actor + timestamp). Removal is a
+current-state tombstone, not a rejection workflow.
+
+**Transitions.** Initialize from a completed published run with ≥1 completed component and the
+supplied finding list. Save edits the complete list, stamps provenance, assigns a **new**
+revision token, and clears approval. Approve targets only the current saved state and changes no
+findings. Stale `expected_revision_id` → conflict; no-op Save retains approval.
+
+**Local persistence (U1.2).** Exact layout:
+
+```text
+<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json
+```
+
+Stores the complete `ExtractionReviewState`, uses atomic temp + replace, and supports one local
+process only. Create refuses overwrite; Save/Approve write only on `changed` outcomes.
+
+**Not implemented:** API routes, frontend/UI, workers, background jobs, runtime L13
+import/execution, SQLite, graph/association work, or automatic approval.
 
 ## 10. L02 execution configuration (implemented loader, not an extractor)
 
