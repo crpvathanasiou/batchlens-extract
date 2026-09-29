@@ -43,6 +43,8 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations
 | Conversion + HITL review slices | Textract/Textractor conversion, review workspace, local harness | MUST | DONE in working tree for local acceptance; not cloud-verified (see [03](03_common_handoff.md)) |
 | U1.1 — Stage 3 extraction-review contracts | Current-state contracts + pure transitions: complete finding list with per-finding provenance, one current revision id, null-or-one approval | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
 | U1.2 — Stage 3 local persisted review service | One atomic `current-review.json` per document under `extraction-reviews/<sha256(job_id)>/` | MUST | DONE / test-verified (see [03](03_common_handoff.md)); API/UI unauthorized |
+| U2.1 — Approved Documents Registry and validation | Read-only discovery/selection of reviewed HTML under a caller-supplied approved-documents root; Stage 2 reader validation | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
+| U2.2 — Local persisted serialized lexical jobs | Local Stage 2/L13 background jobs with atomic job JSON, raw-run registration, one execution at a time per data dir | MUST | DONE / test-verified (see [03](03_common_handoff.md)); API/UI unauthorized |
 | M-Design — Pipeline & contracts design | Remaining extraction-pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
 | LLM wrapper hardening / redesign | Harden/redesign for extraction integration | — | DEFERRED |
 

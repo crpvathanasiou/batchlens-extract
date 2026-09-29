@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 extraction-review **U1 is implemented** and **test-verified** (current-state contracts/transitions + local `current-review.json` persistence). API/UI/workers/runtime L13 import/execution/SQLite/graph work remain **unimplemented**. Review-UI projection for lexical findings remains **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 extraction-review **U1–U2 are implemented** and **test-verified** (current-state review persistence, approved-document selection, and local serialized Stage 2/L13 jobs). API/UI, review finding projection/editing, SQLite, graph work, and automatic approval remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -209,16 +209,19 @@ inside an overall `partial`. Unavailable measurements are omitted, not stored as
 publication must not carry that claim. Partial extraction may be paired with completed
 publication. The claim does not prove that files were written.
 
-## 9a. Stage 3 — Extraction Review Workspace (U1 complete)
+## 9a. Stage 3 — Extraction Review Workspace (U1–U2 complete)
 
-Code: `src/app/extraction_review/contracts.py`, `transitions.py`, `store.py`. Schema
-`batchlens.extraction-review.v1`.
+Code: `src/app/extraction_review/contracts.py`, `transitions.py`, `store.py`,
+`approved_documents.py`, `local_jobs.py`. Review schema `batchlens.extraction-review.v1`;
+local job schema `batchlens.extraction-local-job.v1`.
 
 **Boundary.** Stage 2/L13 remains the independent lexical extraction engine. Stage 1 document
 approval is unchanged. Stage 3 approves an **extraction result**, never the Stage 1 source HTML.
-One final action: **Approve extraction result**, with states `not_approved` and `approved` only.
-Execution/publication outcomes stay independent of human approval; fuzzy extraction defaults off
-(`fuzzy_extraction_default_enabled()`).
+One final human action: **Approve extraction result**, with states `not_approved` and `approved`
+only. Execution/publication outcomes stay independent of human approval; fuzzy extraction
+defaults off (`fuzzy_extraction_default_enabled()` / job `fuzzy_enabled=false`).
+
+### U1 — current review state
 
 **Current state.** A review stores: immutable source/run/Stage 2 provenance (`WorkspaceBinding`);
 one complete current finding list; one `current_revision_id` used only for stale Save conflict
@@ -250,8 +253,58 @@ findings. Stale `expected_revision_id` → conflict; no-op Save retains approval
 Stores the complete `ExtractionReviewState`, uses atomic temp + replace, and supports one local
 process only. Create refuses overwrite; Save/Approve write only on `changed` outcomes.
 
-**Not implemented:** API routes, frontend/UI, workers, background jobs, runtime L13
-import/execution, SQLite, graph/association work, or automatic approval.
+### U2.1 — approved-document selection
+
+Caller-supplied root only. Exact candidate layout:
+
+```text
+<approved-documents-root>/
+  <job_id>/
+    <review_revision_id>/
+      document.html
+      review.json  # optional and ignored by U2
+```
+
+Deterministic paginated discovery returns layout metadata without parsing HTML. Selection
+validates one `document.html` through the existing Stage 2 reviewed-HTML reader (stream pages;
+do not materialize all pages). Folder `job_id` / `review_revision_id` must match HTML root
+provenance. U2.1 is read-only: no registry/index/database.
+
+### U2.2 — local Stage 2 / L13 jobs
+
+Exact persisted layout:
+
+```text
+<data-dir>/
+  extraction-jobs/
+    <local-job-id>.json
+  extraction-raw-runs/
+    <stage2-run-id>/
+      ...existing L13 artifacts and final manifest...
+```
+
+Submit one job with approved-document root, `job_id`, `review_revision_id`, L02 YAML path, one
+`ExtractionReviewAction`, and strict `fuzzy_enabled` (default `false`). Actions map to the fixed
+existing presets; one job performs one selected action and never approves results. The L02 YAML
+file is unchanged; the worker applies in-memory overrides only for selected HTML, preset, no
+extra components, fuzzy flag, and raw-run output root.
+
+Job JSON is the latest state for that job only: document identity, action/fuzzy, timestamps,
+truthful status/phase, validated HTML provenance, run/outcome/publication facts, existing
+raw-run directory when present under `extraction-raw-runs/`, final manifest ID/SHA-256 when
+published, and a safe terminal error when needed. Status values:
+`queued` / `running` / `completed` / `failed` / `interrupted`. Progress is truthful phase state
+only (no percentages). Exactly one lexical job executes at a time per local `data_dir`; later
+jobs remain `queued`. Restart marks abandoned `queued`/`running` jobs `interrupted` (no automatic
+resume or retry). Partial extraction with completed publication is a completed job with partial
+outcomes. No U2 job creates, modifies, or approves `current-review.json`.
+
+### Exclusions
+
+**Not implemented:** API routes, HTTP schemas, frontend/UI, review finding projection/editing,
+browser behavior, SQLite, generic queue/repository infrastructure, job-history projection,
+graph/association work, LLM work, automatic approval, Stage 1 document-review behavior changes,
+or Stage 2 implementation changes.
 
 ## 10. L02 execution configuration (implemented loader, not an extractor)
 

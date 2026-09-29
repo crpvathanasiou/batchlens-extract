@@ -1,5 +1,16 @@
 """Stage 3 extraction-review current-state contracts, transitions, and local store."""
 
+from app.extraction_review.approved_documents import (
+    DEFAULT_PAGE_SIZE,
+    DOCUMENT_HTML_NAME,
+    MAX_PAGE_SIZE,
+    ApprovedDocumentCandidate,
+    ApprovedDocumentError,
+    ApprovedDocumentIdentity,
+    ApprovedDocumentPage,
+    ApprovedDocumentsRegistry,
+    SelectedApprovedDocument,
+)
 from app.extraction_review.contracts import (
     CONTRACT_SCHEMA_VERSION,
     ExtractionResultApproval,
@@ -8,6 +19,18 @@ from app.extraction_review.contracts import (
     ReviewApprovalState,
     action_to_preset,
     fuzzy_extraction_default_enabled,
+)
+from app.extraction_review.local_jobs import (
+    JOB_SCHEMA_VERSION,
+    JOBS_DIR_NAME,
+    RAW_RUNS_DIR_NAME,
+    LocalJobPhase,
+    LocalJobStatus,
+    LocalLexicalJob,
+    LocalLexicalJobNotFoundError,
+    LocalLexicalJobService,
+    LocalLexicalJobServiceAlreadyActiveError,
+    LocalLexicalJobServiceBusyError,
 )
 from app.extraction_review.store import (
     ExtractionReviewAlreadyExistsError,
@@ -23,13 +46,32 @@ from app.extraction_review.transitions import (
 
 __all__ = [
     "CONTRACT_SCHEMA_VERSION",
+    "DEFAULT_PAGE_SIZE",
+    "DOCUMENT_HTML_NAME",
+    "JOBS_DIR_NAME",
+    "JOB_SCHEMA_VERSION",
+    "MAX_PAGE_SIZE",
+    "RAW_RUNS_DIR_NAME",
+    "ApprovedDocumentCandidate",
+    "ApprovedDocumentError",
+    "ApprovedDocumentIdentity",
+    "ApprovedDocumentPage",
+    "ApprovedDocumentsRegistry",
     "ExtractionReviewAction",
     "ExtractionReviewAlreadyExistsError",
     "ExtractionReviewNotFoundError",
     "ExtractionReviewState",
     "ExtractionReviewStore",
     "ExtractionResultApproval",
+    "LocalJobPhase",
+    "LocalJobStatus",
+    "LocalLexicalJob",
+    "LocalLexicalJobNotFoundError",
+    "LocalLexicalJobService",
+    "LocalLexicalJobServiceAlreadyActiveError",
+    "LocalLexicalJobServiceBusyError",
     "ReviewApprovalState",
+    "SelectedApprovedDocument",
     "action_to_preset",
     "approve_extraction_result",
     "derive_workspace_key",

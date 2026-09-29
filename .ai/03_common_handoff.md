@@ -1,45 +1,84 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-29 Stage 3 U1 complete
+## 1. Current state — 2026-09-29 Stage 3 U1–U2 complete
 
-**Implemented** and **test-verified** Stage 3 U1:
+**Implemented** and **test-verified** Stage 3 U1–U2 under `src/app/extraction_review/`.
 
-- **U1.1** — current-state extraction-review contracts and pure transitions
-  (`src/app/extraction_review/contracts.py`, `transitions.py`).
-- **U1.2** — one local atomic JSON file for the current extraction-review state
-  (`src/app/extraction_review/store.py`).
+### U1 — current extraction-review state
 
-**Stage 3 model**
-
+- **U1.1** — current-state contracts and pure transitions (`contracts.py`, `transitions.py`).
+- **U1.2** — one local atomic JSON file for the current extraction-review state (`store.py`).
 - Stage 2 remains an independent lexical extraction engine.
 - Stage 3 approves an extraction result, never the Stage 1 source HTML.
 - One final action: **Approve extraction result** (`not_approved` / `approved` only).
 - A review stores one complete current finding list, immutable source/run/Stage 2 provenance,
   one `current_revision_id` (stale Save conflict detection only), and null-or-one current approval.
-- Save applies edits to the complete list, assigns a new current revision token, and clears approval.
+- Save edits the complete list, assigns a new current revision token, and clears approval.
 - Approve applies only to the current saved state and changes no findings.
 - Latest state only: no Stage 3 revision history, version list, approval ledger, delta chain,
   parent link, retry ledger, or historical result retrieval.
-- Per-finding current-state provenance: lexical original matched text and evidence;
-  `added_by_user`, `changed_by_user`, and `removed_by_user`. Removal is a current-state
-  tombstone, not a rejection workflow.
-
-**Persisted layout (U1.2)**
 
 ```text
 <data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json
 ```
 
-Stores the complete `ExtractionReviewState`, uses atomic replacement, and supports one local
-process only.
+### U2.1 — Approved Documents Registry
 
-**Test-verified:** `poetry run pytest tests/extraction_review/ -q` → **53 passed**;
-`powershell -File scripts/quality.ps1` → Ruff checks passed, Pyright 0 errors, pytest **601 passed**.
+Read-only discovery and selection of reviewed HTML under a caller-supplied root
+(`approved_documents.py`). Optional sibling `review.json` is ignored.
 
-**Remaining boundaries (not implemented):** API routes, frontend/UI, workers, background jobs,
-runtime L13 import/execution, SQLite, graph/association work, automatic approval.
+```text
+<approved-documents-root>/
+  <job_id>/
+    <review_revision_id>/
+      document.html
+      review.json  # optional and ignored by U2
+```
 
-**Next safe step:** user review and authorization before any API/UI/extraction integration work.
+- Deterministic paginated discovery returns layout metadata only; HTML is not parsed while listing.
+- Selection validates one `document.html` through the existing Stage 2 reviewed-HTML reader,
+  streaming pages without materializing all pages.
+- Folder `job_id` and `review_revision_id` must match HTML root provenance.
+- No registry/index/database is created.
+
+### U2.2 — local Stage 2 / L13 jobs
+
+Local persisted, serialized background lexical jobs (`local_jobs.py`) invoke the existing
+Stage 2 / L13 engine for one selected approved document and one `ExtractionReviewAction`.
+
+```text
+<data-dir>/
+  extraction-jobs/
+    <local-job-id>.json
+  extraction-raw-runs/
+    <stage2-run-id>/
+      ...existing L13 artifacts and final manifest...
+```
+
+- Submit: approved-document root, `job_id`, `review_revision_id`, L02 YAML path, one action,
+  and strict `fuzzy_enabled` (default `false`). Actions map to the fixed existing presets.
+- L02 YAML is unchanged; the worker applies in-memory overrides only (selected HTML, preset,
+  no extra components, fuzzy flag, raw-run output root).
+- Job JSON is the latest state only: document identity, action/fuzzy, timestamps, truthful
+  status/phase, validated HTML provenance, run/outcome/publication facts, existing raw-run
+  directory when present, final manifest ID/SHA-256 when published, and a safe terminal error
+  when needed.
+- Status: `queued`, `running`, `completed`, `failed`, `interrupted`. Progress is truthful phase
+  state only (no percentages).
+- Exactly one lexical job executes at a time per local `data_dir`; later jobs remain `queued`.
+- Restart marks abandoned `queued`/`running` jobs `interrupted`; no automatic resume or retry.
+- Partial extraction with completed publication is a completed job with partial outcomes.
+- No U2 job creates, modifies, or approves `current-review.json`.
+
+**Test-verified:** `poetry run pytest tests/extraction_review/ -q` → **82 passed**;
+`powershell -File scripts/quality.ps1` → Ruff checks passed, Pyright 0 errors, pytest **630 passed**.
+
+**Remaining boundaries (not implemented):** API routes, HTTP schemas, frontend/UI, review
+finding projection/editing, browser behavior, SQLite, generic queue/repository infrastructure,
+job-history projection, graph/association work, LLM work, automatic approval, Stage 1
+document-review behavior changes, and Stage 2 implementation changes.
+
+**Next safe step:** user review and authorization before API/UI or extraction-review projection work.
 
 ---
 

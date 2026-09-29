@@ -447,13 +447,12 @@ def test_multiple_parameter_candidates_without_equipment_inference() -> None:
     )
     occ = records[0].occurrences[0]
     assert isinstance(occ, DictionaryOccurrence)
-    assert len(occ.candidates) == 2
+    assert len(occ.candidates) == 1
     assert {c.candidate_kind for c in occ.candidates} == {"parameter_name"}
-    parameter_ids = {
-        c.parameter_id for c in occ.candidates if isinstance(c, ParameterNameCandidate)
-    }
-    assert parameter_ids == {"p1", "p2"}
-    assert all(isinstance(c, ParameterNameCandidate) for c in occ.candidates)
+    assert isinstance(occ.candidates[0], ParameterNameCandidate)
+    assert occ.candidates[0].parameter_id in {"p1", "p2"}
+    assert occ.candidates[0].supporting_row_ids == ()
+    assert occ.candidates[0].ambiguity.value == "unresolved"
 
 
 def test_casefolded_unit_value_and_controlled_identity() -> None:

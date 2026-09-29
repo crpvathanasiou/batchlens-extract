@@ -499,14 +499,13 @@ def test_parameter_names_without_equipment_and_multi_interpretation() -> None:
     occurrence = records[0].occurrences[0]
     assert isinstance(occurrence, DictionaryOccurrence)
     candidates = occurrence.candidates
-    assert len(candidates) == 2
-    assert all(isinstance(candidate, ParameterNameCandidate) for candidate in candidates)
-    assert all(isinstance(candidate.evidence, FuzzyEvidence) for candidate in candidates)
-    assert all(
-        isinstance(candidate.evidence, FuzzyEvidence) and candidate.evidence.edit_distance == 1
-        for candidate in candidates
-    )
-    assert {candidate.row_id for candidate in candidates} == {"eq-a", "eq-b"}
+    assert len(candidates) == 1
+    assert isinstance(candidates[0], ParameterNameCandidate)
+    assert isinstance(candidates[0].evidence, FuzzyEvidence)
+    assert candidates[0].evidence.edit_distance == 1
+    assert candidates[0].row_id in {"eq-a", "eq-b"}
+    assert candidates[0].supporting_row_ids == ()
+    assert candidates[0].ambiguity.value == "unresolved"
 
     equipment_terms = [
         term
@@ -533,7 +532,8 @@ def test_parameter_names_without_equipment_and_multi_interpretation() -> None:
     eq_candidate = eq_occurrence.candidates[0]
     assert isinstance(eq_candidate.evidence, FuzzyEvidence)
     assert eq_candidate.row_id == "eq-c"
-    assert eq_candidate.supporting_row_ids == ("eq-d",)
+    assert eq_candidate.supporting_row_ids == ()
+    assert eq_candidate.ambiguity.value == "unresolved"
 
 
 def test_same_reference_method_precedence_and_exact_elsewhere() -> None:

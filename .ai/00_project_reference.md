@@ -81,7 +81,32 @@ Discussed ~85% effort reduction and ~90% extraction accuracy are **hypotheses**,
 - Optional async OpenAI wrapper with fake-based tests (unwired to product flows)
 - Optional document conversion (disabled by default): Textract, Textractor 1.10.0, durable DynamoDB/S3/SQS jobs, Cognito-owned upload/jobs shell, canonical `document.json` + unreviewed HTML
 - Optional document review (same feature flag): Vue/TipTap/PDF.js workspace, review API, immutable revisions, page/document approval, reviewed HTML/JSON exports
-- Stage 3 extraction-review **U1 complete** (`src/app/extraction_review/`): current-state contracts and pure transitions plus one local atomic JSON file per document. Stage 2 remains an independent lexical engine. Stage 3 approves an extraction result (never Stage 1 HTML) via one final action, **Approve extraction result** (`not_approved` / `approved`). A review holds one complete current finding list, immutable source/run/Stage 2 provenance, one `current_revision_id` (stale Save detection only), and null-or-one current approval. Save edits the complete list, assigns a new revision token, and clears approval; Approve changes no findings. Latest state only—no Stage 3 revision history, version list, approval ledger, delta chain, parent link, or retry ledger. Per-finding provenance: lexical original matched text/evidence; `added_by_user` / `changed_by_user` / `removed_by_user` (removal is a current-state tombstone). Persistence: `<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json` (complete `ExtractionReviewState`, atomic replace, one local process). Not yet: API, UI, workers, L13 import/execution, SQLite, graph/association work, or automatic approval.
+- Stage 3 extraction-review **U1–U2 complete** (`src/app/extraction_review/`):
+  - **U1** — current-state contracts and pure transitions plus one local atomic
+    `current-review.json` per document
+    (`<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json`). Stage 2
+    remains an independent lexical engine. Stage 3 approves an extraction result
+    (never Stage 1 HTML) via one final action, **Approve extraction result**
+    (`not_approved` / `approved`). A review holds one complete current finding list,
+    immutable source/run/Stage 2 provenance, one `current_revision_id` (stale Save
+    detection only), and null-or-one current approval. Latest state only—no Stage 3
+    revision history, approval ledger, or automatic approval.
+  - **U2.1** — read-only Approved Documents Registry under a caller-supplied root:
+    `<job_id>/<review_revision_id>/document.html` (optional sibling `review.json`
+    ignored). Deterministic paginated discovery returns layout metadata without
+    parsing HTML; selection validates one file through the Stage 2 reviewed-HTML
+    reader (streamed pages) and requires folder identity to match HTML root
+    provenance. No registry/index/database is created.
+  - **U2.2** — local persisted, serialized Stage 2/L13 jobs under
+    `<data-dir>/extraction-jobs/<local-job-id>.json` with raw runs in
+    `<data-dir>/extraction-raw-runs/<stage2-run-id>/`. One action per job (fixed
+    preset mapping; `fuzzy_enabled` defaults false); L02 YAML unchanged (in-memory
+    overrides only). Exactly one lexical execution at a time per `data_dir`; restart
+    marks abandoned `queued`/`running` jobs `interrupted`. Partial extraction with
+    completed publication is a completed job. No U2 job creates, modifies, or
+    approves `current-review.json`.
+  - Not yet: API, UI, review finding projection/editing, SQLite, graph/association
+    work, or automatic approval.
 - Lexical extraction engine L01–L13 in `src/app/lexical_extraction/` (independent of Stage 3 review UI)
 - Development/test-only local review harness under `tests/document_review/`
 

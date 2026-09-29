@@ -116,9 +116,8 @@ def test_chebi_alias_qualification_and_no_id_search() -> None:
     blank_terms = map_source_row(blank_alias, components=(Component.MATERIALS,))
     assert _fields(related_terms) == [
         ("materials", "material_name", "medicarpin"),
-        ("materials", "alias_name", "related spelling"),
     ]
-    assert related_terms[1].alias_type == "hasRelatedSynonym"
+    assert all(term.source_field != "alias_name" for term in related_terms)
     assert exact_terms[1].alias_type == "hasExactSynonym"
     assert all(term.source_field != "CAS_NUMBER" for term in related_terms)
     assert all(term.source_field != "CHEBI_ID" for term in related_terms)
@@ -393,10 +392,7 @@ def test_unit_operations_index_flag_and_policies() -> None:
     assert index_this_row_authorizes("YES") is False
     assert _fields(unknown_terms) == [("process_steps", "Process step (EN)", "Step remains")]
 
-    assert (
-        map_source_row(context, components=(Component.UNIT_OPERATIONS,))[0].term_role
-        == "unit_operation"
-    )
+    assert map_source_row(context, components=(Component.UNIT_OPERATIONS,)) == ()
     inspection_term = map_source_row(inspection, components=(Component.UNIT_OPERATIONS,))[0]
     assert inspection_term.term_role == "generic_cue"
     assert inspection_term.operation_id is None
@@ -721,7 +717,6 @@ def test_unknown_uo_policy_and_record_type_fail_closed() -> None:
 def test_known_uo_policies_remain_distinct() -> None:
     cases = (
         ("direct_candidate", "unit_operation", "unit_operation", True),
-        ("context_required", "unit_operation", "unit_operation", True),
         ("step_cue_only", "generic_step_cue", "generic_cue", False),
         ("support_only", "unit_operation", "generic_cue", False),
         ("inspection_only", "unit_operation", "generic_cue", False),
@@ -745,6 +740,22 @@ def test_known_uo_policies_remain_distinct() -> None:
             assert term.operation_id == "UO-KEEP"
         else:
             assert term.operation_id is None
+
+    context_terms = map_source_row(
+        _row(
+            "unit_operations",
+            "uo-context_required",
+            **{
+                "Search term (EN)": "sieving",
+                "Index this row": "TRUE",
+                "Match policy": "context_required",
+                "record_type": "unit_operation",
+                "Operation ID": "UO-KEEP",
+            },
+        ),
+        components=(Component.UNIT_OPERATIONS,),
+    )
+    assert context_terms == ()
 
 
 def test_fuzzy_allowed_shape_and_scope() -> None:
@@ -824,9 +835,8 @@ def test_fuzzy_allowed_shape_and_scope() -> None:
             },
         ),
         components=(Component.UNIT_OPERATIONS,),
-    )[0]
-    assert uo_context.term_role == "unit_operation"
-    assert uo_context.fuzzy_allowed is False
+    )
+    assert uo_context == ()
 
     material = map_source_row(
         _row(

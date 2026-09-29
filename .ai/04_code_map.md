@@ -87,7 +87,9 @@ src/app/
 ├── extraction_review/
 │   ├── contracts.py                 U1 current-state models: findings, provenance, revision id, approval
 │   ├── transitions.py               pure initialize / save / approve over current state
-│   └── store.py                     U1.2 atomic current-review.json under extraction-reviews/<sha256(job_id)>/
+│   ├── store.py                     U1.2 atomic current-review.json under extraction-reviews/<sha256(job_id)>/
+│   ├── approved_documents.py        U2.1 read-only approved-document discovery and Stage 2 HTML selection
+│   └── local_jobs.py                U2.2 local persisted serialized Stage 2/L13 background jobs
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
@@ -115,7 +117,9 @@ tests/lexical_extraction/
 tests/extraction_review/
 ├── test_contracts.py                U1 current-state contract validation
 ├── test_transitions.py              U1 pure initialize/save/approve transitions
-└── test_store.py                    U1.2 create/load/save/approve/reload and byte-stability
+├── test_store.py                    U1.2 create/load/save/approve/reload and byte-stability
+├── test_approved_documents.py       U2.1 discovery/selection/validation and path-safety tests
+└── test_local_jobs.py               U2.2 submit/progress/restart/serial-execution/safe-error tests
 
 tests/document_review/
 ├── test_backend_review.py           canonical lifecycle/mapping/API/approval
@@ -155,9 +159,13 @@ Inspect when:
 | `src/app/extraction_review/contracts.py` | U1 current-state review models: complete finding list, per-finding provenance, one revision id, null-or-one approval | L01 provenance types + published run facts → versioned review contracts; no I/O | Changing current-state shape, finding provenance, approval semantics, or command shapes |
 | `src/app/extraction_review/transitions.py` | Pure initialize / save / approve over one current state; Save clears approval and requires a new revision id | Commands + `ExtractionReviewState` → outcomes | Changing stale conflict, no-op, Add uniqueness, provenance stamping, or discard-on-save behavior |
 | `src/app/extraction_review/store.py` | U1.2 local atomic JSON: one `current-review.json` per `sha256(job_id)` workspace | Data dir + job_id / commands → durable current `ExtractionReviewState` | Changing path layout, atomic write, create/load/save/approve persistence rules |
+| `src/app/extraction_review/approved_documents.py` | U2.1 read-only Approved Documents Registry: paginated layout discovery and safe selection through the Stage 2 reviewed-HTML reader | Caller-supplied approved-documents root → candidate metadata or `SelectedApprovedDocument` | Changing folder layout rules, pagination bounds, path/symlink escape, or HTML identity matching |
+| `src/app/extraction_review/local_jobs.py` | U2.2 local persisted serialized Stage 2/L13 jobs; atomic job JSON; one execution at a time per data dir; restart interruption | Approved-document identity + L02 path + action/fuzzy → durable job state and optional raw-run registration | Changing job/raw-run layout, status/phase model, serial execution, safe errors, or Stage 2 invoke boundary |
 | `tests/extraction_review/test_contracts.py` | Contract validation for current-state models and provenance | Pydantic validation cases | Changing allowed finding/approval/command shapes |
 | `tests/extraction_review/test_transitions.py` | Pure transition coverage for initialize/save/approve | In-memory state transitions | Changing Save/Approve semantics |
 | `tests/extraction_review/test_store.py` | Local JSON create/load/save/approve/reload and non-changed byte stability | Temp directories only | Changing store persistence behavior |
+| `tests/extraction_review/test_approved_documents.py` | U2.1 discovery/pagination, selection validation, path/symlink escape, and no-write guarantees | Synthetic reviewed-HTML fixtures under temp roots | Changing registry discovery or selection/validation rules |
+| `tests/extraction_review/test_local_jobs.py` | U2.2 submit/progress/completion, serial execution, restart interruption, safe errors, and no review mutation | Injected Stage 2 seam + temp data/approved roots | Changing job lifecycle, serial lock, raw-run registration, or error sanitization |
 | `src/app/lexical_extraction/contracts.py` | L01 lexical evidence, candidate, unit/value, provenance, extraction-outcome, and publication-claim records | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, span checks, outcome coherence, or publication claims |
 | `src/app/lexical_extraction/configuration.py` | L02 strict execution YAML load, fixed preset→component union, resource safeguards, effective SHA-256 | Config file path (+ optional typed selection override) → `EffectiveExecutionConfiguration`; no I/O beyond reading the YAML file | Changing YAML shape, preset map, path resolution, override semantics, resource bounds, or digest material |
 | `src/app/lexical_extraction/html_reader.py` | L03 streaming reviewed HTML v1 reader; fail-closed provenance; final digest only on completed read | File path → chunked `iter_pages` → `PageRecord`/`BlockEvidence`; final `ReviewedHtmlV1Input` only when `completed` | Changing streaming/completion semantics, exact version `"1"`, duplicate-attribute rejection, or silent-omission failures |

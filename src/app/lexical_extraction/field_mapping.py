@@ -43,6 +43,9 @@ _INDEX_TRUE: Final = "TRUE"
 _CODE_PATTERN: Final = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 _MAX_ERROR_MESSAGE: Final = 200
 _ELLIPSIS: Final = "..."
+_MIN_DICTIONARY_TERM_CODEPOINTS: Final = 3
+_RELATED_SYNONYM_ALIAS: Final = "hasRelatedSynonym"
+_CONTEXT_REQUIRED_POLICY: Final = "context_required"
 
 KNOWN_MATCH_POLICIES: Final[frozenset[str]] = frozenset(
     {
@@ -320,7 +323,7 @@ def _map_materials_fda_ema(
     terms: list[EligibleSearchTerm] = []
 
     material_name = values.get("material_name", "")
-    if not _is_blank(material_name):
+    if not _is_blank(material_name) and _may_emit_dictionary_term(material_name):
         terms.append(
             EligibleSearchTerm(
                 literal=material_name,
@@ -342,7 +345,11 @@ def _map_materials_fda_ema(
         )
 
     alias_name = values.get("alias_name", "")
-    if not _is_blank(alias_name):
+    if not _is_blank(alias_name) and _may_emit_dictionary_term(
+        alias_name,
+        alias_type=alias_type,
+        is_related_synonym_alias=True,
+    ):
         terms.append(
             EligibleSearchTerm(
                 literal=alias_name,
@@ -364,7 +371,7 @@ def _map_materials_fda_ema(
         )
 
     unii_cell = values.get("UNII", "")
-    if _is_available_code_search_cell(unii_cell):
+    if _is_available_code_search_cell(unii_cell) and _may_emit_dictionary_term(unii_cell):
         terms.append(
             EligibleSearchTerm(
                 literal=unii_cell,
@@ -403,7 +410,7 @@ def _map_materials_chebi(
     terms: list[EligibleSearchTerm] = []
 
     material_name = values.get("material_name", "")
-    if not _is_blank(material_name):
+    if not _is_blank(material_name) and _may_emit_dictionary_term(material_name):
         terms.append(
             EligibleSearchTerm(
                 literal=material_name,
@@ -426,7 +433,11 @@ def _map_materials_chebi(
         )
 
     alias_name = values.get("alias_name", "")
-    if not _is_blank(alias_name):
+    if not _is_blank(alias_name) and _may_emit_dictionary_term(
+        alias_name,
+        alias_type=alias_type,
+        is_related_synonym_alias=True,
+    ):
         terms.append(
             EligibleSearchTerm(
                 literal=alias_name,
@@ -464,7 +475,7 @@ def _map_equipment(
 
     if Component.EQUIPMENT in selected:
         equipment_type = values.get("Equipment type (EN)", "")
-        if not _is_blank(equipment_type):
+        if not _is_blank(equipment_type) and _may_emit_dictionary_term(equipment_type):
             terms.append(
                 EligibleSearchTerm(
                     literal=equipment_type,
@@ -484,7 +495,7 @@ def _map_equipment(
 
     if Component.PARAMETER_NAMES in selected:
         parameter = values.get("Operating parameter (EN)", "")
-        if not _is_blank(parameter):
+        if not _is_blank(parameter) and _may_emit_dictionary_term(parameter):
             terms.append(
                 EligibleSearchTerm(
                     literal=parameter,
@@ -551,7 +562,10 @@ def _map_unit_operations(
 
     if Component.UNIT_OPERATIONS in selected and index_this_row_authorizes(index_flag):
         search_term = values.get("Search term (EN)", "")
-        if not _is_blank(search_term):
+        if not _is_blank(search_term) and _may_emit_dictionary_term(
+            search_term,
+            match_policy=policy_text,
+        ):
             term_role = _unit_operation_term_role(match_policy, record_type, row_id=row.row_id)
             terms.append(
                 EligibleSearchTerm(
@@ -584,7 +598,7 @@ def _map_unit_operations(
 
     if Component.PROCESS_STEPS in selected:
         step = values.get("Process step (EN)", "")
-        if not _is_blank(step):
+        if not _is_blank(step) and _may_emit_dictionary_term(step):
             terms.append(
                 EligibleSearchTerm(
                     literal=step,
@@ -702,6 +716,28 @@ def _optional_native_id(value: str) -> str | None:
     if _is_blank(value) or is_unavailable_identity_marker(value):
         return None
     return value
+
+
+def _dictionary_literal_eligible(literal: str) -> bool:
+    """Dictionary search terms require at least three Unicode code points."""
+
+    return len(literal) >= _MIN_DICTIONARY_TERM_CODEPOINTS
+
+
+def _may_emit_dictionary_term(
+    literal: str,
+    *,
+    alias_type: str | None = None,
+    match_policy: str | None = None,
+    is_related_synonym_alias: bool = False,
+) -> bool:
+    if not _dictionary_literal_eligible(literal):
+        return False
+    if is_related_synonym_alias and alias_type == _RELATED_SYNONYM_ALIAS:
+        return False
+    if match_policy == _CONTEXT_REQUIRED_POLICY:
+        return False
+    return True
 
 
 __all__ = [

@@ -21,7 +21,7 @@ BatchLens Extract prepares pharmaceutical manufacturing PDFs into evidence-prese
 - Do not change conversion, Textractor, review, API, storage, frontend, Docker, AWS/IAM, or test behaviour unless the task explicitly requires it.
 - Do not claim 21 CFR Part 11 compliance, production qualification, or real AWS integration without separate validation evidence.
 - Document-review approval is not batch release or a regulatory electronic signature.
-- Stage 3 U1 is **implemented** and **test-verified**: current-state contracts/transitions plus local `current-review.json` persistence (`src/app/extraction_review/`). Out of scope until separately authorized: API routes, frontend/UI, workers, background jobs, runtime L13 import/execution, SQLite, graph/association work, and automatic approval.
+- Stage 3 U1–U2 are **implemented** and **test-verified** (`src/app/extraction_review/`): current-state contracts/transitions and local `current-review.json` persistence; read-only approved-document selection; local persisted, serialized Stage 2/L13 jobs. Not implemented: API routes, frontend/UI, review finding projection/editing, SQLite, graph/association work, automatic approval, and remaining Stage 3 UI/API boundaries.
 - Pharmaceutical recipe assembly, the rules/Audit layer, and the audit ledger are not implemented.
 
 ## Evidence vocabulary

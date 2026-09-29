@@ -246,7 +246,8 @@ def test_supporting_refs_group_equivalent_uo_rows_without_process_steps() -> Non
     candidate = occs[0].candidates[0]
     assert isinstance(candidate, UnitOperationCandidate)
     assert candidate.row_id == "uo-a"
-    assert candidate.supporting_row_ids == ("uo-b",)
+    assert candidate.supporting_row_ids == ()
+    assert candidate.ambiguity is AmbiguityQualification.UNRESOLVED
     assert candidate.operation_id == "UO-001"
     assert occs[0].applies_to == (Component.UNIT_OPERATIONS,)
     assert all(c.candidate_kind != "process_step" for c in occs[0].candidates)
@@ -331,14 +332,14 @@ def test_distinct_lexical_ids_and_process_step_stay_separate() -> None:
     assert len(occs) == 2
     mix = next(occ for occ in occs if occ.location.matched_text == "mixing")
     step = next(occ for occ in occs if occ.location.matched_text == "Blend powders")
-    assert len(mix.candidates) == 2
-    assert {c.lexical_term_id for c in mix.candidates if isinstance(c, UnitOperationCandidate)} == {
-        "lt-mix-1",
-        "lt-mix-2",
-    }
-    assert all(c.supporting_row_ids == () for c in mix.candidates)
+    assert len(mix.candidates) == 1
+    assert mix.candidates[0].supporting_row_ids == ()
+    assert mix.candidates[0].ambiguity is AmbiguityQualification.UNRESOLVED
+    assert isinstance(mix.candidates[0], UnitOperationCandidate)
+    assert mix.candidates[0].lexical_term_id in {"lt-mix-1", "lt-mix-2"}
     assert isinstance(step.candidates[0], ProcessStepCandidate)
     assert step.candidates[0].process_step_id == "ps-1"
+    assert step.candidates[0].supporting_row_ids == ()
 
 
 def test_chebi_related_versus_exact_and_fda_collision_split_across_shards() -> None:
@@ -415,21 +416,15 @@ def test_chebi_related_versus_exact_and_fda_collision_split_across_shards() -> N
     occs = _dictionary_occurrences(records[0])
     oxidane = next(occ for occ in occs if occ.location.matched_text == "oxidane")
     water = next(occ for occ in occs if occ.location.matched_text == "water")
-    assert len(oxidane.candidates) == 2
-    related = next(
-        c
-        for c in oxidane.candidates
-        if isinstance(c, ChebiMaterialCandidate) and c.alias_type == "hasRelatedSynonym"
-    )
-    exact = next(
-        c
-        for c in oxidane.candidates
-        if isinstance(c, ChebiMaterialCandidate) and c.alias_type == "hasExactSynonym"
-    )
-    assert related.ambiguity is AmbiguityQualification.CONTEXT_REQUIRED
+    assert len(oxidane.candidates) == 1
+    exact = oxidane.candidates[0]
+    assert isinstance(exact, ChebiMaterialCandidate)
+    assert exact.alias_type == "hasExactSynonym"
     assert exact.ambiguity is AmbiguityQualification.NONE
+    assert exact.supporting_row_ids == ()
     assert isinstance(water.candidates[0], FdaEmaMaterialCandidate)
     assert water.candidates[0].unii == "059QF0KO0R"
+    assert water.candidates[0].supporting_row_ids == ()
 
 
 def test_exact_precedes_normalized_for_repeated_source_reference() -> None:
@@ -652,16 +647,18 @@ def test_equivalent_materials_and_equipment_group_parameters_stay_separate() -> 
     by_text = {o.location.matched_text: o for o in _dictionary_occurrences(records[0])}
     material = by_text["lactose"].candidates[0]
     assert material.row_id == "m-a"
-    assert material.supporting_row_ids == ("m-b",)
+    assert material.supporting_row_ids == ()
+    assert material.ambiguity is AmbiguityQualification.UNRESOLVED
     equipment = by_text["Mixer"].candidates[0]
     assert equipment.row_id == "e-a"
-    assert equipment.supporting_row_ids == ("e-b",)
+    assert equipment.supporting_row_ids == ()
+    assert equipment.ambiguity is AmbiguityQualification.UNRESOLVED
     params = by_text["Speed"].candidates
-    assert len(params) == 2
-    assert {c.parameter_id for c in params if isinstance(c, ParameterNameCandidate)} == {
-        "PAR-1",
-        "PAR-2",
-    }
+    assert len(params) == 1
+    assert params[0].supporting_row_ids == ()
+    assert params[0].ambiguity is AmbiguityQualification.UNRESOLVED
+    assert isinstance(params[0], ParameterNameCandidate)
+    assert params[0].parameter_id in {"PAR-1", "PAR-2"}
 
 
 def test_stable_order_under_shuffled_discovery_order_and_l07_pipeline() -> None:
@@ -1048,12 +1045,11 @@ def test_none_versus_present_lexical_term_id_orders_stably() -> None:
     reversed_hits = list(reversed(forward))
     first = _dictionary_occurrences(_aggregate(forward, blocks, snapshot)[0])[0]
     second = _dictionary_occurrences(_aggregate(reversed_hits, blocks, snapshot)[0])[0]
-    assert len(first.candidates) == 2
-    assert [c.row_id for c in first.candidates] == [c.row_id for c in second.candidates]
+    assert len(first.candidates) == 1
+    assert first.candidates[0].row_id == second.candidates[0].row_id
     assert isinstance(first.candidates[0], FdaEmaMaterialCandidate)
-    assert isinstance(first.candidates[1], FdaEmaMaterialCandidate)
-    assert first.candidates[0].lexical_term_id is None
-    assert first.candidates[1].lexical_term_id == "lt-present"
+    assert first.candidates[0].supporting_row_ids == ()
+    assert first.candidates[0].ambiguity is AmbiguityQualification.UNRESOLVED
     assert first.occurrence_id == second.occurrence_id
 
 
@@ -1500,3 +1496,290 @@ def test_block_counter_threshold_without_discoveries_count_star(
         and "block_node_id" in sql.lower()
         for sql in recorded_sql
     )
+
+
+def test_same_material_span_emits_one_candidate_without_supporting_rows() -> None:
+    rows = {
+        ("materials_fda_ema", "m-a"): _row(
+            "materials_fda_ema",
+            "m-a",
+            material_name="water",
+            lexical_term_id="lt-a",
+        ),
+        ("materials_fda_ema", "m-b"): _row(
+            "materials_fda_ema",
+            "m-b",
+            material_name="water",
+            lexical_term_id="lt-b",
+        ),
+        ("materials_chebi", "c-1"): _row(
+            "materials_chebi",
+            "c-1",
+            material_name="water",
+            CHEBI_ID="CHEBI:15377",
+            lexical_term_id="lt-c",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [_block("water")]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-b",
+            lexical_term_id="lt-b",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_chebi",
+            source_field="material_name",
+            row_id="c-1",
+            lexical_term_id="lt-c",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-a",
+            lexical_term_id="lt-a",
+        ),
+    ]
+    records = _aggregate(discoveries, blocks, snapshot)
+    occs = _dictionary_occurrences(records[0])
+    assert len(occs) == 1
+    occ = occs[0]
+    assert occ.applies_to == (Component.MATERIALS,)
+    assert len(occ.candidates) == 1
+    candidate = occ.candidates[0]
+    assert candidate.supporting_row_ids == ()
+    assert candidate.ambiguity is AmbiguityQualification.UNRESOLVED
+    assert candidate.row_id in {"m-a", "m-b", "c-1"}
+    assert occ.location.matched_text == "water"
+    assert occ.block_node_id == blocks[0].node_id
+    assert isinstance(candidate.evidence, ExactEvidence)
+
+
+def test_same_span_two_components_remain_independent() -> None:
+    rows = {
+        ("materials_fda_ema", "m-1"): _row(
+            "materials_fda_ema",
+            "m-1",
+            material_name="Mixer",
+            lexical_term_id="lt-m",
+        ),
+        ("equipment", "e-1"): _row(
+            "equipment",
+            "e-1",
+            **{"Equipment type (EN)": "Mixer", "equipment_type_id": "EQ-1"},
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [_block("Mixer")]
+    discoveries = [
+        _discovery(
+            dictionary_term="Mixer",
+            matched_text="Mixer",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-1",
+            lexical_term_id="lt-m",
+        ),
+        _discovery(
+            dictionary_term="Mixer",
+            matched_text="Mixer",
+            start=0,
+            end=5,
+            component=Component.EQUIPMENT,
+            term_role="equipment_type",
+            source_table="equipment",
+            source_field="Equipment type (EN)",
+            row_id="e-1",
+        ),
+    ]
+    records = _aggregate(discoveries, blocks, snapshot)
+    occs = _dictionary_occurrences(records[0])
+    assert len(occs) == 2
+    by_component = {occ.applies_to[0]: occ for occ in occs}
+    assert set(by_component) == {Component.MATERIALS, Component.EQUIPMENT}
+    for occ in occs:
+        assert len(occ.candidates) == 1
+        assert occ.candidates[0].supporting_row_ids == ()
+        assert occ.location.matched_text == "Mixer"
+        assert occ.block_node_id == blocks[0].node_id
+
+
+def test_excluded_dictionary_terms_do_not_reach_published_occurrences() -> None:
+    rows = {
+        ("materials_chebi", "c-rel"): _row(
+            "materials_chebi",
+            "c-rel",
+            material_name="solvent",
+            alias_name="related spelling",
+            CHEBI_ID="CHEBI:1",
+            alias_type="hasRelatedSynonym",
+            lexical_term_id="lt-rel",
+        ),
+        ("unit_operations", "uo-ctx"): _row(
+            "unit_operations",
+            "uo-ctx",
+            **{
+                "Search term (EN)": "sieving",
+                "Index this row": "TRUE",
+                "Match policy": "context_required",
+                "record_type": "unit_operation",
+                "Operation ID": "UO-1",
+                "lexical_term_id": "lt-ctx",
+            },
+        ),
+        ("materials_fda_ema", "m-short"): _row(
+            "materials_fda_ema",
+            "m-short",
+            material_name="to",
+            lexical_term_id="lt-short",
+        ),
+        ("materials_fda_ema", "m-ok"): _row(
+            "materials_fda_ema",
+            "m-ok",
+            material_name="lactose",
+            lexical_term_id="lt-ok",
+        ),
+    }
+    related_terms = map_source_row(
+        rows[("materials_chebi", "c-rel")], components=(Component.MATERIALS,)
+    )
+    assert all(term.source_field != "alias_name" for term in related_terms)
+    assert (
+        map_source_row(rows[("unit_operations", "uo-ctx")], components=(Component.UNIT_OPERATIONS,))
+        == ()
+    )
+    assert (
+        map_source_row(rows[("materials_fda_ema", "m-short")], components=(Component.MATERIALS,))
+        == ()
+    )
+
+    snapshot = FakeSnapshot(rows=rows)
+    text = "related spelling sieving to lactose"
+    blocks = [_block(text)]
+    discoveries = [
+        _discovery(
+            dictionary_term="related spelling",
+            matched_text="related spelling",
+            start=0,
+            end=16,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_chebi",
+            source_field="alias_name",
+            row_id="c-rel",
+            lexical_term_id="lt-rel",
+        ),
+        _discovery(
+            dictionary_term="sieving",
+            matched_text="sieving",
+            start=17,
+            end=24,
+            component=Component.UNIT_OPERATIONS,
+            term_role="unit_operation",
+            source_table="unit_operations",
+            source_field="Search term (EN)",
+            row_id="uo-ctx",
+            lexical_term_id="lt-ctx",
+        ),
+        _discovery(
+            dictionary_term="to",
+            matched_text="to",
+            start=25,
+            end=27,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-short",
+            lexical_term_id="lt-short",
+        ),
+        _discovery(
+            dictionary_term="lactose",
+            matched_text="lactose",
+            start=28,
+            end=35,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-ok",
+            lexical_term_id="lt-ok",
+        ),
+    ]
+    records = _aggregate(discoveries, blocks, snapshot)
+    occs = _dictionary_occurrences(records[0])
+    assert len(occs) == 1
+    occ = occs[0]
+    assert occ.location.matched_text == "lactose"
+    assert occ.applies_to == (Component.MATERIALS,)
+    assert len(occ.candidates) == 1
+    assert occ.candidates[0].row_id == "m-ok"
+    assert occ.candidates[0].supporting_row_ids == ()
+    assert occ.candidates[0].ambiguity is AmbiguityQualification.NONE
+    assert occ.block_node_id == blocks[0].node_id
+    assert occ.location.start_char == 28
+    assert occ.location.end_char == 35
+    assert isinstance(occ.candidates[0].evidence, ExactEvidence)
+
+
+def test_meaningful_exact_term_keeps_source_backed_span_evidence() -> None:
+    rows = {
+        ("materials_fda_ema", "m-1"): _row(
+            "materials_fda_ema",
+            "m-1",
+            material_name="glucose",
+            UNII="5SL0G7R0OK",
+            lexical_term_id="lt-1",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    text = "charge glucose now"
+    blocks = [_block(text)]
+    terms = map_source_row(
+        rows[("materials_fda_ema", "m-1")],
+        components=(Component.MATERIALS,),
+        snapshot_id=_SNAPSHOT_ID,
+    )
+    assert any(term.literal == "glucose" for term in terms)
+    source = StaticBlockSource(blocks=tuple(blocks), identity="static-l08")
+    discoveries = list(iter_raw_discoveries(terms, source, _limits()))
+    records = _aggregate(discoveries, blocks, snapshot)
+    occs = _dictionary_occurrences(records[0])
+    assert len(occs) == 1
+    occ = occs[0]
+    assert occ.applies_to == (Component.MATERIALS,)
+    assert len(occ.candidates) == 1
+    candidate = occ.candidates[0]
+    assert isinstance(candidate, FdaEmaMaterialCandidate)
+    assert candidate.row_id == "m-1"
+    assert candidate.supporting_row_ids == ()
+    assert candidate.ambiguity is AmbiguityQualification.NONE
+    assert occ.location.matched_text == "glucose"
+    assert occ.location.start_char == text.index("glucose")
+    assert occ.location.end_char == text.index("glucose") + len("glucose")
+    assert occ.block_node_id == blocks[0].node_id
+    assert isinstance(candidate.evidence, ExactEvidence)

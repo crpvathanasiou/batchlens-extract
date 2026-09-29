@@ -483,8 +483,12 @@ def _ingest_discoveries(
                     "SNAPSHOT_IDENTITY_MISMATCH",
                     "raw discovery snapshot identity does not match the open knowledge snapshot",
                 )
+            term = _matching_term_from_discovery(
+                discovery, snapshot, cache, row_cache_size=row_cache_size
+            )
+            if term is None or not _dictionary_term_is_matchable(term):
+                continue
             _require_block_capacity(connection, discovery.block_node_id, limits)
-            term = _require_matching_term(discovery, snapshot, cache, row_cache_size=row_cache_size)
             edit_distance = _validated_edit_distance(discovery, term)
             try:
                 connection.execute(
@@ -614,7 +618,7 @@ def _build_block_record(
     cache: dict[tuple[str, str], SourceRow | None] = {}
     for start, end, matched_text in sorted(by_span, key=lambda item: (item[0], item[1], item[2])):
         span_hits = by_span[(start, end, matched_text)]
-        occurrence, cand_n = _build_occurrence(
+        built, cand_n = _build_occurrences_for_span(
             block=block,
             location=CharSpan(start_char=start, end_char=end, matched_text=matched_text),
             hits=span_hits,
@@ -623,7 +627,7 @@ def _build_block_record(
             cache=cache,
             row_cache_size=row_cache_size,
         )
-        occurrences.append(occurrence)
+        occurrences.extend(built)
         candidate_total += cand_n
     record = BlockRecord(block=block, occurrences=tuple(occurrences))
     return record, len(occurrences), candidate_total
@@ -715,7 +719,7 @@ def _require_all_hits_consumed(connection: sqlite3.Connection) -> None:
         )
 
 
-def _build_occurrence(
+def _build_occurrences_for_span(
     *,
     block: BlockEvidence,
     location: CharSpan,
@@ -724,7 +728,7 @@ def _build_occurrence(
     limits: ResourceLimits,
     cache: dict[tuple[str, str], SourceRow | None],
     row_cache_size: int,
-) -> tuple[DictionaryOccurrence, int]:
+) -> tuple[tuple[DictionaryOccurrence, ...], int]:
     # Deduplicate repeated source references at this span; exact wins.
     best_by_ref: dict[tuple[str, str, str, str, str, str | None], _SpooledHit] = {}
     for hit in hits:
@@ -742,7 +746,9 @@ def _build_occurrence(
 
     groups: dict[tuple[object, ...], _GroupState] = {}
     for hit in best_by_ref.values():
-        term = _require_matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
+        term = _matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
+        if term is None or not _dictionary_term_is_matchable(term):
+            continue
         if hit.method == "fuzzy":
             _require_fuzzy_span_against_block(block=block, location=location, term=term)
         key = _interpretation_key(term, hit.dictionary_term)
@@ -767,52 +773,79 @@ def _build_occurrence(
             "per-span candidate group count exceeds result_buffer_records",
         )
 
-    candidates: list[LexicalCandidate] = []
-    applies: set[Component] = set()
-    for key in sorted(groups, key=_candidate_sort_key):
-        group = groups[key]
-        ordered_ids = tuple(sorted(group.row_ids))
+    by_component: dict[Component, list[tuple[tuple[object, ...], _GroupState]]] = {}
+    for key, group in groups.items():
+        by_component.setdefault(group.term.component, []).append((key, group))
+
+    occurrences: list[DictionaryOccurrence] = []
+    for component in _COMPONENT_ORDER:
+        entries = by_component.get(component)
+        if not entries:
+            continue
+        entries.sort(key=lambda item: _candidate_sort_key(item[0]))
+        unique_row_ids: set[str] = set()
+        for _, group in entries:
+            unique_row_ids.update(group.row_ids)
+        alternatives_existed = len(entries) > 1 or len(unique_row_ids) > 1
+
+        _, chosen = entries[0]
+        ordered_ids = tuple(sorted(chosen.row_ids))
         representative = ordered_ids[0]
-        supporting = ordered_ids[1:]
         evidence = _evidence_for(
-            group.method,
-            dictionary_term=group.term.literal,
-            edit_distance=group.edit_distance,
+            chosen.method,
+            dictionary_term=chosen.term.literal,
+            edit_distance=chosen.edit_distance,
         )
-        if group.method == "exact" and group.term.literal != location.matched_text:
+        if chosen.method == "exact" and chosen.term.literal != location.matched_text:
             raise DictionaryAggregationError(
                 "EXACT_EVIDENCE_MISMATCH",
                 "exact evidence requires the dictionary term to equal the span text",
             )
-        candidate = _build_candidate(
-            group.term,
-            matched_term=group.term.literal,
-            row_id=representative,
-            supporting_row_ids=supporting,
-            evidence=evidence,
+        ambiguity = (
+            AmbiguityQualification.UNRESOLVED
+            if alternatives_existed
+            else _ambiguity_for(chosen.term)
         )
-        candidates.append(candidate)
-        applies.add(group.term.component)
+        candidate = _build_candidate(
+            chosen.term,
+            matched_term=chosen.term.literal,
+            row_id=representative,
+            supporting_row_ids=(),
+            evidence=evidence,
+            ambiguity=ambiguity,
+        )
+        applies_to = (component,)
+        occurrence = DictionaryOccurrence(
+            occurrence_id=_occurrence_id(block.node_id, location, applies_to, (candidate,)),
+            block_node_id=block.node_id,
+            location=location,
+            applies_to=applies_to,
+            candidates=(candidate,),
+        )
+        occurrences.append(occurrence)
 
-    applies_to = tuple(component for component in _COMPONENT_ORDER if component in applies)
-    occurrence_id = _occurrence_id(block.node_id, location, applies_to, candidates)
-    occurrence = DictionaryOccurrence(
-        occurrence_id=occurrence_id,
-        block_node_id=block.node_id,
-        location=location,
-        applies_to=applies_to,
-        candidates=tuple(candidates),
-    )
-    return occurrence, len(candidates)
+    return tuple(occurrences), len(occurrences)
 
 
-def _require_matching_term(
+def _dictionary_term_is_matchable(term: EligibleSearchTerm) -> bool:
+    """Reject dictionary terms that must not reach matching or publication."""
+
+    if term.component not in _DICTIONARY_COMPONENTS:
+        return False
+    if term.term_role == "material_alias" and term.alias_type == "hasRelatedSynonym":
+        return False
+    if term.match_policy == "context_required":
+        return False
+    return len(term.literal) >= 3
+
+
+def _matching_term_from_discovery(
     discovery: RawDiscovery,
     snapshot: SnapshotLookup,
     cache: dict[tuple[str, str], SourceRow | None],
     *,
     row_cache_size: int,
-) -> EligibleSearchTerm:
+) -> EligibleSearchTerm | None:
     hit = _SpooledHit(
         method=discovery.method,
         dictionary_term=discovery.dictionary_term,
@@ -828,7 +861,7 @@ def _require_matching_term(
         matched_text=discovery.span.matched_text,
         edit_distance=discovery.edit_distance,
     )
-    return _require_matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
+    return _matching_term_from_hit(hit, snapshot, cache, row_cache_size=row_cache_size)
 
 
 def _validated_edit_distance(
@@ -954,13 +987,13 @@ def _require_fuzzy_span_against_block(
         )
 
 
-def _require_matching_term_from_hit(
+def _matching_term_from_hit(
     hit: _SpooledHit,
     snapshot: SnapshotLookup,
     cache: dict[tuple[str, str], SourceRow | None],
     *,
     row_cache_size: int,
-) -> EligibleSearchTerm:
+) -> EligibleSearchTerm | None:
     row = _cached_lookup(
         snapshot, hit.source_table, hit.row_id, cache, row_cache_size=row_cache_size
     )
@@ -989,12 +1022,37 @@ def _require_matching_term_from_hit(
         and term.lexical_term_id == hit.lexical_term_id
         and term.snapshot_id == hit.snapshot_id
     ]
+    if len(matches) == 0:
+        if _is_intentionally_excluded_discovery(hit, row):
+            return None
+        if terms:
+            raise DictionaryAggregationError(
+                "SOURCE_TERM_MISMATCH",
+                "mapped source row does not reproduce the raw discovery term reference",
+            )
+        return None
     if len(matches) != 1:
         raise DictionaryAggregationError(
             "SOURCE_TERM_MISMATCH",
             "mapped source row does not reproduce the raw discovery term reference",
         )
     return matches[0]
+
+
+def _is_intentionally_excluded_discovery(hit: _SpooledHit, row: SourceRow) -> bool:
+    """True when eligibility filters intentionally drop this discovery reference."""
+
+    if len(hit.dictionary_term) < 3:
+        return True
+    values = dict(row.values)
+    if hit.source_field == "alias_name" and values.get("alias_type", "") == "hasRelatedSynonym":
+        return True
+    if (
+        hit.source_field == "Search term (EN)"
+        and values.get("Match policy", "") == "context_required"
+    ):
+        return True
+    return False
 
 
 def _cached_lookup(
@@ -1116,13 +1174,15 @@ def _build_candidate(
     row_id: str,
     supporting_row_ids: tuple[str, ...],
     evidence: ExactEvidence | NormalizedExactEvidence | FuzzyEvidence,
+    ambiguity: AmbiguityQualification | None = None,
 ) -> LexicalCandidate:
     if term.snapshot_id is None:
         raise DictionaryAggregationError(
             "SNAPSHOT_IDENTITY_MISMATCH",
             "eligible term is missing the required snapshot identity",
         )
-    ambiguity = _ambiguity_for(term)
+    if ambiguity is None:
+        ambiguity = _ambiguity_for(term)
     snapshot_id = term.snapshot_id
     display_name = term.display_name
     if term.source_table == "materials_fda_ema":
