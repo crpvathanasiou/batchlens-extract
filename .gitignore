@@ -31,6 +31,8 @@ out/
 # Local document-review acceptance inputs and persistent state contain protected data.
 manual-input/
 .local-review-data/
+.local-extraction-data/
+.local-extraction-review-data/
 
 # Reproducible frontend build output is produced by `npm --prefix frontend run build`.
 src/app/document_review/static/
