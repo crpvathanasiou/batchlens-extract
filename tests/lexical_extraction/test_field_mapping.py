@@ -116,8 +116,11 @@ def test_chebi_alias_qualification_and_no_id_search() -> None:
     blank_terms = map_source_row(blank_alias, components=(Component.MATERIALS,))
     assert _fields(related_terms) == [
         ("materials", "material_name", "medicarpin"),
+        ("materials", "alias_name", "related spelling"),
     ]
-    assert all(term.source_field != "alias_name" for term in related_terms)
+    related_alias = next(term for term in related_terms if term.source_field == "alias_name")
+    assert related_alias.alias_type == "hasRelatedSynonym"
+    assert related_alias.term_role == "material_alias"
     assert exact_terms[1].alias_type == "hasExactSynonym"
     assert all(term.source_field != "CAS_NUMBER" for term in related_terms)
     assert all(term.source_field != "CHEBI_ID" for term in related_terms)

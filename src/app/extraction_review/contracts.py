@@ -279,8 +279,8 @@ class ReviewFindingRecord(ExtractionReviewModel):
         elif self.added_by_user is not None:
             raise ValueError("lexical findings cannot carry added_by_user provenance")
         if self.removed:
-            if self.current is not None:
-                raise ValueError("removed findings must not retain current content")
+            if self.current is None:
+                raise ValueError("removed findings require current content for restore")
             if self.removed_by_user is None:
                 raise ValueError("removed findings require removed_by_user provenance")
         else:
@@ -288,10 +288,10 @@ class ReviewFindingRecord(ExtractionReviewModel):
                 raise ValueError("active findings require current content")
             if self.removed_by_user is not None:
                 raise ValueError("active findings cannot carry removed_by_user provenance")
-        if (
-            self.current is not None
-            and self.current.evidence_status is FindingEvidenceStatus.DOCUMENT_EVIDENCE
-            and isinstance(self.origin, LexicalFindingOrigin)
+        current = self.current
+        assert current is not None
+        if current.evidence_status is FindingEvidenceStatus.DOCUMENT_EVIDENCE and isinstance(
+            self.origin, LexicalFindingOrigin
         ):
             evidence = self.origin.evidence
             if evidence.location is None or evidence.block_node_id is None:
@@ -397,8 +397,18 @@ class RemoveFindingEdit(FindingEditOp):
     note: Annotated[str, Field(max_length=MAX_EDIT_NOTE_LENGTH)] | None = None
 
 
+class RestoreFindingEdit(FindingEditOp):
+    """Restore a removed tombstone to active in the current state (not a history undo)."""
+
+    op: Literal["restore"] = "restore"
+
+
 FindingEditCommand = Annotated[
-    AddFindingEdit | ReplaceFindingEdit | PatchFindingTextEdit | RemoveFindingEdit,
+    AddFindingEdit
+    | ReplaceFindingEdit
+    | PatchFindingTextEdit
+    | RemoveFindingEdit
+    | RestoreFindingEdit,
     Field(discriminator="op"),
 ]
 

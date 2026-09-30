@@ -131,12 +131,16 @@ def _page() -> str:
 """
 
 
-def _bootstrap() -> str:
+def _bootstrap(*, initial_local_job_id: str | None = None) -> str:
+    option_lines = [f"  demoLabel: {LABEL!r}"]
+    if initial_local_job_id is not None:
+        option_lines.append(f"  initialLocalJobId: {initial_local_job_id!r}")
+    options = ",\n".join(option_lines)
     script = (
         "import { mountExtractionReviewWorkspace } "
         "from '/documents/review-assets/review.js';\n"
         "const host = mountExtractionReviewWorkspace('#extraction-review', {\n"
-        f"  demoLabel: {LABEL!r}\n"
+        f"{options}\n"
         "});\n"
         "window.addEventListener('pagehide', () => host.unmount(), { once: true });\n"
     )
@@ -148,6 +152,7 @@ def create_app(
     data_dir: Path,
     approved_documents_root: Path,
     static_dir: Path | None = None,
+    initial_local_job_id: str | None = None,
 ) -> FastAPI:
     review_js, _css = find_built_assets(static_dir)
     static = review_js.parent
@@ -161,7 +166,10 @@ def create_app(
         return HTMLResponse(_page())
 
     def _bootstrap_route() -> Response:
-        return Response(_bootstrap(), media_type="text/javascript")
+        return Response(
+            _bootstrap(initial_local_job_id=initial_local_job_id),
+            media_type="text/javascript",
+        )
 
     def _review_asset(asset: str) -> FileResponse:
         requested = _safe_asset(static, asset)
@@ -430,7 +438,13 @@ def main(
 
     try:
         find_built_assets()
-        app = create_app_fn(data_dir=data_dir, approved_documents_root=approved)
+        app_kwargs: dict[str, object] = {
+            "data_dir": data_dir,
+            "approved_documents_root": approved,
+        }
+        if local_job_id is not None:
+            app_kwargs["initial_local_job_id"] = local_job_id
+        app = create_app_fn(**app_kwargs)
     except LocalHarnessError as error:
         print(f"Local extraction review did not start:\n{error}", file=sys.stderr)
         return 2

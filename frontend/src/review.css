@@ -536,6 +536,31 @@ button:disabled {
   font-size: 12px;
 }
 
+.bl-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bl-legend-toggle.is-off {
+  text-decoration: line-through;
+  opacity: 0.55;
+  border-style: dashed;
+  border-color: currentColor;
+}
+
+.bl-legend-toggle.is-off .bl-swatch {
+  background: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
 .bl-swatch {
   display: inline-block;
   margin-right: 4px;
@@ -567,13 +592,25 @@ button:disabled {
 
 .bl-finding-list li.is-removed {
   text-decoration: line-through;
+  opacity: 0.72;
+}
+
+.bl-finding-list li.is-draft {
+  outline: 1px dashed var(--bl-line);
+  outline-offset: 4px;
+}
+
+.bl-finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
 }
 
 .bl-finding-select {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -586,6 +623,15 @@ button:disabled {
   font-size: 11px;
   letter-spacing: .03em;
   text-transform: uppercase;
+}
+
+.bl-finding-text,
+.bl-finding-text-plain {
+  border-radius: 2px;
+}
+
+.bl-finding-text {
+  padding: 0 2px;
 }
 
 .bl-findings {

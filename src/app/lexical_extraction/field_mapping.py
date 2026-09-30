@@ -44,7 +44,6 @@ _CODE_PATTERN: Final = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 _MAX_ERROR_MESSAGE: Final = 200
 _ELLIPSIS: Final = "..."
 _MIN_DICTIONARY_TERM_CODEPOINTS: Final = 3
-_RELATED_SYNONYM_ALIAS: Final = "hasRelatedSynonym"
 _CONTEXT_REQUIRED_POLICY: Final = "context_required"
 
 KNOWN_MATCH_POLICIES: Final[frozenset[str]] = frozenset(
@@ -345,11 +344,7 @@ def _map_materials_fda_ema(
         )
 
     alias_name = values.get("alias_name", "")
-    if not _is_blank(alias_name) and _may_emit_dictionary_term(
-        alias_name,
-        alias_type=alias_type,
-        is_related_synonym_alias=True,
-    ):
+    if not _is_blank(alias_name) and _may_emit_dictionary_term(alias_name):
         terms.append(
             EligibleSearchTerm(
                 literal=alias_name,
@@ -433,11 +428,7 @@ def _map_materials_chebi(
         )
 
     alias_name = values.get("alias_name", "")
-    if not _is_blank(alias_name) and _may_emit_dictionary_term(
-        alias_name,
-        alias_type=alias_type,
-        is_related_synonym_alias=True,
-    ):
+    if not _is_blank(alias_name) and _may_emit_dictionary_term(alias_name):
         terms.append(
             EligibleSearchTerm(
                 literal=alias_name,
@@ -727,13 +718,16 @@ def _dictionary_literal_eligible(literal: str) -> bool:
 def _may_emit_dictionary_term(
     literal: str,
     *,
-    alias_type: str | None = None,
     match_policy: str | None = None,
-    is_related_synonym_alias: bool = False,
 ) -> bool:
+    """Return whether a dictionary literal may enter lexical search.
+
+    Short literals (under three code points) and explicitly ``context_required``
+    unit-operation terms remain non-searchable. Alias type does not exclude a
+    term from search; related-synonym aliases stay searchable.
+    """
+
     if not _dictionary_literal_eligible(literal):
-        return False
-    if is_related_synonym_alias and alias_type == _RELATED_SYNONYM_ALIAS:
         return False
     if match_policy == _CONTEXT_REQUIRED_POLICY:
         return False

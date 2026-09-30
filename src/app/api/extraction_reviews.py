@@ -13,7 +13,7 @@ from typing import Annotated, Literal, cast
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.extraction_review.contracts import (
@@ -32,6 +32,7 @@ from app.extraction_review.workspace import (
     PatchPageEdit,
     RemovePageEdit,
     ReplacePageEdit,
+    RestorePageEdit,
     finding_page_number,
 )
 
@@ -119,8 +120,14 @@ class RemoveEditBody(ExtractionResponse):
     note: str | None = None
 
 
+class RestoreEditBody(ExtractionResponse):
+    op: Literal["restore"]
+    finding_id: str = Field(min_length=1)
+    page_number: int = Field(ge=1)
+
+
 EditBody = Annotated[
-    AddEditBody | PatchEditBody | ReplaceEditBody | RemoveEditBody,
+    AddEditBody | PatchEditBody | ReplaceEditBody | RemoveEditBody | RestoreEditBody,
     Field(discriminator="op"),
 ]
 
@@ -195,9 +202,23 @@ def approve_review(
     return _json(_opened(job, state, pages))
 
 
+@router.get("/api/v1/extraction-reviews/jobs/{local_job_id}/results.txt")
+def download_results_txt(local_job_id: str, review: Workspace) -> PlainTextResponse:
+    text = review.results_txt(local_job_id)
+    filename = f"extraction-results-{local_job_id}.txt"
+    return PlainTextResponse(
+        text,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 def _page_edit(
-    edit: AddEditBody | PatchEditBody | ReplaceEditBody | RemoveEditBody,
-) -> AddPageEdit | PatchPageEdit | ReplacePageEdit | RemovePageEdit:
+    edit: AddEditBody | PatchEditBody | ReplaceEditBody | RemoveEditBody | RestoreEditBody,
+) -> AddPageEdit | PatchPageEdit | ReplacePageEdit | RemovePageEdit | RestorePageEdit:
     if isinstance(edit, AddEditBody):
         return AddPageEdit(
             finding_id=edit.finding_id,
@@ -218,6 +239,8 @@ def _page_edit(
             component=edit.component,
             display_text=edit.display_text,
         )
+    if isinstance(edit, RestoreEditBody):
+        return RestorePageEdit(finding_id=edit.finding_id, page_number=edit.page_number)
     return RemovePageEdit(finding_id=edit.finding_id, page_number=edit.page_number, note=edit.note)
 
 

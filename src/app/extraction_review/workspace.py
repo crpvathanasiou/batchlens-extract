@@ -39,6 +39,7 @@ from app.extraction_review.contracts import (
     PatchFindingTextEdit,
     RemoveFindingEdit,
     ReplaceFindingEdit,
+    RestoreFindingEdit,
     ReviewFindingRecord,
     SaveReviewEditsCommand,
     TransitionOutcomeKind,
@@ -125,7 +126,11 @@ class RemovePageEdit(PageEditModel):
     note: str | None = None
 
 
-PageEdit = AddPageEdit | PatchPageEdit | ReplacePageEdit | RemovePageEdit
+class RestorePageEdit(PageEditModel):
+    op: Literal["restore"] = "restore"
+
+
+PageEdit = AddPageEdit | PatchPageEdit | ReplacePageEdit | RemovePageEdit | RestorePageEdit
 
 
 class ExtractionReviewWorkspace:
@@ -202,7 +207,7 @@ class ExtractionReviewWorkspace:
     ) -> ExtractionReviewState:
         job = self._require_reviewable(local_job_id)
         try:
-            state = self._store.load(job.job_id)
+            state = self._store.load(job.local_job_id)
         except ExtractionReviewNotFoundError as exc:
             raise ExtractionWorkspaceError(
                 "REVIEW_NOT_FOUND",
@@ -226,7 +231,7 @@ class ExtractionReviewWorkspace:
                 422,
             ) from exc
         outcome = self._store.save_edits(
-            job.job_id,
+            job.local_job_id,
             command,
             new_revision_id=self._revision_ids(),
         )
@@ -242,7 +247,7 @@ class ExtractionReviewWorkspace:
     ) -> ExtractionReviewState:
         job = self._require_reviewable(local_job_id)
         try:
-            state = self._store.load(job.job_id)
+            state = self._store.load(job.local_job_id)
         except ExtractionReviewNotFoundError as exc:
             raise ExtractionWorkspaceError(
                 "REVIEW_NOT_FOUND",
@@ -263,7 +268,7 @@ class ExtractionReviewWorkspace:
                 "approval request is invalid",
                 422,
             ) from exc
-        outcome = self._store.approve(job.job_id, command)
+        outcome = self._store.approve(job.local_job_id, command)
         return self._require_transition_state(
             outcome.outcome,
             outcome.state,
@@ -271,9 +276,15 @@ class ExtractionReviewWorkspace:
             "approve",
         )
 
+    def results_txt(self, local_job_id: str) -> str:
+        """Format the current saved extraction-review findings as plain text."""
+
+        _job, state, _pages = self.open_job(local_job_id)
+        return format_extraction_results_txt(state)
+
     def _load_or_initialize(self, job: LocalLexicalJob) -> ExtractionReviewState:
         try:
-            state = self._store.load(job.job_id)
+            state = self._store.load(job.local_job_id)
         except ExtractionReviewNotFoundError:
             state = None
         if state is not None:
@@ -322,9 +333,9 @@ class ExtractionReviewWorkspace:
                 422,
             ) from exc
         try:
-            created = self._store.create(command)
+            created = self._store.create(job.local_job_id, command)
         except ExtractionReviewAlreadyExistsError:
-            created = self._store.load(job.job_id)
+            created = self._store.load(job.local_job_id)
             self._require_same_run(created, job)
             return created
         except ValueError as exc:
@@ -518,7 +529,13 @@ class ExtractionReviewWorkspace:
         edit: PageEdit,
         state: ExtractionReviewState,
         pages: tuple[int, ...],
-    ) -> AddFindingEdit | PatchFindingTextEdit | ReplaceFindingEdit | RemoveFindingEdit:
+    ) -> (
+        AddFindingEdit
+        | PatchFindingTextEdit
+        | ReplaceFindingEdit
+        | RemoveFindingEdit
+        | RestoreFindingEdit
+    ):
         if edit.page_number not in pages:
             raise ExtractionWorkspaceError("PAGE_NOT_FOUND", "reviewed page was not found", 404)
         if isinstance(edit, AddPageEdit):
@@ -535,7 +552,7 @@ class ExtractionReviewWorkspace:
         if finding is None or finding.current is None:
             raise ExtractionWorkspaceError(
                 "INVALID_REVIEW",
-                "finding is not an active finding on the selected page",
+                "finding is not available on the selected page",
                 422,
             )
         assigned = _assigned_page(finding.current.page_assignment)
@@ -543,6 +560,20 @@ class ExtractionReviewWorkspace:
             raise ExtractionWorkspaceError(
                 "INVALID_REVIEW",
                 "findings can be edited only on their assigned page",
+                422,
+            )
+        if isinstance(edit, RestorePageEdit):
+            if not finding.removed:
+                raise ExtractionWorkspaceError(
+                    "INVALID_REVIEW",
+                    "finding is not a removed finding on the selected page",
+                    422,
+                )
+            return RestoreFindingEdit(finding_id=edit.finding_id)
+        if finding.removed:
+            raise ExtractionWorkspaceError(
+                "INVALID_REVIEW",
+                "finding is not an active finding on the selected page",
                 422,
             )
         if isinstance(edit, RemovePageEdit):
@@ -605,6 +636,68 @@ class ExtractionReviewWorkspace:
 
 def category_class(component: Component) -> str:
     return _CATEGORY_CLASS.get(component, "bl-hit--other")
+
+
+_TXT_CATEGORY_HEADINGS: dict[Component, str] = {
+    Component.MATERIALS: "Materials",
+    Component.UNIT_OPERATIONS: "Unit Operations",
+    Component.PROCESS_STEPS: "Process Steps",
+    Component.EQUIPMENT: "Equipment",
+    Component.PARAMETER_NAMES: "Parameters",
+    Component.QUANTITY_EXPRESSIONS: "Quantities",
+    Component.PARAMETER_VALUE_EXPRESSIONS: "Values",
+    Component.UNITS: "Units",
+}
+
+_TXT_CATEGORY_ORDER: tuple[Component, ...] = (
+    Component.MATERIALS,
+    Component.UNIT_OPERATIONS,
+    Component.PROCESS_STEPS,
+    Component.EQUIPMENT,
+    Component.PARAMETER_NAMES,
+    Component.QUANTITY_EXPRESSIONS,
+    Component.PARAMETER_VALUE_EXPRESSIONS,
+    Component.UNITS,
+)
+
+
+def format_extraction_results_txt(state: ExtractionReviewState) -> str:
+    """Group active saved findings by category for on-demand TXT download."""
+
+    saved_order = {finding.finding_id: index for index, finding in enumerate(state.findings)}
+    active = [
+        finding for finding in state.findings if finding.is_active and finding.current is not None
+    ]
+    by_component: dict[Component, list[ReviewFindingRecord]] = {}
+    for finding in active:
+        assert finding.current is not None
+        by_component.setdefault(finding.current.component, []).append(finding)
+
+    sections: list[str] = []
+    for component in _TXT_CATEGORY_ORDER:
+        group = by_component.get(component)
+        if not group:
+            continue
+
+        def _txt_sort_key(item: ReviewFindingRecord) -> tuple[int, int, int]:
+            page = finding_page_number(item)
+            index = saved_order[item.finding_id]
+            if page is None:
+                return (1, 0, index)
+            return (0, page, index)
+
+        group.sort(key=_txt_sort_key)
+        lines = [_TXT_CATEGORY_HEADINGS[component]]
+        for finding in group:
+            assert finding.current is not None
+            page = finding_page_number(finding)
+            page_label = f"page {page}" if page is not None else "page unassigned"
+            line = f"- {finding.current.display_text} ({page_label})"
+            if finding.current.evidence_status is FindingEvidenceStatus.NO_DOCUMENT_EVIDENCE:
+                line += " [no document evidence]"
+            lines.append(line)
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections) + ("\n" if sections else "")
 
 
 def finding_page_number(finding: ReviewFindingRecord) -> int | None:

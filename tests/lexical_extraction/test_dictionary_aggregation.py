@@ -420,7 +420,7 @@ def test_chebi_related_versus_exact_and_fda_collision_split_across_shards() -> N
     exact = oxidane.candidates[0]
     assert isinstance(exact, ChebiMaterialCandidate)
     assert exact.alias_type == "hasExactSynonym"
-    assert exact.ambiguity is AmbiguityQualification.NONE
+    assert exact.ambiguity is AmbiguityQualification.UNRESOLVED
     assert exact.supporting_row_ids == ()
     assert isinstance(water.candidates[0], FdaEmaMaterialCandidate)
     assert water.candidates[0].unii == "059QF0KO0R"
@@ -1064,7 +1064,11 @@ def test_many_distinct_blocks_stay_within_per_block_bound() -> None:
     }
     snapshot = FakeSnapshot(rows=rows)
     block_count = 120
-    blocks = [_block("water", node_id=f"n-{index}", order=index) for index in range(block_count)]
+    # One block per page keeps the page buffer at one while stressing per-block capacity.
+    blocks = [
+        _block("water", node_id=f"n-{index}", page_number=index + 1, order=0)
+        for index in range(block_count)
+    ]
     discoveries = [
         _discovery(
             dictionary_term="water",
@@ -1081,7 +1085,7 @@ def test_many_distinct_blocks_stay_within_per_block_bound() -> None:
         )
         for index in range(block_count)
     ]
-    # Per-block limit is 2; 120 distinct blocks with one hit each must succeed.
+    # Per-block limit is 2; 120 distinct pages with one hit each must succeed.
     records = _aggregate(
         discoveries,
         blocks,
@@ -1090,6 +1094,7 @@ def test_many_distinct_blocks_stay_within_per_block_bound() -> None:
     )
     assert len(records) == block_count
     assert sum(len(_dictionary_occurrences(record)) for record in records) == block_count
+    assert all(len(_dictionary_occurrences(record)) == 1 for record in records)
 
 
 def test_unmatched_spooled_hits_and_empty_replay_fail_without_coverage() -> None:
@@ -1628,7 +1633,7 @@ def test_same_span_two_components_remain_independent() -> None:
         assert occ.block_node_id == blocks[0].node_id
 
 
-def test_excluded_dictionary_terms_do_not_reach_published_occurrences() -> None:
+def test_related_synonym_alias_is_searchable_and_short_context_still_excluded() -> None:
     rows = {
         ("materials_chebi", "c-rel"): _row(
             "materials_chebi",
@@ -1667,7 +1672,9 @@ def test_excluded_dictionary_terms_do_not_reach_published_occurrences() -> None:
     related_terms = map_source_row(
         rows[("materials_chebi", "c-rel")], components=(Component.MATERIALS,)
     )
-    assert all(term.source_field != "alias_name" for term in related_terms)
+    related_alias = next(term for term in related_terms if term.source_field == "alias_name")
+    assert related_alias.literal == "related spelling"
+    assert related_alias.alias_type == "hasRelatedSynonym"
     assert (
         map_source_row(rows[("unit_operations", "uo-ctx")], components=(Component.UNIT_OPERATIONS,))
         == ()
@@ -1732,18 +1739,372 @@ def test_excluded_dictionary_terms_do_not_reach_published_occurrences() -> None:
     ]
     records = _aggregate(discoveries, blocks, snapshot)
     occs = _dictionary_occurrences(records[0])
+    assert len(occs) == 2
+    by_text = {occ.location.matched_text: occ for occ in occs}
+    assert set(by_text) == {"related spelling", "lactose"}
+    related_occ = by_text["related spelling"]
+    assert related_occ.applies_to == (Component.MATERIALS,)
+    assert len(related_occ.candidates) == 1
+    assert related_occ.candidates[0].row_id == "c-rel"
+    assert related_occ.candidates[0].supporting_row_ids == ()
+    assert related_occ.candidates[0].ambiguity is AmbiguityQualification.CONTEXT_REQUIRED
+    assert isinstance(related_occ.candidates[0], ChebiMaterialCandidate)
+    assert related_occ.candidates[0].alias_type == "hasRelatedSynonym"
+    lactose = by_text["lactose"]
+    assert lactose.candidates[0].row_id == "m-ok"
+    assert lactose.candidates[0].supporting_row_ids == ()
+    assert lactose.candidates[0].ambiguity is AmbiguityQualification.NONE
+    assert isinstance(lactose.candidates[0].evidence, ExactEvidence)
+
+
+def test_canonical_name_wins_over_alias_on_same_span() -> None:
+    rows = {
+        ("materials_fda_ema", "m-name"): _row(
+            "materials_fda_ema",
+            "m-name",
+            material_name="water",
+            lexical_term_id="lt-name",
+        ),
+        ("materials_fda_ema", "m-alias"): _row(
+            "materials_fda_ema",
+            "m-alias",
+            material_name="dihydrogen oxide",
+            alias_name="water",
+            alias_type="hasExactSynonym",
+            lexical_term_id="lt-alias",
+        ),
+        ("materials_fda_ema", "m-alias-2"): _row(
+            "materials_fda_ema",
+            "m-alias-2",
+            material_name="oxidane label",
+            alias_name="water",
+            alias_type="hasRelatedSynonym",
+            lexical_term_id="lt-alias-2",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [_block("water")]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_fda_ema",
+            source_field="alias_name",
+            row_id="m-alias",
+            lexical_term_id="lt-alias",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_fda_ema",
+            source_field="alias_name",
+            row_id="m-alias-2",
+            lexical_term_id="lt-alias-2",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-name",
+            lexical_term_id="lt-name",
+        ),
+    ]
+    records = _aggregate(discoveries, blocks, snapshot)
+    occs = _dictionary_occurrences(records[0])
     assert len(occs) == 1
-    occ = occs[0]
-    assert occ.location.matched_text == "lactose"
-    assert occ.applies_to == (Component.MATERIALS,)
-    assert len(occ.candidates) == 1
-    assert occ.candidates[0].row_id == "m-ok"
-    assert occ.candidates[0].supporting_row_ids == ()
-    assert occ.candidates[0].ambiguity is AmbiguityQualification.NONE
-    assert occ.block_node_id == blocks[0].node_id
-    assert occ.location.start_char == 28
-    assert occ.location.end_char == 35
-    assert isinstance(occ.candidates[0].evidence, ExactEvidence)
+    candidate = occs[0].candidates[0]
+    assert len(occs[0].candidates) == 1
+    assert candidate.supporting_row_ids == ()
+    assert isinstance(candidate, FdaEmaMaterialCandidate)
+    assert candidate.source_field == "material_name"
+    assert candidate.row_id == "m-name"
+
+
+def test_alias_only_span_emits_one_deterministic_candidate() -> None:
+    rows = {
+        ("materials_fda_ema", "m-b"): _row(
+            "materials_fda_ema",
+            "m-b",
+            material_name="display b",
+            alias_name="water",
+            alias_type="hasExactSynonym",
+            lexical_term_id="lt-b",
+        ),
+        ("materials_fda_ema", "m-a"): _row(
+            "materials_fda_ema",
+            "m-a",
+            material_name="display a",
+            alias_name="water",
+            alias_type="hasRelatedSynonym",
+            lexical_term_id="lt-a",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [_block("water")]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_fda_ema",
+            source_field="alias_name",
+            row_id="m-b",
+            lexical_term_id="lt-b",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_fda_ema",
+            source_field="alias_name",
+            row_id="m-a",
+            lexical_term_id="lt-a",
+        ),
+    ]
+    forward = _aggregate(discoveries, blocks, snapshot)
+    reversed_hits = _aggregate(list(reversed(discoveries)), blocks, snapshot)
+    forward_occ = _dictionary_occurrences(forward[0])[0]
+    reversed_occ = _dictionary_occurrences(reversed_hits[0])[0]
+    assert len(forward_occ.candidates) == 1
+    assert len(reversed_occ.candidates) == 1
+    assert forward_occ.candidates[0].supporting_row_ids == ()
+    assert reversed_occ.candidates[0].supporting_row_ids == ()
+    assert forward_occ.candidates[0].row_id == reversed_occ.candidates[0].row_id
+    assert forward_occ.occurrence_id == reversed_occ.occurrence_id
+    assert isinstance(forward_occ.candidates[0], FdaEmaMaterialCandidate)
+    assert forward_occ.candidates[0].source_field == "alias_name"
+
+
+def test_page_dedup_keeps_one_occurrence_per_component_text() -> None:
+    rows = {
+        ("materials_fda_ema", "m-alias"): _row(
+            "materials_fda_ema",
+            "m-alias",
+            material_name="dihydrogen oxide",
+            alias_name="water",
+            alias_type="hasExactSynonym",
+            lexical_term_id="lt-alias",
+        ),
+        ("materials_fda_ema", "m-name"): _row(
+            "materials_fda_ema",
+            "m-name",
+            material_name="water",
+            lexical_term_id="lt-name",
+        ),
+        ("materials_fda_ema", "m-other"): _row(
+            "materials_fda_ema",
+            "m-other",
+            material_name="lactose",
+            lexical_term_id="lt-other",
+        ),
+        ("equipment", "e-1"): _row(
+            "equipment",
+            "e-1",
+            **{"Equipment type (EN)": "water", "equipment_type_id": "EQ-1"},
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [
+        _block("water", node_id="b1", page_number=1, order=0),
+        _block("water again", node_id="b2", page_number=1, order=1),
+        _block("lactose", node_id="b4", page_number=1, order=2),
+        _block("water", node_id="b3", page_number=2, order=0),
+    ]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_alias",
+            source_table="materials_fda_ema",
+            source_field="alias_name",
+            row_id="m-alias",
+            block_node_id="b1",
+            lexical_term_id="lt-alias",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.EQUIPMENT,
+            term_role="equipment_type",
+            source_table="equipment",
+            source_field="Equipment type (EN)",
+            row_id="e-1",
+            block_node_id="b1",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-name",
+            block_node_id="b2",
+            lexical_term_id="lt-name",
+        ),
+        _discovery(
+            dictionary_term="lactose",
+            matched_text="lactose",
+            start=0,
+            end=7,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-other",
+            block_node_id="b4",
+            lexical_term_id="lt-other",
+        ),
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="m-name",
+            block_node_id="b3",
+            lexical_term_id="lt-name",
+        ),
+    ]
+    records = _aggregate(discoveries, blocks, snapshot)
+    by_node = {record.block.node_id: record for record in records}
+    assert _dictionary_occurrences(by_node["b1"])  # equipment kept; material alias suppressed
+    b1_occs = _dictionary_occurrences(by_node["b1"])
+    assert len(b1_occs) == 1
+    assert b1_occs[0].applies_to == (Component.EQUIPMENT,)
+    b2_occs = _dictionary_occurrences(by_node["b2"])
+    assert len(b2_occs) == 1
+    assert b2_occs[0].applies_to == (Component.MATERIALS,)
+    assert isinstance(b2_occs[0].candidates[0], FdaEmaMaterialCandidate)
+    assert b2_occs[0].candidates[0].source_field == "material_name"
+    assert b2_occs[0].candidates[0].supporting_row_ids == ()
+    b3_occs = _dictionary_occurrences(by_node["b3"])
+    assert len(b3_occs) == 1
+    assert b3_occs[0].location.matched_text == "water"
+    b4_occs = _dictionary_occurrences(by_node["b4"])
+    assert len(b4_occs) == 1
+    assert b4_occs[0].location.matched_text == "lactose"
+
+
+def test_page_buffer_exceeding_result_buffer_records_fails() -> None:
+    rows = {
+        ("materials_fda_ema", "f-1"): _row(
+            "materials_fda_ema",
+            "f-1",
+            material_name="water",
+            lexical_term_id="lt-1",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [
+        _block("water", node_id="n-0", page_number=1, order=0),
+        _block("water", node_id="n-1", page_number=1, order=1),
+        _block("water", node_id="n-2", page_number=1, order=2),
+    ]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="f-1",
+            lexical_term_id="lt-1",
+            block_node_id=f"n-{index}",
+        )
+        for index in range(3)
+    ]
+    with pytest.raises(DictionaryAggregationError) as overflow_exc:
+        _aggregate(
+            discoveries,
+            blocks,
+            snapshot,
+            limits=_limits(result_buffer_records=2),
+        )
+    assert overflow_exc.value.code == "RESOURCE_LIMIT_EXCEEDED"
+    assert overflow_exc.value.message == "per-page block count exceeds result_buffer_records"
+    structured = overflow_exc.value.to_structured_error()
+    assert structured.code == "RESOURCE_LIMIT_EXCEEDED"
+    assert structured.message == "per-page block count exceeds result_buffer_records"
+    assert structured.retryable is False
+
+
+def test_page_buffer_count_resets_across_pages() -> None:
+    rows = {
+        ("materials_fda_ema", "f-1"): _row(
+            "materials_fda_ema",
+            "f-1",
+            material_name="water",
+            lexical_term_id="lt-1",
+        ),
+    }
+    snapshot = FakeSnapshot(rows=rows)
+    blocks = [
+        _block("water", node_id="p1-a", page_number=1, order=0),
+        _block("water", node_id="p1-b", page_number=1, order=1),
+        _block("water", node_id="p2-a", page_number=2, order=0),
+        _block("water", node_id="p2-b", page_number=2, order=1),
+    ]
+    discoveries = [
+        _discovery(
+            dictionary_term="water",
+            matched_text="water",
+            start=0,
+            end=5,
+            component=Component.MATERIALS,
+            term_role="material_name",
+            source_table="materials_fda_ema",
+            source_field="material_name",
+            row_id="f-1",
+            lexical_term_id="lt-1",
+            block_node_id=node_id,
+        )
+        for node_id in ("p1-a", "p1-b", "p2-a", "p2-b")
+    ]
+    records = _aggregate(
+        discoveries,
+        blocks,
+        snapshot,
+        limits=_limits(result_buffer_records=2),
+    )
+    assert len(records) == 4
+    by_node = {record.block.node_id: record for record in records}
+    assert len(_dictionary_occurrences(by_node["p1-a"])) == 1
+    assert by_node["p1-b"].occurrences == ()
+    assert len(_dictionary_occurrences(by_node["p2-a"])) == 1
+    assert by_node["p2-b"].occurrences == ()
 
 
 def test_meaningful_exact_term_keeps_source_backed_span_evidence() -> None:

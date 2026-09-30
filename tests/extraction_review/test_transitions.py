@@ -24,6 +24,7 @@ from app.extraction_review.contracts import (
     RemovedByUserProvenance,
     RemoveFindingEdit,
     ReplaceFindingEdit,
+    RestoreFindingEdit,
     ReviewApprovalState,
     ReviewFindingRecord,
     SaveReviewEditsCommand,
@@ -438,13 +439,46 @@ def test_remove_marks_finding_removed_with_provenance_tombstone() -> None:
     tombstone = saved.state.findings[0]
     assert tombstone.removed is True
     assert tombstone.is_active is False
-    assert tombstone.current is None
+    assert tombstone.current is not None
+    assert tombstone.current.display_text == "water"
     assert tombstone.origin == original_origin
     assert tombstone.removed_by_user == RemovedByUserProvenance(
         actor="reviewer",
         at=LATER,
         note="not a material",
     )
+
+
+def test_restore_returns_removed_finding_to_active() -> None:
+    state = _init(findings=(lexical_finding("f1", "water"),))
+    removed = save_review_edits(
+        state,
+        SaveReviewEditsCommand(
+            expected_revision_id=REV_1,
+            actor="reviewer",
+            at=LATER,
+            edits=(RemoveFindingEdit(finding_id="f1"),),
+        ),
+        new_revision_id=REV_2,
+    )
+    assert removed.state is not None
+    restored = save_review_edits(
+        removed.state,
+        SaveReviewEditsCommand(
+            expected_revision_id=REV_2,
+            actor="reviewer",
+            at=LATER,
+            edits=(RestoreFindingEdit(finding_id="f1"),),
+        ),
+        new_revision_id="33333333-3333-4333-8333-333333333333",
+    )
+    assert restored.outcome is TransitionOutcomeKind.CHANGED
+    assert restored.state is not None
+    finding = restored.state.findings[0]
+    assert finding.removed is False
+    assert finding.removed_by_user is None
+    assert finding.current is not None
+    assert finding.current.display_text == "water"
 
 
 def test_effective_save_rejects_unchanged_replacement_revision_id() -> None:

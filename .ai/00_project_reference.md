@@ -81,34 +81,41 @@ Discussed ~85% effort reduction and ~90% extraction accuracy are **hypotheses**,
 - Optional async OpenAI wrapper with fake-based tests (unwired to product flows)
 - Optional document conversion (disabled by default): Textract, Textractor 1.10.0, durable DynamoDB/S3/SQS jobs, Cognito-owned upload/jobs shell, canonical `document.json` + unreviewed HTML
 - Optional document review (same feature flag): Vue/TipTap/PDF.js workspace, review API, immutable revisions, page/document approval, reviewed HTML/JSON exports
-- Stage 3 extraction-review **U1–U2 complete** (`src/app/extraction_review/`):
-  - **U1** — current-state contracts and pure transitions plus one local atomic
-    `current-review.json` per document
-    (`<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json`). Stage 2
-    remains an independent lexical engine. Stage 3 approves an extraction result
-    (never Stage 1 HTML) via one final action, **Approve extraction result**
-    (`not_approved` / `approved`). A review holds one complete current finding list,
-    immutable source/run/Stage 2 provenance, one `current_revision_id` (stale Save
-    detection only), and null-or-one current approval. Latest state only—no Stage 3
-    revision history, approval ledger, or automatic approval.
+- Stage 3 — Extraction Review Workspace **U1–U3 local slice complete**
+  (`src/app/extraction_review/`, local harness, Vue workspace):
+  - **Boundary.** Stage 2 remains the independent deterministic Lexical Extraction
+    Engine. Stage 3 opens completed local Stage 2 jobs; it does not duplicate or
+    redesign lexical extraction. Stage 1 source-document approval is separate and
+    unchanged. One final human action only: **Approve extraction result**. No page,
+    component, lexical, LLM, finding, or automatic approval.
+  - **U1** — current-state contracts/transitions and one local atomic
+    `current-review.json` per lexical execution run
+    (`<data-dir>/extraction-reviews/<sha256(local_job_id)>/current-review.json`).
+    A review holds one complete current finding list, immutable source/run binding,
+    one `current_revision_id` (stale Save detection), and null-or-one current
+    approval. Effective Save clears approval. Latest state only—no Stage 3 revision
+    history, approval ledger, version list, SQLite, or automatic merge/transfer.
+    Two runs of the same approved HTML have independent saved/approved states.
+    Old source-`job_id` keyed local files were not migrated.
   - **U2.1** — read-only Approved Documents Registry under a caller-supplied root:
     `<job_id>/<review_revision_id>/document.html` (optional sibling `review.json`
-    ignored). Deterministic paginated discovery returns layout metadata without
-    parsing HTML; selection validates one file through the Stage 2 reviewed-HTML
-    reader (streamed pages) and requires folder identity to match HTML root
-    provenance. No registry/index/database is created.
+    ignored). Paginated discovery returns layout metadata; selection validates one
+    file through the Stage 2 reviewed-HTML reader.
   - **U2.2** — local persisted, serialized Stage 2/L13 jobs under
     `<data-dir>/extraction-jobs/<local-job-id>.json` with raw runs in
-    `<data-dir>/extraction-raw-runs/<stage2-run-id>/`. One action per job (fixed
-    preset mapping; `fuzzy_enabled` defaults false); L02 YAML unchanged (in-memory
-    overrides only). Exactly one lexical execution at a time per `data_dir`; restart
-    marks abandoned `queued`/`running` jobs `interrupted`. Partial extraction with
-    completed publication is a completed job. No U2 job creates, modifies, or
-    approves `current-review.json`.
-  - Not yet: API, UI, review finding projection/editing, SQLite, graph/association
-    work, or automatic approval.
+    `<data-dir>/extraction-raw-runs/<stage2-run-id>/`. One active writer/worker per
+    data directory; restart marks abandoned jobs `interrupted`. A run is never
+    automatically approved. No U2 job creates, modifies, or approves
+    `current-review.json`.
+  - **U3 local workspace** — list/open completed runs; page HTML with category
+    highlights; By page edit / All findings navigate; Add/Edit/Remove/Restore/Save;
+    Download TXT; final approval; `Extraction run` selector; harness
+    `--run-extraction` + `initialLocalJobId`. Local vertical slice is
+    **manually verified**. Production mount/auth and the future workflow remain
+    outside this mini-project.
 - Lexical extraction engine L01–L13 in `src/app/lexical_extraction/` (independent of Stage 3 review UI)
-- Development/test-only local review harness under `tests/document_review/`
+- Development/test-only local review harness under `tests/document_review/` and
+  extraction-review harness under `tests/extraction_review/`
 
 `/ready` is foundation readiness only — not document-processing or AWS dependency proof.
 

@@ -252,19 +252,37 @@ class AggregatedBlockStream:
             blocks_emitted = 0
             occurrence_count = 0
             candidate_count = 0
+            page_buffer: list[BlockRecord] = []
+            current_page: int | None = None
             try:
                 for block in self._blocks.iter_blocks():
-                    record, occ_n, cand_n = _build_block_record(
+                    if current_page is not None and block.page_number != current_page:
+                        for record, occ_n, cand_n in _flush_page_dedup(page_buffer):
+                            blocks_emitted += 1
+                            occurrence_count += occ_n
+                            candidate_count += cand_n
+                            yield record
+                        page_buffer = []
+                    current_page = block.page_number
+                    if len(page_buffer) >= self._limits.result_buffer_records:
+                        raise DictionaryAggregationError(
+                            "RESOURCE_LIMIT_EXCEEDED",
+                            "per-page block count exceeds result_buffer_records",
+                        )
+                    record, _occ_n, _cand_n = _build_block_record(
                         connection,
                         block,
                         self._snapshot,
                         self._limits,
                         row_cache_size=self._row_cache_size,
                     )
+                    page_buffer.append(record)
+                for record, occ_n, cand_n in _flush_page_dedup(page_buffer):
                     blocks_emitted += 1
                     occurrence_count += occ_n
                     candidate_count += cand_n
                     yield record
+                page_buffer = []
             except DictionaryMatchError as exc:
                 raise DictionaryAggregationError(exc.code, exc.message) from exc
             except DictionaryAggregationError:
@@ -782,7 +800,12 @@ def _build_occurrences_for_span(
         entries = by_component.get(component)
         if not entries:
             continue
-        entries.sort(key=lambda item: _candidate_sort_key(item[0]))
+        entries.sort(
+            key=lambda item: (
+                0 if _is_canonical_name_term(item[1].term) else 1,
+                _candidate_sort_key(item[0]),
+            )
+        )
         unique_row_ids: set[str] = set()
         for _, group in entries:
             unique_row_ids.update(group.row_ids)
@@ -832,11 +855,85 @@ def _dictionary_term_is_matchable(term: EligibleSearchTerm) -> bool:
 
     if term.component not in _DICTIONARY_COMPONENTS:
         return False
-    if term.term_role == "material_alias" and term.alias_type == "hasRelatedSynonym":
-        return False
     if term.match_policy == "context_required":
         return False
     return len(term.literal) >= 3
+
+
+def _is_canonical_name_term(term: EligibleSearchTerm) -> bool:
+    """True when the term is a materials canonical name (not an alias/code)."""
+
+    return term.term_role == "material_name"
+
+
+def _is_canonical_name_occurrence(occurrence: DictionaryOccurrence) -> bool:
+    """True when the selected candidate is a materials canonical-name match."""
+
+    if not occurrence.candidates:
+        return False
+    source_field = getattr(occurrence.candidates[0], "source_field", None)
+    return source_field == "material_name"
+
+
+def _normalize_matched_text_key(matched_text: str) -> str:
+    """Casefold key for page-level lexical occurrence de-duplication."""
+
+    return matched_text.casefold()
+
+
+def _flush_page_dedup(
+    page_records: list[BlockRecord],
+) -> list[tuple[BlockRecord, int, int]]:
+    """Emit page-buffered records after one-occurrence-per-text de-duplication.
+
+    For each ``(component, normalized matched text)`` on the page, retain exactly
+    one dictionary occurrence. Canonical-name matches beat aliases; otherwise the
+    earliest document order wins. Non-dictionary occurrences are unchanged.
+    """
+
+    if not page_records:
+        return []
+
+    winners: dict[tuple[Component, str], tuple[int, str]] = {}
+    ranked: list[tuple[tuple[object, ...], int, str, Component, str]] = []
+    for block_index, record in enumerate(page_records):
+        for occurrence in record.occurrences:
+            if not isinstance(occurrence, DictionaryOccurrence):
+                continue
+            component = occurrence.applies_to[0]
+            text_key = _normalize_matched_text_key(occurrence.location.matched_text)
+            sort_key = (
+                0 if _is_canonical_name_occurrence(occurrence) else 1,
+                record.block.order,
+                record.block.node_id,
+                occurrence.location.start_char,
+                occurrence.location.end_char,
+                occurrence.occurrence_id,
+            )
+            ranked.append((sort_key, block_index, occurrence.occurrence_id, component, text_key))
+
+    ranked.sort(key=lambda item: item[0])
+    for _sort_key, block_index, occurrence_id, component, text_key in ranked:
+        group_key = (component, text_key)
+        if group_key not in winners:
+            winners[group_key] = (block_index, occurrence_id)
+
+    keep: set[tuple[int, str]] = set(winners.values())
+    flushed: list[tuple[BlockRecord, int, int]] = []
+    for block_index, record in enumerate(page_records):
+        kept_occurrences: list[DictionaryOccurrence] = []
+        for occurrence in record.occurrences:
+            if not isinstance(occurrence, DictionaryOccurrence):
+                continue
+            if (block_index, occurrence.occurrence_id) in keep:
+                kept_occurrences.append(occurrence)
+        if len(kept_occurrences) == len(record.occurrences):
+            out = record
+        else:
+            out = BlockRecord(block=record.block, occurrences=tuple(kept_occurrences))
+        occ_n = len(kept_occurrences)
+        flushed.append((out, occ_n, occ_n))
+    return flushed
 
 
 def _matching_term_from_discovery(
@@ -1045,8 +1142,6 @@ def _is_intentionally_excluded_discovery(hit: _SpooledHit, row: SourceRow) -> bo
     if len(hit.dictionary_term) < 3:
         return True
     values = dict(row.values)
-    if hit.source_field == "alias_name" and values.get("alias_type", "") == "hasRelatedSynonym":
-        return True
     if (
         hit.source_field == "Search term (EN)"
         and values.get("Match policy", "") == "context_required"

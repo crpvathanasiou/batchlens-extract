@@ -42,11 +42,16 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations
 | D2 — Nine-document documentation set | Align 00–04; create 05–08 design docs | MUST | DONE (docs implemented/checked; awaiting user review / Git commit) |
 | Conversion + HITL review slices | Textract/Textractor conversion, review workspace, local harness | MUST | DONE in working tree for local acceptance; not cloud-verified (see [03](03_common_handoff.md)) |
 | U1.1 — Stage 3 extraction-review contracts | Current-state contracts + pure transitions: complete finding list with per-finding provenance, one current revision id, null-or-one approval | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
-| U1.2 — Stage 3 local persisted review service | One atomic `current-review.json` per document under `extraction-reviews/<sha256(job_id)>/` | MUST | DONE / test-verified (see [03](03_common_handoff.md)); API/UI unauthorized |
+| U1.2 — Stage 3 local persisted review service | One atomic `current-review.json` per `local_job_id` under `extraction-reviews/<sha256(local_job_id)>/` | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
 | U2.1 — Approved Documents Registry and validation | Read-only discovery/selection of reviewed HTML under a caller-supplied approved-documents root; Stage 2 reader validation | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
-| U2.2 — Local persisted serialized lexical jobs | Local Stage 2/L13 background jobs with atomic job JSON, raw-run registration, one execution at a time per data dir | MUST | DONE / test-verified (see [03](03_common_handoff.md)); API/UI unauthorized |
+| U2.2 — Local persisted serialized lexical jobs | Local Stage 2/L13 background jobs with atomic job JSON, raw-run registration, one execution at a time per data dir | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
+| U3 — Stage 3 local extraction-review workspace | Local harness API + Vue workspace: open completed runs, page highlights, edit/save/TXT/approve; per-run isolation; `--run-extraction` + `initialLocalJobId` | MUST | DONE / test-verified / manually verified local slice (see [03](03_common_handoff.md)); production mount/auth out of scope |
+| Page classification / page-policy exclusion | Exclude or classify pages before lexical search | — | FUTURE / not implemented |
+| Duplicate-upload / execution-fingerprint / run reuse | Detect duplicate PDFs, fingerprint runs, cache/reuse completed extractions | — | FUTURE / out of Stage 3 mini-project scope |
+| Stage 3 production API mount / auth | Mount extraction-review in production FastAPI with real auth | — | FUTURE / out of this mini-project |
 | M-Design — Pipeline & contracts design | Remaining extraction-pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
 | LLM wrapper hardening / redesign | Harden/redesign for extraction integration | — | DEFERRED |
+| Graph / association / recipe assembly | Interactive graph, entity associations, pharmaceutical recipe assembly | — | FUTURE / not implemented |
 
 ```text
 MUST / SHOULD / COULD
@@ -178,12 +183,16 @@ M0 (DONE)
 → D five-file docs (DONE)
 → D2 nine-document set (DONE — awaiting review)
 → Conversion + HITL review slices (DONE in working tree; local acceptance complete; not cloud-verified)
+→ Stage 2 L01–L13 lexical engine (DONE / user-accepted)
+→ Stage 3 Extraction Review Workspace U1–U3 local slice (DONE / test-verified / manually verified)
 → Intended-use / regulatory-boundary and audit/provenance design (next; no audit-log implementation)
 → M-Design remaining extraction pipeline/contracts
-→ Extraction implementation slice (after design; not yet defined)
+→ Broader extraction productization (after design; not yet defined)
 ```
 
-Safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product / rules layer, audit-ledger implementation, wrapper hardening, enterprise integrations.
+Safe deferrals / out of Stage 3 mini-project: Neo4j, GraphRAG, catalogs/RAG, Audit product /
+rules layer, audit-ledger implementation, wrapper hardening, enterprise integrations,
+production Stage 3 mount/auth, page classification, duplicate-upload/fingerprint/reuse.
 
 ---
 
@@ -191,68 +200,16 @@ Safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product / rules layer, audi
 
 Operational detail: [03_common_handoff.md](03_common_handoff.md).
 
-**Current:** Conversion and HITL review slices are implemented in the working tree. Local harness visual/functional acceptance is complete for the behaviours listed in 03. AWS/production integration remains unverified.
+**Current:** Stage 3 — Extraction Review Workspace local U1–U3 slice is
+**implemented**, **test-verified**, and **manually verified**. Stage 2/L13 remains
+the independent Lexical Extraction Engine. Stage 1 document approval is unchanged.
+AWS/production integration remains unverified.
 
-**Next:** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Extraction M-Design remains later.
+**Next:** intended-use / regulatory-boundary and audit/provenance design before any
+audit-log implementation. Stage 3 production mount/auth, page classification,
+duplicate-upload/fingerprint/reuse, LLM, and graph/association work remain future
+or out of this mini-project. Extraction M-Design remains later.
 
-**L01 progress (2026-09-25; user-accepted):** lexical evidence, candidate, unit/value, and
-outcome contracts are implemented in `src/app/lexical_extraction/contracts.py`.
-
-**L02 progress (2026-09-28; user-accepted):** execution-configuration loading and fixed preset
-resolution are implemented in `src/app/lexical_extraction/configuration.py`.
-
-**L03 progress (2026-09-28; user-accepted):** reviewed HTML v1 reader corrected for
-bounded `iter_pages` streaming, final digest only on completed read, fail-closed silent source
-omissions, exact version `"1"`, and duplicate provenance attributes
-(`src/app/lexical_extraction/html_reader.py`).
-
-**L04 progress (2026-09-28; user-accepted):** read-only flat SQLite snapshot
-preflight, pinned `mode=ro` access, bounded single-table `rowid` paging, and source
-`row_id` lookup are implemented in `src/app/lexical_extraction/knowledge_snapshot.py`.
-
-**L05 progress (2026-09-28; user-accepted):** fixed V1 source-field mapping from
-L04 `SourceRow` values to eligible search-term records is implemented in
-`src/app/lexical_extraction/field_mapping.py`.
-
-**L06 progress (2026-09-28; user-accepted):** fixed V1 comparison
-normalization, comparison→original offset projection, and role-aware boundaries
-(including compound-unit and hyphen corrections) are implemented in
-`src/app/lexical_extraction/comparison.py`.
-
-**L07 progress (2026-09-28; user-accepted):** bounded Aho–Corasick
-exact/normalized-exact raw discoveries over L05 terms and replayable L03 blocks
-are implemented in `src/app/lexical_extraction/dictionary_matcher.py`.
-
-**L08 progress (2026-09-28; treated as accepted baseline for L09 per L09
-authorization):** bounded dictionary aggregation from L07 raw discoveries into
-L01 `BlockRecord` values is implemented in
-`src/app/lexical_extraction/dictionary_aggregation.py`, with additive optional
-`supporting_row_ids` on the shared L01 candidate base.
-
-**L09 progress (2026-09-28; user-accepted as baseline for L10):** early
-full-Materials feasibility measurement helper and recorded dual-shard runs over
-real reviewed HTML v1 + production flat snapshot. Helper:
-`tests/lexical_extraction/acceptance.py`. Integrity-reporting correction is
-test-verified.
-
-**L10 progress (2026-09-28; user-accepted as baseline for L11):** independent
-parameter names, units, and value expressions in `unit_value_rules.py`,
-`unit_aggregation.py`, `value_expressions.py`, and `parameter_unit_value.py`,
-with additive optional `supporting_row_ids` on L01 `EquipmentUnitRecord`.
-
-**L11 progress (2026-09-28; user-accepted as baseline for L12):** optional
-restricted fuzzy dictionary matching (`fuzzy_enabled` default false) via
-`fuzzy_matching.py` and minimal L07/L08/L10 bridges, including later fuzzy-evidence
-and edge-whitespace corrections.
-
-**L12 progress (2026-09-28; user-accepted as baseline for L13):** callable runner
-and compact monitoring in `runner.py` and `monitoring.py`, including the later
-bounded-count / sink-lifecycle correction. Streams evidence through a caller-owned
-sink.
-
-**L13 progress (2026-09-28; implemented / test-verified; awaiting user
-acceptance):** filesystem publication and thin CLI in `publication.py` and
-`__main__.py`. Atomic per-component artifacts under a new run directory; final
-manifest written last; partial extraction may publish completed publication.
-Does not build the review UI, finding approval, or LLM/vector retrieval.
-Do not start those from this progress note.
+**L01–L13 progress (user-accepted lexical engine):** contracts through filesystem
+publication/CLI under `src/app/lexical_extraction/`. Stage 3 consumes completed
+published local runs; it does not redesign L01–L13.

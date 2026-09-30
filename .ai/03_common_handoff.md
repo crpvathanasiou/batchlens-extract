@@ -1,84 +1,99 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-29 Stage 3 U1–U2 complete
+## 1. Current state — 2026-09-30 Stage 3 U1–U3 local workspace complete
 
-**Implemented** and **test-verified** Stage 3 U1–U2 under `src/app/extraction_review/`.
+**Mini-project:** Stage 3 — Extraction Review Workspace.
 
-### U1 — current extraction-review state
+**Status:** **implemented**, **test-verified**, and **manually verified** for the
+local U1–U3 vertical slice under `src/app/extraction_review/`,
+`src/app/api/extraction_reviews.py`, the Vue extraction-review workspace, and
+`tests/extraction_review/local_harness.py`.
 
-- **U1.1** — current-state contracts and pure transitions (`contracts.py`, `transitions.py`).
-- **U1.2** — one local atomic JSON file for the current extraction-review state (`store.py`).
-- Stage 2 remains an independent lexical extraction engine.
-- Stage 3 approves an extraction result, never the Stage 1 source HTML.
-- One final action: **Approve extraction result** (`not_approved` / `approved` only).
-- A review stores one complete current finding list, immutable source/run/Stage 2 provenance,
-  one `current_revision_id` (stale Save conflict detection only), and null-or-one current approval.
-- Save edits the complete list, assigns a new current revision token, and clears approval.
-- Approve applies only to the current saved state and changes no findings.
-- Latest state only: no Stage 3 revision history, version list, approval ledger, delta chain,
-  parent link, retry ledger, or historical result retrieval.
+### Boundaries
 
-```text
-<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json
-```
+- Stage 2 remains the independent deterministic Lexical Extraction Engine
+  (`src/app/lexical_extraction/`). Stage 3 opens completed local Stage 2/L13 jobs;
+  it does not redesign lexical extraction.
+- Stage 1 source-document approval is separate and unchanged.
+- One final human action only: **Approve extraction result**. No page, component,
+  lexical, LLM, finding, or automatic approval.
+- Current-state-only review: one saved finding list, immutable source/run binding,
+  one `current_revision_id` (stale Save detection), optional current approval.
+  Effective Save clears approval; approval covers committed content only.
+- No review revision history, approval ledger, version list, SQLite review store,
+  or automatic merge/transfer of edits between runs.
+- Findings keep lexical origin/evidence and user add/change/remove provenance.
+  Removal is a restoreable tombstone. A user-added finding is assigned to the
+  current page by the By-page UI; it has `no_document_evidence` and no invented
+  document-evidence node, block, span, or highlight.
 
-### U2.1 — Approved Documents Registry
+### Per-run isolation
 
-Read-only discovery and selection of reviewed HTML under a caller-supplied root
-(`approved_documents.py`). Optional sibling `review.json` is ignored.
-
-```text
-<approved-documents-root>/
-  <job_id>/
-    <review_revision_id>/
-      document.html
-      review.json  # optional and ignored by U2
-```
-
-- Deterministic paginated discovery returns layout metadata only; HTML is not parsed while listing.
-- Selection validates one `document.html` through the existing Stage 2 reviewed-HTML reader,
-  streaming pages without materializing all pages.
-- Folder `job_id` and `review_revision_id` must match HTML root provenance.
-- No registry/index/database is created.
-
-### U2.2 — local Stage 2 / L13 jobs
-
-Local persisted, serialized background lexical jobs (`local_jobs.py`) invoke the existing
-Stage 2 / L13 engine for one selected approved document and one `ExtractionReviewAction`.
+A Stage 3 current review belongs to one `LocalLexicalJob`, keyed by `local_job_id`:
 
 ```text
-<data-dir>/
-  extraction-jobs/
-    <local-job-id>.json
-  extraction-raw-runs/
-    <stage2-run-id>/
-      ...existing L13 artifacts and final manifest...
+<data-dir>/extraction-reviews/<sha256(local_job_id)>/current-review.json
 ```
 
-- Submit: approved-document root, `job_id`, `review_revision_id`, L02 YAML path, one action,
-  and strict `fuzzy_enabled` (default `false`). Actions map to the fixed existing presets.
-- L02 YAML is unchanged; the worker applies in-memory overrides only (selected HTML, preset,
-  no extra components, fuzzy flag, raw-run output root).
-- Job JSON is the latest state only: document identity, action/fuzzy, timestamps, truthful
-  status/phase, validated HTML provenance, run/outcome/publication facts, existing raw-run
-  directory when present, final manifest ID/SHA-256 when published, and a safe terminal error
-  when needed.
-- Status: `queued`, `running`, `completed`, `failed`, `interrupted`. Progress is truthful phase
-  state only (no percentages).
-- Exactly one lexical job executes at a time per local `data_dir`; later jobs remain `queued`.
-- Restart marks abandoned `queued`/`running` jobs `interrupted`; no automatic resume or retry.
-- Partial extraction with completed publication is a completed job with partial outcomes.
-- No U2 job creates, modifies, or approves `current-review.json`.
+Two completed runs of the same approved HTML have independent saved/approved
+states. Binding still verifies the exact published run/manifest within that local
+job. Old source-`job_id` keyed local review files were not migrated. This is not a
+duplicate-upload, execution-fingerprint, cache/reuse, or run-history system.
 
-**Test-verified:** `poetry run pytest tests/extraction_review/ -q` → **82 passed**;
-`powershell -File scripts/quality.ps1` → Ruff checks passed, Pyright 0 errors, pytest **630 passed**.
+### U2 local execution
 
-**Remaining boundaries (not implemented):** API routes, HTTP schemas, frontend/UI, review
-finding projection/editing, browser behavior, SQLite, generic queue/repository infrastructure,
-job-history projection, graph/association work, LLM work, automatic approval, Stage 1
-document-review behavior changes, and Stage 2 implementation changes.
+- **U2.1** discovers eligible reviewed HTML under the approved-documents root.
+- **U2.2** persists local background lexical jobs and raw L13 runs; one active
+  writer/worker per data directory; reload/restart recovery with truthful terminal
+  status.
+- Harness `--run-extraction` validates the selected approved HTML, submits and waits
+  for a Stage 2 run, then opens the Stage 3 UI with `initialLocalJobId`. A run is
+  never automatically approved.
 
-**Next safe step:** user review and authorization before API/UI or extraction-review projection work.
+### Accepted Stage 2 lexical facts (unchanged engine)
+
+Search includes canonical names and searchable aliases; canonical-name matches take
+precedence over aliases; one deterministic candidate per exact component/block/span;
+one displayed occurrence per `(page, component, casefolded matched text)`; components
+remain independent; `hasRelatedSynonym` aliases are searchable; short literals under
+three code points and `context_required` UO terms stay excluded; per-page de-duplication
+buffering is bounded by `result_buffer_records`. Page classification / page-policy
+exclusion remain future work.
+
+### Accepted local UI / API / harness
+
+- Left: read-only reviewed HTML page with category-distinct lexical highlights.
+- Right: findings. By page is editable; All findings is read-only and navigates to
+  the finding’s page. Add is By-page only and assigns the current page.
+- Edit, Remove, Restore, Save, Download TXT, and final approval as implemented.
+- TXT exports active saved findings by category/document order; removed findings
+  excluded; no-evidence additions marked.
+- Category legend (UO / Material / Equipment / Other) hides/shows that category on
+  both sides; session-only; does not dirty Save; no API call. Finding selection
+  focuses/navigates evidence only.
+- Selector labelled **Extraction run** (not document); distinguishes runs with
+  action, status, finished time when available, and local-job suffix.
+- `--run-extraction` passes `initialLocalJobId` so first load and refresh open that
+  exact run.
+
+Local harness API (not production-mounted): list/open jobs, page HTML, save, approve,
+results TXT under `/api/v1/extraction-reviews/...`.
+
+### Manual acceptance (local slice)
+
+Completed for: manual add → Save → final approval; refresh persistence; TXT download;
+post-approval Save clears approval; same approved HTML with two lexical runs keeps
+independent reviews and approvals.
+
+### Explicitly out of this mini-project
+
+Production API mounting/authentication; page classification; duplicate-upload /
+fingerprint / reuse workflows; LLM; graph/associations; recipe assembly; automatic
+approval; Stage 1 or Stage 2 redesign.
+
+**Next safe step:** treat Stage 3 local U1–U3 as accepted baseline. Do not expand into
+production mount/auth, page classification, fingerprint/reuse, LLM, or graph work
+without a new authorized task.
 
 ---
 
@@ -109,10 +124,10 @@ real-input report remains historical evidence for older publisher code and does
 formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **548 passed**.
 
 **L12 status:** **user-accepted** baseline for L13.
-**L13 status:** streaming-reader corrected, **implemented** and **test-verified**;
-still **awaiting user acceptance**.
-**Next safe step:** user review of corrected L13. Do **not** start the review UI,
-human finding approval, or semantic/vector/LLM retrieval.
+**L13 status (historical note):** streaming-reader corrected, **implemented** and
+**test-verified** here; later **user-accepted** with the Stage 2 engine used by
+Stage 3 (see current §1).
+**Next safe step (historical):** user review of corrected L13.
 
 ---
 
@@ -151,8 +166,8 @@ reader fixes.
 formatted), Pyright 0 errors / 0 warnings / 0 informations, pytest **544 passed**.
 
 **L12 status:** **user-accepted** baseline for L13.
-**L13 status:** corrected, later streaming-reader corrected (see current §1);
-still **awaiting user acceptance**.
+**L13 status (historical note):** corrected, later streaming-reader corrected
+(prior §1ae); later **user-accepted** with Stage 3 (see current §1).
 **Next safe step (historical):** user review of corrected L13.
 
 ---
@@ -167,7 +182,8 @@ still **awaiting user acceptance**.
 entry, atomic per-component artifacts, and final-manifest-last sealing. Accepted
 L01–L12 matching/config/snapshot/runner behavior is unchanged. Review UI, finding
 approval, vector/LLM retrieval were **not** started. Later corrected for bounded
-serialization/lookup/write/path guard and streaming-reader fixes (see current §1).
+serialization/lookup/write/path guard and streaming-reader fixes (prior §1ad/§1ae);
+later **user-accepted** with Stage 3 (see current §1).
 
 - `src/app/lexical_extraction/publication.py`: `FilesystemEvidenceSink` stages
   page skeletons and blocks under `{output.directory}/{run_id}/.staging/` with

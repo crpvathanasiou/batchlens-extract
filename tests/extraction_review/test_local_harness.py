@@ -287,6 +287,7 @@ def test_successful_run_extraction_closes_service_then_creates_ui(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     created: dict[str, Path] = {}
+    captured_initial: dict[str, str | None] = {}
     served: list[FastAPI] = []
     closed: list[bool] = []
 
@@ -302,13 +303,20 @@ def test_successful_run_extraction_closes_service_then_creates_ui(
             clock=lambda: FIXED_NOW,
         )
 
-    def create_app_fn(*, data_dir: Path, approved_documents_root: Path) -> FastAPI:
+    def create_app_fn(
+        *,
+        data_dir: Path,
+        approved_documents_root: Path,
+        initial_local_job_id: str | None = None,
+    ) -> FastAPI:
         created["data_dir"] = data_dir
         created["approved"] = approved_documents_root
+        captured_initial["local_job_id"] = initial_local_job_id
         return create_app(
             data_dir=data_dir,
             approved_documents_root=approved_documents_root,
             static_dir=harness_env["static"],
+            initial_local_job_id=initial_local_job_id,
         )
 
     def serve(app: FastAPI, *, host: str, port: int) -> None:
@@ -373,6 +381,12 @@ def test_successful_run_extraction_closes_service_then_creates_ui(
     assert len(jobs) == 1
     assert jobs[0]["job_id"] == DOC_JOB
     assert jobs[0]["action"] == ExtractionReviewAction.EXTRACT_MATERIALS.value
+    submitted_id = jobs[0]["local_job_id"]
+    assert captured_initial["local_job_id"] == submitted_id
+    bootstrap = client.get("/documents/local-extraction-review/bootstrap.js")
+    assert bootstrap.status_code == 200
+    assert f"initialLocalJobId: {submitted_id!r}" in bootstrap.text
+    assert "demoLabel:" in bootstrap.text
 
 
 def test_failed_interrupted_and_timeout_do_not_start_ui(
@@ -544,6 +558,10 @@ def test_without_run_extraction_opens_existing_completed_jobs(
     page = client.get("/documents/local-extraction-review")
     assert page.status_code == 200
     assert 'id="extraction-review"' in page.text
+    bootstrap = client.get("/documents/local-extraction-review/bootstrap.js")
+    assert bootstrap.status_code == 200
+    assert "initialLocalJobId" not in bootstrap.text
+    assert "demoLabel:" in bootstrap.text
 
 
 def test_built_bundle_exports_review_and_extraction_mounts() -> None:

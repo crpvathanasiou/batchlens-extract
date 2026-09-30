@@ -1,7 +1,7 @@
 """Local JSON persistence for the Stage 3 current extraction-review state.
 
-Persists only ``current-review.json`` per document workspace. No revision history,
-approval ledgers, SQLite, or version listing.
+Persists only ``current-review.json`` per local lexical job workspace. No revision
+history, approval ledgers, SQLite, or version listing.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ CURRENT_REVIEW_FILENAME = "current-review.json"
 
 
 class ExtractionReviewNotFoundError(FileNotFoundError):
-    """No current-review.json exists for the requested document."""
+    """No current-review.json exists for the requested local lexical job."""
 
 
 class ExtractionReviewAlreadyExistsError(FileExistsError):
@@ -40,7 +40,7 @@ class ExtractionReviewAlreadyExistsError(FileExistsError):
 
 
 class ExtractionReviewStore:
-    """Single-local-process store for one current ``ExtractionReviewState`` per job."""
+    """Single-local-process store for one current ``ExtractionReviewState`` per local job."""
 
     def __init__(self, data_dir: Path) -> None:
         self._data_dir = data_dir.expanduser().resolve()
@@ -49,73 +49,74 @@ class ExtractionReviewStore:
     def data_dir(self) -> Path:
         return self._data_dir
 
-    def workspace_key(self, job_id: str) -> str:
-        return derive_workspace_key(job_id)
+    def workspace_key(self, local_job_id: str) -> str:
+        return derive_workspace_key(local_job_id)
 
-    def current_path(self, job_id: str) -> Path:
+    def current_path(self, local_job_id: str) -> Path:
         return (
             self._data_dir
             / REVIEWS_DIR_NAME
-            / derive_workspace_key(job_id)
+            / derive_workspace_key(local_job_id)
             / CURRENT_REVIEW_FILENAME
         )
 
-    def create(self, command: InitializeReviewCommand) -> ExtractionReviewState:
+    def create(
+        self,
+        local_job_id: str,
+        command: InitializeReviewCommand,
+    ) -> ExtractionReviewState:
         result = initialize_review_workspace(command)
-        path = self.current_path(result.state.job_id)
+        path = self.current_path(local_job_id)
         if path.is_file():
             raise ExtractionReviewAlreadyExistsError(
-                f"extraction review already exists for job_id={result.state.job_id!r}"
+                f"extraction review already exists for local_job_id={local_job_id!r}"
             )
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_atomic_json(path, result.state)
         return result.state
 
-    def load(self, job_id: str) -> ExtractionReviewState:
-        path = self.current_path(job_id)
+    def load(self, local_job_id: str) -> ExtractionReviewState:
+        path = self.current_path(local_job_id)
         if not path.is_file():
             raise ExtractionReviewNotFoundError(
-                f"extraction review not found for job_id={job_id!r}"
+                f"extraction review not found for local_job_id={local_job_id!r}"
             )
         payload = _read_json(path)
-        state = ExtractionReviewState.model_validate(payload)
-        if state.job_id != job_id:
-            raise ValueError("stored job_id does not match requested job_id")
-        return state
+        return ExtractionReviewState.model_validate(payload)
 
     def save_edits(
         self,
-        job_id: str,
+        local_job_id: str,
         command: SaveReviewEditsCommand,
         *,
         new_revision_id: str,
     ) -> SaveReviewEditsResult:
-        state = self.load(job_id)
+        state = self.load(local_job_id)
         outcome = save_review_edits(state, command, new_revision_id=new_revision_id)
         if outcome.outcome is TransitionOutcomeKind.CHANGED:
             assert outcome.state is not None
-            _write_atomic_json(self.current_path(job_id), outcome.state)
+            _write_atomic_json(self.current_path(local_job_id), outcome.state)
         return outcome
 
     def approve(
         self,
-        job_id: str,
+        local_job_id: str,
         command: ApproveExtractionResultCommand,
     ) -> ApproveExtractionResultResult:
-        state = self.load(job_id)
+        state = self.load(local_job_id)
         outcome = approve_extraction_result(state, command)
         if outcome.outcome is TransitionOutcomeKind.CHANGED:
             assert outcome.state is not None
-            _write_atomic_json(self.current_path(job_id), outcome.state)
+            _write_atomic_json(self.current_path(local_job_id), outcome.state)
         return outcome
 
 
-def derive_workspace_key(job_id: str) -> str:
-    """Deterministic filesystem-safe SHA-256 hex key from Stage 3 ``job_id`` only."""
+def derive_workspace_key(local_job_id: str) -> str:
+    """Deterministic filesystem-safe SHA-256 hex key from ``local_job_id`` only."""
 
-    if not job_id:
-        raise ValueError("job_id must be non-empty")
-    return hashlib.sha256(job_id.encode("utf-8")).hexdigest()
+    if not local_job_id:
+        raise ValueError("local_job_id must be non-empty")
+    return hashlib.sha256(local_job_id.encode("utf-8")).hexdigest()
 
 
 def _write_atomic_json(path: Path, state: ExtractionReviewState) -> None:

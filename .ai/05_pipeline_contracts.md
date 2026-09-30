@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 extraction-review **U1–U2 are implemented** and **test-verified** (current-state review persistence, approved-document selection, and local serialized Stage 2/L13 jobs). API/UI, review finding projection/editing, SQLite, graph work, and automatic approval remain **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 — Extraction Review Workspace **U1–U3 local slice is implemented**, **test-verified**, and **manually verified** (current-state review per `local_job_id`, approved-document selection, local Stage 2/L13 jobs, local UI/API/harness). Production mount/auth, page classification, duplicate-upload/fingerprint/reuse, SQLite review store, graph/association work, LLM, and automatic approval remain **out of this mini-project** or **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -209,102 +209,119 @@ inside an overall `partial`. Unavailable measurements are omitted, not stored as
 publication must not carry that claim. Partial extraction may be paired with completed
 publication. The claim does not prove that files were written.
 
-## 9a. Stage 3 — Extraction Review Workspace (U1–U2 complete)
+## 9a. Stage 3 — Extraction Review Workspace (U1–U3 local slice complete)
 
-Code: `src/app/extraction_review/contracts.py`, `transitions.py`, `store.py`,
-`approved_documents.py`, `local_jobs.py`. Review schema `batchlens.extraction-review.v1`;
-local job schema `batchlens.extraction-local-job.v1`.
+Code: `src/app/extraction_review/` (`contracts`, `transitions`, `store`,
+`approved_documents`, `local_jobs`, `workspace`, `page_html`), local API
+`src/app/api/extraction_reviews.py`, Vue `ExtractionReviewWorkspace`, harness
+`tests/extraction_review/local_harness.py`. Review schema
+`batchlens.extraction-review.v1`; local job schema `batchlens.extraction-local-job.v1`.
 
-**Boundary.** Stage 2/L13 remains the independent lexical extraction engine. Stage 1 document
-approval is unchanged. Stage 3 approves an **extraction result**, never the Stage 1 source HTML.
-One final human action: **Approve extraction result**, with states `not_approved` and `approved`
-only. Execution/publication outcomes stay independent of human approval; fuzzy extraction
-defaults off (`fuzzy_extraction_default_enabled()` / job `fuzzy_enabled=false`).
+**Boundary.** Stage 2/L13 remains the independent Lexical Extraction Engine. Stage 1
+document approval is unchanged. Stage 3 opens completed local Stage 2 jobs and
+approves an **extraction result**, never Stage 1 HTML. One final human action:
+**Approve extraction result** (`not_approved` / `approved` only). No page, component,
+lexical, LLM, finding, or automatic approval. Execution/publication outcomes stay
+independent of human approval; fuzzy defaults off.
+
+### Accepted Stage 2 lexical display rules (engine facts; not redesigned here)
+
+- Search includes canonical names and searchable aliases; canonical-name matches take
+  precedence over alias matches.
+- One deterministic candidate per exact component/block/span.
+- One displayed occurrence per `(page, component, casefolded matched text)`.
+- Different components remain independent.
+- `hasRelatedSynonym` aliases are searchable.
+- Short literals under three code points and `context_required` UO terms remain excluded.
+- Per-page de-duplication buffering is bounded by `result_buffer_records`.
+- Page classification and page-policy exclusion remain future work (not implemented).
 
 ### U1 — current review state
 
-**Current state.** A review stores: immutable source/run/Stage 2 provenance (`WorkspaceBinding`);
-one complete current finding list; one `current_revision_id` used only for stale Save conflict
-detection; and `approval` null or one current `ExtractionResultApproval` (actor, server timestamp,
-exact current saved revision id). Latest state only—no Stage 3 revision history, version list,
-approval ledger, delta chain, parent link, retry ledger, or historical result retrieval.
+**Current state.** Immutable source/run/Stage 2 provenance (`WorkspaceBinding`); one
+complete current finding list; one `current_revision_id` for stale Save detection;
+`approval` null or one current `ExtractionResultApproval`. Latest state only—no Stage 3
+revision history, version list, approval ledger, delta chain, parent link, retry ledger,
+SQLite review store, or historical result retrieval. No automatic merge/transfer of edits
+between runs.
 
-**Identity.** Optional Stage 1 `document_hash` (never fabricated from HTML SHA-256); mandatory
-reviewed-HTML byte SHA-256; completed Stage 3-reviewable runs require `published_manifest` with
-`manifest_id` and `manifest_sha256` (recorded provenance; U1 does not verify artifact bytes).
+**Findings.** Origins: `lexical` (immutable Stage 2 evidence + `original_matched_text`) vs
+`user_added`. User-facing values use `page_assignment` and `evidence_status`. A user-added
+finding is assigned to the current page by the By-page UI; it has `no_document_evidence` and
+no invented document-evidence node, block, span, or highlight. Edit provenance:
+`added_by_user`, `changed_by_user`, `removed_by_user`. Removal is a restoreable tombstone.
 
-**Findings and provenance.** Origins: `lexical` (immutable Stage 2 evidence +
-`original_matched_text`) vs `user_added`. User-facing values use `page_assignment` and
-`evidence_status`; `AssignedPage` + `no_document_evidence` is valid. Current-state edit provenance:
-`added_by_user`, `changed_by_user`, `removed_by_user` (Save actor + timestamp). Removal is a
-current-state tombstone, not a rejection workflow.
+**Transitions.** Initialize from a completed published run with ≥1 completed component.
+Save edits the complete list, stamps provenance, assigns a **new** revision token, and
+clears approval. Approve targets only the current saved state and changes no findings.
+Stale `expected_revision_id` → conflict; no-op Save retains approval.
 
-**Transitions.** Initialize from a completed published run with ≥1 completed component and the
-supplied finding list. Save edits the complete list, stamps provenance, assigns a **new**
-revision token, and clears approval. Approve targets only the current saved state and changes no
-findings. Stale `expected_revision_id` → conflict; no-op Save retains approval.
-
-**Local persistence (U1.2).** Exact layout:
+**Per-run persistence (U1.2).** A current review belongs to one `LocalLexicalJob`
+(`local_job_id`):
 
 ```text
-<data-dir>/extraction-reviews/<sha256(job_id)>/current-review.json
+<data-dir>/extraction-reviews/<sha256(local_job_id)>/current-review.json
 ```
 
-Stores the complete `ExtractionReviewState`, uses atomic temp + replace, and supports one local
-process only. Create refuses overwrite; Save/Approve write only on `changed` outcomes.
+Two runs of the same approved HTML have independent saved/approved states. Binding still
+verifies the exact published run/manifest within that local job. Old source-`job_id` keyed
+local files were not migrated. This is not a duplicate-upload, execution-fingerprint,
+cache/reuse, or run-history system. Atomic temp + replace; one local process; create
+refuses overwrite; Save/Approve write only on `changed` outcomes.
 
 ### U2.1 — approved-document selection
 
-Caller-supplied root only. Exact candidate layout:
+Caller-supplied root only:
 
 ```text
-<approved-documents-root>/
-  <job_id>/
-    <review_revision_id>/
-      document.html
-      review.json  # optional and ignored by U2
+<approved-documents-root>/<job_id>/<review_revision_id>/document.html
+# optional sibling review.json ignored by U2
 ```
 
-Deterministic paginated discovery returns layout metadata without parsing HTML. Selection
-validates one `document.html` through the existing Stage 2 reviewed-HTML reader (stream pages;
-do not materialize all pages). Folder `job_id` / `review_revision_id` must match HTML root
-provenance. U2.1 is read-only: no registry/index/database.
+Paginated discovery returns layout metadata without parsing HTML. Selection validates one
+file through the Stage 2 reviewed-HTML reader. Folder identity must match HTML provenance.
+Read-only: no registry/index/database.
 
 ### U2.2 — local Stage 2 / L13 jobs
 
-Exact persisted layout:
-
 ```text
-<data-dir>/
-  extraction-jobs/
-    <local-job-id>.json
-  extraction-raw-runs/
-    <stage2-run-id>/
-      ...existing L13 artifacts and final manifest...
+<data-dir>/extraction-jobs/<local-job-id>.json
+<data-dir>/extraction-raw-runs/<stage2-run-id>/...
 ```
 
-Submit one job with approved-document root, `job_id`, `review_revision_id`, L02 YAML path, one
-`ExtractionReviewAction`, and strict `fuzzy_enabled` (default `false`). Actions map to the fixed
-existing presets; one job performs one selected action and never approves results. The L02 YAML
-file is unchanged; the worker applies in-memory overrides only for selected HTML, preset, no
-extra components, fuzzy flag, and raw-run output root.
+One job = one action (fixed preset mapping; `fuzzy_enabled` default false). L02 YAML
+unchanged (in-memory overrides only). One active writer/worker per data directory; later
+jobs stay `queued`. Restart marks abandoned `queued`/`running` jobs `interrupted`. Partial
+extraction with completed publication is a completed job. No U2 job creates, modifies, or
+approves `current-review.json`. A run is never automatically approved. Harness
+`--run-extraction` validates HTML, submits/waits for Stage 2, then opens Stage 3 with
+`initialLocalJobId`.
 
-Job JSON is the latest state for that job only: document identity, action/fuzzy, timestamps,
-truthful status/phase, validated HTML provenance, run/outcome/publication facts, existing
-raw-run directory when present under `extraction-raw-runs/`, final manifest ID/SHA-256 when
-published, and a safe terminal error when needed. Status values:
-`queued` / `running` / `completed` / `failed` / `interrupted`. Progress is truthful phase state
-only (no percentages). Exactly one lexical job executes at a time per local `data_dir`; later
-jobs remain `queued`. Restart marks abandoned `queued`/`running` jobs `interrupted` (no automatic
-resume or retry). Partial extraction with completed publication is a completed job with partial
-outcomes. No U2 job creates, modifies, or approves `current-review.json`.
+### U3 — local workspace / API / harness
+
+- Left: read-only reviewed HTML with category-distinct highlights. Right: findings.
+- By page editable; All findings read-only and navigates to the finding’s page.
+- Add only in By page (current page assigned). Edit / Remove / Restore / Save /
+  Download TXT / final approval as implemented.
+- TXT: active saved findings by category and document order; removed excluded;
+  no-evidence additions marked.
+- Category legend (UO / Material / Equipment / Other): session-only hide/show on both
+  sides; does not dirty Save; no API. Selection focuses/navigates evidence only.
+- Selector labelled **Extraction run**; distinguishes runs via action, status, finished
+  time when available, and local-job suffix.
+- Local harness API (not production-mounted): list/open, page HTML, save, approve,
+  results TXT under `/api/v1/extraction-reviews/...`.
+
+**Manual acceptance (local):** add → Save → approve; refresh persistence; TXT download;
+post-approval Save clears approval; two runs of the same HTML keep independent
+reviews/approvals.
 
 ### Exclusions
 
-**Not implemented:** API routes, HTTP schemas, frontend/UI, review finding projection/editing,
-browser behavior, SQLite, generic queue/repository infrastructure, job-history projection,
-graph/association work, LLM work, automatic approval, Stage 1 document-review behavior changes,
-or Stage 2 implementation changes.
+**Out of this mini-project / not implemented:** production API mount/auth; page
+classification; duplicate-upload / fingerprint / reuse; SQLite review store; job-history
+projection; graph/association/LLM work; automatic approval; Stage 1 document-review
+behavior changes; Stage 2 redesign.
 
 ## 10. L02 execution configuration (implemented loader, not an extractor)
 
@@ -470,7 +487,10 @@ cues stay false. L05 does not calculate edit distance.
 
 **Limits.** Matching, normalization, fuzzy distance, value parsing, occurrence
 aggregation, runner/CLI, monitoring, and publication remain unimplemented at L05.
-Normalization helpers are L06.
+Dictionary search omits short literals (under three Unicode code points) and
+explicitly `context_required` unit-operation terms; `hasRelatedSynonym` aliases
+remain searchable. Normalization helpers are L06. Page classification /
+page-policy exclusion remain future work.
 
 ## 14. L06 fixed V1 comparison normalization, offsets, and boundaries
 
@@ -629,10 +649,15 @@ hits, invalid/ineligible fuzzy claims, spool I/O/cleanup errors, and
 per-block/group overflow of `result_buffer_records` raise bounded
 `DictionaryAggregationError`. Failures do not claim completed coverage.
 
-**Limits.** Runner/CLI, monitoring, review-UI projection, and publication remain
-unimplemented. Independent unit/`UnitOccurrence` aggregation and value-expression
-recognition are L10 (not this module). Full-Materials time/peak-memory feasibility
-requires a local reviewed HTML v1 export and is recorded separately when run.
+**Limits.** Same-span discoveries collapse to one candidate per component/block/span
+with canonical-name precedence over aliases where applicable. After aggregation,
+page buffering retains one displayed dictionary occurrence per
+`(page, component, casefolded matched text)`, bounded by `result_buffer_records`.
+Components stay independent. Runner/CLI/monitoring/publication are L12/L13.
+Stage 3 projects published occurrences into the current review UI. Independent
+unit/`UnitOccurrence` aggregation and value-expression recognition are L10.
+Full-Materials time/peak-memory feasibility requires a local reviewed HTML v1
+export and is recorded separately when run.
 
 ## 17. L10 independent parameter names, units, and value expressions
 

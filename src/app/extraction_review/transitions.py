@@ -20,6 +20,7 @@ from app.extraction_review.contracts import (
     PatchFindingTextEdit,
     RemovedByUserProvenance,
     RemoveFindingEdit,
+    RestoreFindingEdit,
     ReviewFindingRecord,
     SaveReviewEditsCommand,
     SaveReviewEditsResult,
@@ -172,6 +173,23 @@ def _apply_edits_to_findings(
         existing = by_id.get(edit.finding_id)
         if existing is None:
             raise ValueError("missing finding for required finding_id")
+
+        if isinstance(edit, RestoreFindingEdit):
+            if not existing.removed:
+                raise ValueError("cannot restore an active finding")
+            assert existing.current is not None
+            by_id[edit.finding_id] = ReviewFindingRecord(
+                finding_id=existing.finding_id,
+                origin=existing.origin,
+                current=existing.current,
+                removed=False,
+                added_by_user=existing.added_by_user,
+                changed_by_user=existing.changed_by_user,
+                removed_by_user=None,
+            )
+            changed = True
+            continue
+
         if existing.removed:
             raise ValueError("cannot edit a removed finding")
         assert existing.current is not None
@@ -180,7 +198,7 @@ def _apply_edits_to_findings(
             by_id[edit.finding_id] = ReviewFindingRecord(
                 finding_id=existing.finding_id,
                 origin=existing.origin,
-                current=None,
+                current=existing.current,
                 removed=True,
                 added_by_user=existing.added_by_user,
                 changed_by_user=existing.changed_by_user,

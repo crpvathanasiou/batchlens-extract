@@ -39,6 +39,8 @@ export interface OpenedExtractionReview {
 export interface ExtractionReviewOptions {
   apiBaseUrl?: string
   demoLabel?: string
+  /** When set and present in the jobs list, open this job first (harness --run-extraction). */
+  initialLocalJobId?: string
 }
 
 export type PageEdit =
@@ -64,6 +66,11 @@ export type PageEdit =
     }
   | {
       op: 'remove'
+      finding_id: string
+      page_number: number
+    }
+  | {
+      op: 'restore'
       finding_id: string
       page_number: number
     }
@@ -102,6 +109,9 @@ export function createExtractionReviewApi(apiBaseUrl = '') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expected_revision_id: expectedRevisionId }),
       })
+    },
+    resultsTxtUrl(localJobId: string): string {
+      return `${root}/jobs/${encodeURIComponent(localJobId)}/results.txt`
     },
   }
 }

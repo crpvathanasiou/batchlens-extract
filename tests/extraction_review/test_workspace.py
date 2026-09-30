@@ -22,11 +22,16 @@ from app.extraction_review.contracts import (
 )
 from app.extraction_review.local_jobs import LocalJobPhase, LocalJobStatus, LocalLexicalJob
 from app.extraction_review.store import (
+    CURRENT_REVIEW_FILENAME,
     REVIEWS_DIR_NAME,
     ExtractionReviewStore,
     derive_workspace_key,
 )
-from app.extraction_review.workspace import LOCAL_REVIEW_ACTOR, ExtractionReviewWorkspace
+from app.extraction_review.workspace import (
+    LOCAL_REVIEW_ACTOR,
+    ExtractionReviewWorkspace,
+    format_extraction_results_txt,
+)
 from app.lexical_extraction.contracts import (
     RECORD_SCHEMA_VERSION,
     BlockEvidence,
@@ -63,11 +68,14 @@ from app.lexical_extraction.publication import (
 from tests.extraction_review.local_harness import create_app
 
 LOCAL_JOB_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+SECOND_LOCAL_JOB_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 FAILED_JOB_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 JOB_ID = "job-1"
 REVISION_ID = "rev-doc-1"
 RUN_ID = "run-1"
+SECOND_RUN_ID = "run-2"
 NOW = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+LATER = datetime(2026, 9, 29, 13, 0, tzinfo=UTC)
 PAGE_1_A = "Add water to the tank."
 PAGE_1_B = "Charge 2.5 kg then OFF."
 PAGE_2 = "Begin mixing the batch."
@@ -137,11 +145,17 @@ def _page(number: int, order: int, *blocks: BlockRecord) -> dict[str, object]:
     }
 
 
-def _write_artifact(path: Path, component: Component, pages: list[dict[str, object]]) -> None:
+def _write_artifact(
+    path: Path,
+    component: Component,
+    pages: list[dict[str, object]],
+    *,
+    run_id: str = RUN_ID,
+) -> None:
     payload = {
         "schema_version": COMPONENT_ARTIFACT_SCHEMA_VERSION,
         "record_schema_version": RECORD_SCHEMA_VERSION,
-        "run_id": RUN_ID,
+        "run_id": run_id,
         "component": component.value,
         "page_count": len(pages),
         "pages": pages,
@@ -389,7 +403,7 @@ def test_list_open_initializes_one_current_review_and_reloads_it(tmp_path: Path)
 
     data = tmp_path / "data"
     store = ExtractionReviewStore(data)
-    state = store.load(JOB_ID)
+    state = store.load(LOCAL_JOB_ID)
     assert state.binding.document_source.document_hash is None
     water_origin = _origin(state, "water")
     assert water_origin.evidence.candidate_refs == ()
@@ -406,14 +420,14 @@ def test_list_open_initializes_one_current_review_and_reloads_it(tmp_path: Path)
     assert value_origin.evidence.occurrence_kind == "value"
     assert value_origin.evidence.candidate_refs == ()
 
-    stored = store.current_path(JOB_ID).read_bytes()
+    stored = store.current_path(LOCAL_JOB_ID).read_bytes()
     again = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}")
     assert again.status_code == 200
     assert again.json()["current_revision_id"] == body["current_revision_id"]
-    assert store.current_path(JOB_ID).read_bytes() == stored
+    assert store.current_path(LOCAL_JOB_ID).read_bytes() == stored
 
     first_ids = {item["finding_id"] for item in body["findings"]}
-    store.current_path(JOB_ID).unlink()
+    store.current_path(LOCAL_JOB_ID).unlink()
     rebuilt = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}")
     assert {item["finding_id"] for item in rebuilt.json()["findings"]} == first_ids
 
@@ -548,7 +562,7 @@ def test_open_succeeds_when_occurrence_exceeds_candidate_ref_limit(tmp_path: Pat
     assert water_finding["start_char"] is not None
     assert water_finding["end_char"] is not None
 
-    state = ExtractionReviewStore(data).load(JOB_ID)
+    state = ExtractionReviewStore(data).load(LOCAL_JOB_ID)
     origin = _origin(state, "water")
     assert origin.evidence.candidate_refs == ()
     assert origin.evidence.occurrence_id == "occ-water-many-refs"
@@ -694,7 +708,7 @@ def test_page_scoped_save_persists_and_later_save_clears_approval(tmp_path: Path
     assert approved.status_code == 200
     assert approved.json()["approval_state"] == "approved"
     assert approved.json()["current_revision_id"] == body["current_revision_id"]
-    stored = ExtractionReviewStore(tmp_path / "data").load(JOB_ID)
+    stored = ExtractionReviewStore(tmp_path / "data").load(LOCAL_JOB_ID)
     assert stored.approval is not None
     assert stored.approval.actor == LOCAL_REVIEW_ACTOR
     assert stored.approval.approved_revision_id == body["current_revision_id"]
@@ -715,7 +729,7 @@ def test_page_scoped_save_persists_and_later_save_clears_approval(tmp_path: Path
     )
     assert cleared.status_code == 200
     assert cleared.json()["approval_state"] == "not_approved"
-    assert ExtractionReviewStore(tmp_path / "data").load(JOB_ID).approval is None
+    assert ExtractionReviewStore(tmp_path / "data").load(LOCAL_JOB_ID).approval is None
 
 
 def test_no_page_or_finding_approval_and_no_revision_history(tmp_path: Path) -> None:
@@ -740,7 +754,7 @@ def test_no_page_or_finding_approval_and_no_revision_history(tmp_path: Path) -> 
     assert files == ["current-review.json"]
     assert not list((tmp_path / "data").rglob("*.sqlite"))
     assert not list((tmp_path / "data").rglob("history.jsonl"))
-    key = derive_workspace_key(JOB_ID)
+    key = derive_workspace_key(LOCAL_JOB_ID)
     assert (review_root / key / "current-review.json").is_file()
 
 
@@ -758,6 +772,413 @@ def test_harness_serves_the_extraction_review_screen(tmp_path: Path) -> None:
     bootstrap = client.get("/documents/local-extraction-review/bootstrap.js")
     assert bootstrap.status_code == 200
     assert "mountExtractionReviewWorkspace" in bootstrap.text
+    assert "initialLocalJobId" not in bootstrap.text
     listed = client.get("/api/v1/extraction-reviews/jobs")
     assert listed.status_code == 200
     assert listed.json()["jobs"][0]["local_job_id"] == LOCAL_JOB_ID
+
+
+def test_harness_bootstrap_includes_explicit_initial_local_job_id(tmp_path: Path) -> None:
+    data, approved = _build(tmp_path)
+    static = tmp_path / "static"
+    static.mkdir()
+    (static / "review.js").write_text("export {}", encoding="utf-8")
+    (static / "review.css").write_text(".bl-review{}", encoding="utf-8")
+    app = create_app(
+        data_dir=data,
+        approved_documents_root=approved,
+        static_dir=static,
+        initial_local_job_id=LOCAL_JOB_ID,
+    )
+    client = TestClient(app)
+    bootstrap = client.get("/documents/local-extraction-review/bootstrap.js")
+    assert bootstrap.status_code == 200
+    assert f"initialLocalJobId: {LOCAL_JOB_ID!r}" in bootstrap.text
+
+
+def test_remove_save_survives_new_store_instance_and_restore(tmp_path: Path) -> None:
+    data, approved = _build(tmp_path)
+
+    def _workspace_client() -> TestClient:
+        app = FastAPI()
+        mount_extraction_review(
+            app,
+            ExtractionReviewWorkspace(data, approved, actor=LOCAL_REVIEW_ACTOR),
+        )
+        return TestClient(app)
+
+    first = _workspace_client()
+    opened = first.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}").json()
+    tank = _finding(opened, "tank")
+    origin_before = next(
+        finding.origin
+        for finding in ExtractionReviewStore(data).load(LOCAL_JOB_ID).findings
+        if finding.finding_id == tank["finding_id"]
+    )
+
+    saved = first.put(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": opened["current_revision_id"],
+            "edits": [
+                {
+                    "op": "remove",
+                    "finding_id": tank["finding_id"],
+                    "page_number": 1,
+                }
+            ],
+        },
+    )
+    assert saved.status_code == 200
+    removed_payload = _finding(saved.json(), "tank")
+    assert removed_payload["removed"] is True
+    assert removed_payload["display_text"] == "tank"
+    assert removed_payload["removed_by_user"] is True
+    assert removed_payload["origin_kind"] == "lexical"
+    assert removed_payload["block_node_id"] == "n1"
+
+    after_remove = ExtractionReviewStore(data).load(LOCAL_JOB_ID)
+    tombstone = next(
+        finding for finding in after_remove.findings if finding.finding_id == tank["finding_id"]
+    )
+    assert tombstone.removed is True
+    assert tombstone.current is not None
+    assert tombstone.current.display_text == "tank"
+    assert tombstone.origin == origin_before
+    assert tombstone.removed_by_user is not None
+
+    second = _workspace_client()
+    reopened = second.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}")
+    assert reopened.status_code == 200
+    reopened_tank = _finding(reopened.json(), "tank")
+    assert reopened_tank["removed"] is True
+    assert reopened_tank["display_text"] == "tank"
+    assert reopened_tank["removed_by_user"] is True
+    assert reopened_tank["block_node_id"] == "n1"
+    assert reopened_tank["original_matched_text"] == "tank"
+
+    restored = second.put(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": reopened.json()["current_revision_id"],
+            "edits": [
+                {
+                    "op": "restore",
+                    "finding_id": tank["finding_id"],
+                    "page_number": 1,
+                }
+            ],
+        },
+    )
+    assert restored.status_code == 200
+    active = _finding(restored.json(), "tank")
+    assert active["removed"] is False
+    assert active["removed_by_user"] is False
+    assert active["display_text"] == "tank"
+    assert active["block_node_id"] == "n1"
+
+    third = _workspace_client()
+    final = third.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}").json()
+    final_tank = _finding(final, "tank")
+    assert final_tank["removed"] is False
+    assert final_tank["display_text"] == "tank"
+    assert final_tank["block_node_id"] == "n1"
+    reloaded_origin = next(
+        finding.origin
+        for finding in ExtractionReviewStore(data).load(LOCAL_JOB_ID).findings
+        if finding.finding_id == tank["finding_id"]
+    )
+    assert reloaded_origin == origin_before
+
+
+def test_results_txt_groups_active_saved_findings_and_excludes_removed(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    opened = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}").json()
+    revision = opened["current_revision_id"]
+    tank = _finding(opened, "tank")
+    saved = client.put(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": revision,
+            "edits": [
+                {
+                    "op": "remove",
+                    "finding_id": tank["finding_id"],
+                    "page_number": 1,
+                },
+                {
+                    "op": "add",
+                    "finding_id": "added-note",
+                    "page_number": 1,
+                    "component": "materials",
+                    "display_text": "operator note",
+                },
+            ],
+        },
+    )
+    assert saved.status_code == 200
+    removed = _finding(saved.json(), "tank")
+    assert removed["removed"] is True
+    assert removed["display_text"] == "tank"
+
+    response = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}/results.txt")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "attachment" in response.headers["content-disposition"]
+    text = response.text
+    assert "Materials" in text
+    assert "Unit Operations" in text
+    assert "water (page 1)" in text
+    assert "operator note (page 1) [no document evidence]" in text
+    assert "mixing (page 2)" in text
+    assert "Equipment" not in text
+    assert "tank" not in text
+
+    restored = client.put(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": saved.json()["current_revision_id"],
+            "edits": [
+                {
+                    "op": "restore",
+                    "finding_id": tank["finding_id"],
+                    "page_number": 1,
+                }
+            ],
+        },
+    )
+    assert restored.status_code == 200
+    active = _finding(restored.json(), "tank")
+    assert active["removed"] is False
+    assert active["display_text"] == "tank"
+    assert active["removed_by_user"] is False
+    reloaded = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}").json()
+    assert _finding(reloaded, "tank")["removed"] is False
+    txt_after = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}/results.txt").text
+    assert "tank (page 1)" in txt_after
+
+
+def test_results_txt_orders_by_page_then_saved_list_order_not_finding_id() -> None:
+    from app.extraction_review.contracts import (
+        DocumentSourceReference,
+        ExtractionReviewState,
+        WorkspaceBinding,
+    )
+    from tests.extraction_review.test_contracts import (
+        REV_1,
+        lexical_finding,
+        materials_extraction,
+        published_run,
+        reviewed_html,
+    )
+
+    # Hashed-looking IDs that would reverse saved order if sorted lexicographically.
+    findings = (
+        lexical_finding("zzz-later-hash", "alpha-first", page_number=2),
+        lexical_finding("aaa-earlier-hash", "beta-second", page_number=1),
+        lexical_finding("mmm-mid-hash", "gamma-third", page_number=1),
+        lexical_finding("000-unassigned", "delta-unassigned", page_number=None, with_span=False),
+    )
+    state = ExtractionReviewState(
+        binding=WorkspaceBinding(
+            document_source=DocumentSourceReference(
+                job_id="job-1",
+                document_hash="a" * 64,
+                reviewed_html=reviewed_html(),
+            ),
+            run=published_run(),
+            extraction=materials_extraction(match_count=4),
+        ),
+        current_revision_id=REV_1,
+        findings=findings,
+    )
+    text = format_extraction_results_txt(state)
+    materials = text.split("Materials\n", 1)[1].strip().splitlines()
+    assert materials == [
+        "- beta-second (page 1)",
+        "- gamma-third (page 1)",
+        "- alpha-first (page 2)",
+        "- delta-unassigned (page unassigned) [no document evidence]",
+    ]
+    # Lexicographic finding_id order would put aaa before zzz and 000 first.
+    assert materials[0].startswith("- beta-second")
+    assert "000-unassigned" not in text
+
+
+def _add_second_completed_run(data: Path, approved: Path) -> LocalLexicalJob:
+    """Second completed local job for the same approved HTML / source job_id."""
+
+    html_path = approved / JOB_ID / REVISION_ID / "document.html"
+    reader = open_reviewed_html(html_path)
+    reader.read_all_pages()
+    reviewed = reader.validated_input
+
+    run_dir = data / "extraction-raw-runs" / SECOND_RUN_ID
+    artifacts: list[dict[str, object]] = []
+    for component, pages in _occurrences().items():
+        relative = f"artifacts/component-{component.value}.json"
+        path = run_dir / relative
+        _write_artifact(path, component, pages, run_id=SECOND_RUN_ID)
+        artifacts.append(
+            {
+                "component": component.value,
+                "relative_path": relative,
+                "byte_size": path.stat().st_size,
+                "sha256": _sha256(path),
+            }
+        )
+    resolved = (
+        Component.UNIT_OPERATIONS,
+        Component.MATERIALS,
+        Component.EQUIPMENT,
+        Component.UNITS,
+        Component.QUANTITY_EXPRESSIONS,
+    )
+    extraction = ExtractionOutcomeRecord(
+        overall=ExtractionOutcome.COMPLETED,
+        components=tuple(
+            ComponentResult(component=component, outcome=ExtractionOutcome.COMPLETED, match_count=1)
+            for component in resolved
+        ),
+    )
+    provenance = RunProvenance(
+        run_id=SECOND_RUN_ID,
+        requested_presets=(Preset.FULL,),
+        requested_components=resolved,
+        resolved_components=resolved,
+        fuzzy_requested=False,
+        input_html_sha256=reviewed.html_sha256,
+        knowledge=KnowledgeSnapshotIdentity(
+            snapshot_id="snap-1",
+            database_sha256="5" * 64,
+            manifest_sha256="6" * 64,
+        ),
+        configuration_sha256="7" * 64,
+        rules_sha256="8" * 64,
+        engine_version="test",
+    )
+    publication = PublicationRecord(
+        status=PublicationStatus.COMPLETED,
+        final_manifest=FinalManifestClaim(manifest_id="manifest-run-2"),
+    )
+    manifest = {
+        "schema_version": RUN_MANIFEST_SCHEMA_VERSION,
+        "manifest_id": "manifest-run-2",
+        "run_id": SECOND_RUN_ID,
+        "publication": publication.model_dump(mode="json"),
+        "artifacts": artifacts,
+    }
+    manifest_path = run_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    job = LocalLexicalJob(
+        local_job_id=SECOND_LOCAL_JOB_ID,
+        job_id=JOB_ID,
+        review_revision_id=REVISION_ID,
+        action=ExtractionReviewAction.EXTRACT_ALL,
+        fuzzy_enabled=False,
+        status=LocalJobStatus.COMPLETED,
+        phase=LocalJobPhase.COMPLETED,
+        submitted_at=LATER,
+        started_at=LATER,
+        finished_at=LATER,
+        reviewed_html=reviewed,
+        run=provenance,
+        extraction=extraction,
+        publication=publication,
+        raw_run_relative_dir=SECOND_RUN_ID,
+        published_manifest=PublishedManifestReference(
+            manifest_id="manifest-run-2",
+            manifest_sha256=_sha256(manifest_path),
+        ),
+    )
+    jobs = data / "extraction-jobs"
+    (jobs / f"{SECOND_LOCAL_JOB_ID}.json").write_text(
+        job.model_dump_json(indent=2), encoding="utf-8"
+    )
+    return job
+
+
+def test_two_local_jobs_same_source_document_keep_independent_reviews(tmp_path: Path) -> None:
+    data, approved = _build(tmp_path)
+    _add_second_completed_run(data, approved)
+    app = FastAPI()
+    mount_extraction_review(app, ExtractionReviewWorkspace(data, approved))
+    client = TestClient(app)
+
+    listed = client.get("/api/v1/extraction-reviews/jobs")
+    assert listed.status_code == 200
+    listed_ids = [job["local_job_id"] for job in listed.json()["jobs"]]
+    assert listed_ids == [LOCAL_JOB_ID, SECOND_LOCAL_JOB_ID]
+    assert all(job["job_id"] == JOB_ID for job in listed.json()["jobs"])
+
+    opened_a = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}")
+    assert opened_a.status_code == 200
+    body_a = opened_a.json()
+    water_a = _finding(body_a, "water")
+    saved_a = client.put(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": body_a["current_revision_id"],
+            "edits": [
+                {
+                    "op": "patch_text",
+                    "finding_id": water_a["finding_id"],
+                    "page_number": 1,
+                    "display_text": "run-a-water",
+                }
+            ],
+        },
+    )
+    assert saved_a.status_code == 200
+    revision_a = saved_a.json()["current_revision_id"]
+    approved_a = client.post(
+        f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}/approve",
+        json={"expected_revision_id": revision_a},
+    )
+    assert approved_a.status_code == 200
+    assert approved_a.json()["approval_state"] == "approved"
+
+    opened_b = client.get(f"/api/v1/extraction-reviews/jobs/{SECOND_LOCAL_JOB_ID}")
+    assert opened_b.status_code == 200
+    body_b = opened_b.json()
+    assert body_b["approval_state"] == "not_approved"
+    water_b = _finding(body_b, "water")
+    assert water_b["display_text"] == "water"
+    saved_b = client.put(
+        f"/api/v1/extraction-reviews/jobs/{SECOND_LOCAL_JOB_ID}",
+        json={
+            "expected_revision_id": body_b["current_revision_id"],
+            "edits": [
+                {
+                    "op": "patch_text",
+                    "finding_id": water_b["finding_id"],
+                    "page_number": 1,
+                    "display_text": "run-b-water",
+                }
+            ],
+        },
+    )
+    assert saved_b.status_code == 200
+    assert saved_b.json()["approval_state"] == "not_approved"
+    assert _finding(saved_b.json(), "water")["display_text"] == "run-b-water"
+
+    reloaded_a = client.get(f"/api/v1/extraction-reviews/jobs/{LOCAL_JOB_ID}")
+    assert reloaded_a.status_code == 200
+    reloaded_body = reloaded_a.json()
+    assert reloaded_body["approval_state"] == "approved"
+    assert reloaded_body["current_revision_id"] == revision_a
+    assert _finding(reloaded_body, "water")["display_text"] == "run-a-water"
+
+    store = ExtractionReviewStore(data)
+    path_a = store.current_path(LOCAL_JOB_ID)
+    path_b = store.current_path(SECOND_LOCAL_JOB_ID)
+    assert path_a != path_b
+    assert path_a.parent != path_b.parent
+    assert path_a.name == CURRENT_REVIEW_FILENAME
+    assert path_b.name == CURRENT_REVIEW_FILENAME
+    assert sorted(path.name for path in path_a.parent.iterdir()) == [CURRENT_REVIEW_FILENAME]
+    assert sorted(path.name for path in path_b.parent.iterdir()) == [CURRENT_REVIEW_FILENAME]
+    assert store.load(LOCAL_JOB_ID).approval is not None
+    assert store.load(SECOND_LOCAL_JOB_ID).approval is None
+    assert derive_workspace_key(LOCAL_JOB_ID) != derive_workspace_key(SECOND_LOCAL_JOB_ID)
+    assert derive_workspace_key(LOCAL_JOB_ID) != derive_workspace_key(JOB_ID)

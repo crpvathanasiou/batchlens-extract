@@ -1,0 +1,201 @@
+{
+  "action": "extract_all",
+  "error": null,
+  "extraction": {
+    "components": [
+      {
+        "blocks_considered": 728,
+        "component": "unit_operations",
+        "error": null,
+        "match_count": 22,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "process_steps",
+        "error": null,
+        "match_count": 5,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "materials",
+        "error": null,
+        "match_count": 135,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "equipment",
+        "error": null,
+        "match_count": 0,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "parameter_names",
+        "error": null,
+        "match_count": 3,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "units",
+        "error": null,
+        "match_count": 87,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "quantity_expressions",
+        "error": null,
+        "match_count": 55,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 728,
+        "component": "parameter_value_expressions",
+        "error": null,
+        "match_count": 55,
+        "outcome": "completed"
+      }
+    ],
+    "overall": "completed"
+  },
+  "finished_at": "2026-09-30T09:32:20.431953Z",
+  "fuzzy_enabled": false,
+  "job_id": "local-fexofenadine",
+  "local_job_id": "6b7dcbd3-c50c-4be2-8a00-e8d9c0a056d9",
+  "phase": "completed",
+  "publication": {
+    "final_manifest": {
+      "manifest_id": "manifest-57fb3a77-e5ba-49fe-98fa-c8af3f65f4d5",
+      "publication_status": "completed"
+    },
+    "status": "completed"
+  },
+  "published_manifest": {
+    "manifest_id": "manifest-57fb3a77-e5ba-49fe-98fa-c8af3f65f4d5",
+    "manifest_sha256": "8c10d24b597efc7c5e0718dab41813751ed84b50c7b02121d049f181f990720b"
+  },
+  "raw_run_relative_dir": "57fb3a77-e5ba-49fe-98fa-c8af3f65f4d5",
+  "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27",
+  "reviewed_html": {
+    "conversion_status": "SUCCEEDED",
+    "external_document_id": null,
+    "html_contract_version": 1,
+    "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+    "job_id": "local-fexofenadine",
+    "review_generation": 27,
+    "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+  },
+  "run": {
+    "configuration_sha256": "e657951be0dad792145dae023ed8ef75e5bc9754f66425e04ad566451b7f0982",
+    "dependency_versions": [
+      {
+        "name": "pyahocorasick",
+        "version": "2.3.1"
+      },
+      {
+        "name": "pydantic",
+        "version": "2.12.5"
+      },
+      {
+        "name": "pyyaml",
+        "version": "6.0.3"
+      }
+    ],
+    "engine_version": "0.1.0",
+    "fuzzy_requested": false,
+    "input_html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+    "knowledge": {
+      "database_sha256": "cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2",
+      "manifest_sha256": "c312cf8c455b0bcb816db906f7faaa3258dd9f28f9650ba12fa146049e390937",
+      "preparation_version": "flat-sqlite-1",
+      "schema_user_version": 1,
+      "snapshot_id": "flat-v1-a39c0b393ffdbd4e97ed"
+    },
+    "measurements": [
+      {
+        "name": "pages_observed",
+        "value": "18"
+      },
+      {
+        "name": "blocks_observed",
+        "value": "728"
+      },
+      {
+        "name": "eligible_terms",
+        "value": "4349737"
+      },
+      {
+        "name": "eligible_rows",
+        "value": "1720928"
+      },
+      {
+        "name": "candidates",
+        "value": "162"
+      },
+      {
+        "name": "peak_process_memory_bytes",
+        "value": "517197824"
+      }
+    ],
+    "requested_components": [],
+    "requested_presets": [
+      "full"
+    ],
+    "resolved_components": [
+      "unit_operations",
+      "process_steps",
+      "materials",
+      "equipment",
+      "parameter_names",
+      "units",
+      "quantity_expressions",
+      "parameter_value_expressions"
+    ],
+    "rules_sha256": "00b271d4f67c5e3003d609c7fefefded1ac8dcd8fef2a8e46f1ed9b938e3a755",
+    "rules_version": "lexical-internal-rules-v1",
+    "run_id": "57fb3a77-e5ba-49fe-98fa-c8af3f65f4d5",
+    "schema_version": "batchlens.lexical-record.v1",
+    "timings": [
+      {
+        "elapsed_ms": 18,
+        "name": "html_validation"
+      },
+      {
+        "elapsed_ms": 2557,
+        "name": "snapshot_preflight"
+      },
+      {
+        "elapsed_ms": 2885,
+        "name": "component:unit_operations"
+      },
+      {
+        "elapsed_ms": 1748,
+        "name": "component:process_steps"
+      },
+      {
+        "elapsed_ms": 172815,
+        "name": "component:materials"
+      },
+      {
+        "elapsed_ms": 1484,
+        "name": "component:equipment"
+      },
+      {
+        "elapsed_ms": 6840,
+        "name": "component_group:l10"
+      },
+      {
+        "elapsed_ms": 188365,
+        "name": "total"
+      }
+    ]
+  },
+  "schema_version": "batchlens.extraction-local-job.v1",
+  "started_at": "2026-09-30T09:29:12.017716Z",
+  "status": "completed",
+  "submitted_at": "2026-09-30T09:29:12.009715Z"
+}
