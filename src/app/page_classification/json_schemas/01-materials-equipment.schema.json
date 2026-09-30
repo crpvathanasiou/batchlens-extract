@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "LabelEvidence_Literal__BILL_OF_MATERIALS____EQUIPMENT_LIST___": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "BILL_OF_MATERIALS",
+            "EQUIPMENT_LIST"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "quote": {
+          "description": "Short exact excerpt from this page's readable HTML text supporting the label. Decode HTML entities and collapse whitespace only. Do not paraphrase, translate, invent, or join distant passages.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "reason": {
+          "description": "One short sentence explaining which label criterion the quoted content and its local structure satisfy. Not a reasoning transcript.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "element_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact existing HTML id of the quoted element or its closest containing element with an id; null when none exists. Never invent an id, selector, or page number.",
+          "title": "Element Id"
+        }
+      },
+      "required": [
+        "label",
+        "quote",
+        "reason",
+        "element_id"
+      ],
+      "title": "LabelEvidence[Literal['BILL_OF_MATERIALS', 'EQUIPMENT_LIST']]",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Call 1: materials and equipment, including both labels together.",
+  "properties": {
+    "labels": {
+      "description": "All supported labels from this call's allowed set, with no duplicates, in the order listed in its prompt. An empty list is allowed.",
+      "items": {
+        "enum": [
+          "BILL_OF_MATERIALS",
+          "EQUIPMENT_LIST"
+        ],
+        "type": "string"
+      },
+      "title": "Labels",
+      "type": "array"
+    },
+    "status": {
+      "description": "ok: assessable content, including no matching label in this call; empty: no content beyond recurring boilerplate, requiring labels=[]; needs_review: evidence cannot be reliably assessed; retain any independently supported labels.",
+      "enum": [
+        "ok",
+        "empty",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "evidence": {
+      "description": "Exactly one evidence item per returned label, in the same order. No missing or extra items. Use [] when labels=[].",
+      "items": {
+        "$ref": "#/$defs/LabelEvidence_Literal__BILL_OF_MATERIALS____EQUIPMENT_LIST___"
+      },
+      "title": "Evidence",
+      "type": "array"
+    }
+  },
+  "required": [
+    "labels",
+    "status",
+    "evidence"
+  ],
+  "title": "MaterialEquipmentResponse",
+  "type": "object"
+}

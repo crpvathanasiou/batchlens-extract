@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "LabelEvidence_Literal__SPECIAL_REQUIREMENTS____PROCESS_FLOW_DIAGRAM____SAMPLING_TESTING_PLAN____FORMULATION_RECIPE____BILL_OF_PACKAGING_MATERIALS____MATERIAL_RECEIPT_AND_ACCEPTANCE____AREA_CLEARANCE____EQUIPMENT_SETUP____EQUIPMENT_CLEANING_SANITIZATION____EQUIPMENT_TEST____EQUIPMENT_STORAGE____MANUFACTURING_INSTRUCTIONS____PROCESS_EXECUTION_RECORD____IN_PROCESS_CONTROL____ANALYTICAL_TEST_DATA____WEIGHING_PRINTOUT____YIELD_CALCULATION____BATCH_RECONCILIATION____PACKAGING_AND_LABELING___": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "SPECIAL_REQUIREMENTS",
+            "PROCESS_FLOW_DIAGRAM",
+            "SAMPLING_TESTING_PLAN",
+            "FORMULATION_RECIPE",
+            "BILL_OF_PACKAGING_MATERIALS",
+            "MATERIAL_RECEIPT_AND_ACCEPTANCE",
+            "AREA_CLEARANCE",
+            "EQUIPMENT_SETUP",
+            "EQUIPMENT_CLEANING_SANITIZATION",
+            "EQUIPMENT_TEST",
+            "EQUIPMENT_STORAGE",
+            "MANUFACTURING_INSTRUCTIONS",
+            "PROCESS_EXECUTION_RECORD",
+            "IN_PROCESS_CONTROL",
+            "ANALYTICAL_TEST_DATA",
+            "WEIGHING_PRINTOUT",
+            "YIELD_CALCULATION",
+            "BATCH_RECONCILIATION",
+            "PACKAGING_AND_LABELING"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "quote": {
+          "description": "Short exact excerpt from this page's readable HTML text supporting the label. Decode HTML entities and collapse whitespace only. Do not paraphrase, translate, invent, or join distant passages.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "reason": {
+          "description": "One short sentence explaining which label criterion the quoted content and its local structure satisfy. Not a reasoning transcript.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "element_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact existing HTML id of the quoted element or its closest containing element with an id; null when none exists. Never invent an id, selector, or page number.",
+          "title": "Element Id"
+        }
+      },
+      "required": [
+        "label",
+        "quote",
+        "reason",
+        "element_id"
+      ],
+      "title": "LabelEvidence[Literal['SPECIAL_REQUIREMENTS', 'PROCESS_FLOW_DIAGRAM', 'SAMPLING_TESTING_PLAN', 'FORMULATION_RECIPE', 'BILL_OF_PACKAGING_MATERIALS', 'MATERIAL_RECEIPT_AND_ACCEPTANCE', 'AREA_CLEARANCE', 'EQUIPMENT_SETUP', 'EQUIPMENT_CLEANING_SANITIZATION', 'EQUIPMENT_TEST', 'EQUIPMENT_STORAGE', 'MANUFACTURING_INSTRUCTIONS', 'PROCESS_EXECUTION_RECORD', 'IN_PROCESS_CONTROL', 'ANALYTICAL_TEST_DATA', 'WEIGHING_PRINTOUT', 'YIELD_CALCULATION', 'BATCH_RECONCILIATION', 'PACKAGING_AND_LABELING']]",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Call 2: the 19 process, operations, and control labels.",
+  "properties": {
+    "labels": {
+      "description": "All supported labels from this call's allowed set, with no duplicates, in the order listed in its prompt. An empty list is allowed.",
+      "items": {
+        "enum": [
+          "SPECIAL_REQUIREMENTS",
+          "PROCESS_FLOW_DIAGRAM",
+          "SAMPLING_TESTING_PLAN",
+          "FORMULATION_RECIPE",
+          "BILL_OF_PACKAGING_MATERIALS",
+          "MATERIAL_RECEIPT_AND_ACCEPTANCE",
+          "AREA_CLEARANCE",
+          "EQUIPMENT_SETUP",
+          "EQUIPMENT_CLEANING_SANITIZATION",
+          "EQUIPMENT_TEST",
+          "EQUIPMENT_STORAGE",
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD",
+          "IN_PROCESS_CONTROL",
+          "ANALYTICAL_TEST_DATA",
+          "WEIGHING_PRINTOUT",
+          "YIELD_CALCULATION",
+          "BATCH_RECONCILIATION",
+          "PACKAGING_AND_LABELING"
+        ],
+        "type": "string"
+      },
+      "title": "Labels",
+      "type": "array"
+    },
+    "status": {
+      "description": "ok: assessable content, including no matching label in this call; empty: no content beyond recurring boilerplate, requiring labels=[]; needs_review: evidence cannot be reliably assessed; retain any independently supported labels.",
+      "enum": [
+        "ok",
+        "empty",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "evidence": {
+      "description": "Exactly one evidence item per returned label, in the same order. No missing or extra items. Use [] when labels=[].",
+      "items": {
+        "$ref": "#/$defs/LabelEvidence_Literal__SPECIAL_REQUIREMENTS____PROCESS_FLOW_DIAGRAM____SAMPLING_TESTING_PLAN____FORMULATION_RECIPE____BILL_OF_PACKAGING_MATERIALS____MATERIAL_RECEIPT_AND_ACCEPTANCE____AREA_CLEARANCE____EQUIPMENT_SETUP____EQUIPMENT_CLEANING_SANITIZATION____EQUIPMENT_TEST____EQUIPMENT_STORAGE____MANUFACTURING_INSTRUCTIONS____PROCESS_EXECUTION_RECORD____IN_PROCESS_CONTROL____ANALYTICAL_TEST_DATA____WEIGHING_PRINTOUT____YIELD_CALCULATION____BATCH_RECONCILIATION____PACKAGING_AND_LABELING___"
+      },
+      "title": "Evidence",
+      "type": "array"
+    }
+  },
+  "required": [
+    "labels",
+    "status",
+    "evidence"
+  ],
+  "title": "ProcessOperationsResponse",
+  "type": "object"
+}

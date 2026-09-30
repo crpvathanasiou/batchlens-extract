@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "LabelEvidence_Literal__NON_RELATED____COVER_PAGE____PRODUCT_BATCH_DETAILS____TABLE_OF_CONTENTS____DOCUMENTATION_INSTRUCTIONS____EXPERIMENTAL_OBJECTIVES____REFERENCE_DOCUMENTATION____CHAIN_OF_IDENTITY_AND_CUSTODY____INVENTORY_TRANSACTION____COMMENT_LOG____EXCEPTION_DEVIATION_LOG____SIGNATURE_LOG____SIGNATURE_APPROVAL____ACKNOWLEDGEMENT____BATCH_CONCLUSION____BATCH_REVIEW_DISPOSITION____DOCUMENT_CHANGE_HISTORY____APPENDIX____CERTIFICATE___": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "NON_RELATED",
+            "COVER_PAGE",
+            "PRODUCT_BATCH_DETAILS",
+            "TABLE_OF_CONTENTS",
+            "DOCUMENTATION_INSTRUCTIONS",
+            "EXPERIMENTAL_OBJECTIVES",
+            "REFERENCE_DOCUMENTATION",
+            "CHAIN_OF_IDENTITY_AND_CUSTODY",
+            "INVENTORY_TRANSACTION",
+            "COMMENT_LOG",
+            "EXCEPTION_DEVIATION_LOG",
+            "SIGNATURE_LOG",
+            "SIGNATURE_APPROVAL",
+            "ACKNOWLEDGEMENT",
+            "BATCH_CONCLUSION",
+            "BATCH_REVIEW_DISPOSITION",
+            "DOCUMENT_CHANGE_HISTORY",
+            "APPENDIX",
+            "CERTIFICATE"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "quote": {
+          "description": "Short exact excerpt from this page's readable HTML text supporting the label. Decode HTML entities and collapse whitespace only. Do not paraphrase, translate, invent, or join distant passages.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "reason": {
+          "description": "One short sentence explaining which label criterion the quoted content and its local structure satisfy. Not a reasoning transcript.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "element_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact existing HTML id of the quoted element or its closest containing element with an id; null when none exists. Never invent an id, selector, or page number.",
+          "title": "Element Id"
+        }
+      },
+      "required": [
+        "label",
+        "quote",
+        "reason",
+        "element_id"
+      ],
+      "title": "LabelEvidence[Literal['NON_RELATED', 'COVER_PAGE', 'PRODUCT_BATCH_DETAILS', 'TABLE_OF_CONTENTS', 'DOCUMENTATION_INSTRUCTIONS', 'EXPERIMENTAL_OBJECTIVES', 'REFERENCE_DOCUMENTATION', 'CHAIN_OF_IDENTITY_AND_CUSTODY', 'INVENTORY_TRANSACTION', 'COMMENT_LOG', 'EXCEPTION_DEVIATION_LOG', 'SIGNATURE_LOG', 'SIGNATURE_APPROVAL', 'ACKNOWLEDGEMENT', 'BATCH_CONCLUSION', 'BATCH_REVIEW_DISPOSITION', 'DOCUMENT_CHANGE_HISTORY', 'APPENDIX', 'CERTIFICATE']]",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Call 3: the 19 document and supporting-record labels.",
+  "properties": {
+    "labels": {
+      "description": "All supported labels from this call's allowed set, with no duplicates, in the order listed in its prompt. An empty list is allowed.",
+      "items": {
+        "enum": [
+          "NON_RELATED",
+          "COVER_PAGE",
+          "PRODUCT_BATCH_DETAILS",
+          "TABLE_OF_CONTENTS",
+          "DOCUMENTATION_INSTRUCTIONS",
+          "EXPERIMENTAL_OBJECTIVES",
+          "REFERENCE_DOCUMENTATION",
+          "CHAIN_OF_IDENTITY_AND_CUSTODY",
+          "INVENTORY_TRANSACTION",
+          "COMMENT_LOG",
+          "EXCEPTION_DEVIATION_LOG",
+          "SIGNATURE_LOG",
+          "SIGNATURE_APPROVAL",
+          "ACKNOWLEDGEMENT",
+          "BATCH_CONCLUSION",
+          "BATCH_REVIEW_DISPOSITION",
+          "DOCUMENT_CHANGE_HISTORY",
+          "APPENDIX",
+          "CERTIFICATE"
+        ],
+        "type": "string"
+      },
+      "title": "Labels",
+      "type": "array"
+    },
+    "status": {
+      "description": "ok: assessable content, including no matching label in this call; empty: no content beyond recurring boilerplate, requiring labels=[]; needs_review: evidence cannot be reliably assessed; retain any independently supported labels.",
+      "enum": [
+        "ok",
+        "empty",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "evidence": {
+      "description": "Exactly one evidence item per returned label, in the same order. No missing or extra items. Use [] when labels=[].",
+      "items": {
+        "$ref": "#/$defs/LabelEvidence_Literal__NON_RELATED____COVER_PAGE____PRODUCT_BATCH_DETAILS____TABLE_OF_CONTENTS____DOCUMENTATION_INSTRUCTIONS____EXPERIMENTAL_OBJECTIVES____REFERENCE_DOCUMENTATION____CHAIN_OF_IDENTITY_AND_CUSTODY____INVENTORY_TRANSACTION____COMMENT_LOG____EXCEPTION_DEVIATION_LOG____SIGNATURE_LOG____SIGNATURE_APPROVAL____ACKNOWLEDGEMENT____BATCH_CONCLUSION____BATCH_REVIEW_DISPOSITION____DOCUMENT_CHANGE_HISTORY____APPENDIX____CERTIFICATE___"
+      },
+      "title": "Evidence",
+      "type": "array"
+    }
+  },
+  "required": [
+    "labels",
+    "status",
+    "evidence"
+  ],
+  "title": "DocumentSupportingResponse",
+  "type": "object"
+}
