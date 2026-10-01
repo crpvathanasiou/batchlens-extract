@@ -1107,3 +1107,76 @@ def test_early_block_iterator_close_still_advances_pages(tmp_path: Path) -> None
     assert len(remaining) == 3
     with pytest.raises(StopIteration):
         next(pages)
+
+
+def test_sparse_increasing_page_orders_accepted_and_preserved(tmp_path: Path) -> None:
+    sink = FilesystemEvidenceSink(tmp_path / "out")
+    sink.begin_run("sparse-orders")
+    sink.begin_component(Component.MATERIALS)
+    sink.write_page(
+        Component.MATERIALS,
+        PageEvidence(page_number=2, order=1, coverage=PageCoverage.COMPLETE),
+    )
+    sink.write_page(
+        Component.MATERIALS,
+        PageEvidence(page_number=3, order=2, coverage=PageCoverage.COMPLETE),
+    )
+    sink.write_block(
+        Component.MATERIALS,
+        BlockRecord(
+            block=BlockEvidence(
+                node_id="n2",
+                kind="line",
+                text="Water",
+                page_number=2,
+                order=0,
+            ),
+            occurrences=(),
+        ),
+    )
+    sink.complete_component(Component.MATERIALS)
+    sink.complete_run()
+    assert sink.run_directory is not None
+    artifact = sink.run_directory / sink.committed_artifacts[Component.MATERIALS].relative_path
+    pages = _collect_pages(artifact)
+    assert [page.page_number for page, _ in pages] == [2, 3]
+    assert [page.order for page, _ in pages] == [1, 2]
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    assert payload["page_count"] == 2
+
+
+def test_duplicate_and_non_increasing_page_orders_rejected(tmp_path: Path) -> None:
+    sink = FilesystemEvidenceSink(tmp_path / "out")
+    sink.begin_run("order-rejects")
+    sink.begin_component(Component.MATERIALS)
+    sink.write_page(
+        Component.MATERIALS,
+        PageEvidence(page_number=2, order=1, coverage=PageCoverage.COMPLETE),
+    )
+    with pytest.raises(PublicationError) as duplicate_page:
+        sink.write_page(
+            Component.MATERIALS,
+            PageEvidence(page_number=2, order=2, coverage=PageCoverage.COMPLETE),
+        )
+    assert duplicate_page.value.code == "PAGE_DUPLICATE"
+
+    with pytest.raises(PublicationError) as non_increasing:
+        sink.write_page(
+            Component.MATERIALS,
+            PageEvidence(page_number=3, order=1, coverage=PageCoverage.COMPLETE),
+        )
+    assert non_increasing.value.code == "PAGE_ORDER"
+
+    with pytest.raises(PublicationError) as equal_order:
+        sink.write_page(
+            Component.MATERIALS,
+            PageEvidence(page_number=4, order=1, coverage=PageCoverage.COMPLETE),
+        )
+    assert equal_order.value.code == "PAGE_ORDER"
+
+    sink.write_page(
+        Component.MATERIALS,
+        PageEvidence(page_number=5, order=3, coverage=PageCoverage.COMPLETE),
+    )
+    sink.complete_component(Component.MATERIALS)
+    sink.complete_run()

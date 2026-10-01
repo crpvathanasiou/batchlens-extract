@@ -16,12 +16,19 @@ A standalone character span checks its own offsets and code-point length. Slice
 equality requires the block via ``validate_match_against_block``.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Annotated, Literal, Self, cast
+from typing import Annotated, Any, Literal, Self, cast
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_serializer,
+    model_validator,
+)
 
 RECORD_SCHEMA_VERSION = "batchlens.lexical-record.v1"
 HTML_CONTRACT_VERSION = 1
@@ -752,6 +759,38 @@ class KnowledgeSnapshotIdentity(LexicalModel):
     preparation_version: Literal["flat-sqlite-1"] = FLAT_SQLITE_PREPARATION_VERSION
 
 
+STAGE4_CLASSIFIER_POLICY_VERSION: Literal["batchlens.page-classification-policy.v1"] = (
+    "batchlens.page-classification-policy.v1"
+)
+
+
+class Stage4PageRestrictionProvenance(LexicalModel):
+    """Stage-4-only provenance when a lexical run scanned an explicit page allow-list.
+
+    Records that Stage 2 scanned only the listed reviewed-HTML page numbers while
+    retaining the original full HTML identity/hash. Omitted pages were not scanned
+    and must not appear as synthetic extraction pages. Present only on restricted
+    runs; unrestricted serialization must omit this object entirely.
+    """
+
+    selected_page_numbers: tuple[StrictPositiveInt, ...]
+    classifier_policy_version: Literal["batchlens.page-classification-policy.v1"] = (
+        STAGE4_CLASSIFIER_POLICY_VERSION
+    )
+    classification_snapshot_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def selected_pages_are_strictly_increasing(self) -> Self:
+        pages = self.selected_page_numbers
+        if not pages:
+            raise ValueError("selected_page_numbers must not be empty")
+        if list(pages) != sorted(pages):
+            raise ValueError("selected_page_numbers must be strictly increasing")
+        if len(set(pages)) != len(pages):
+            raise ValueError("selected_page_numbers must not contain duplicates")
+        return self
+
+
 class RunProvenance(LexicalModel):
     """Identities for one requested run. Preset names are not expanded here."""
 
@@ -770,6 +809,7 @@ class RunProvenance(LexicalModel):
     dependency_versions: tuple[DependencyVersion, ...] = ()
     timings: tuple[ElapsedTiming, ...] = ()
     measurements: tuple[AvailableMeasurement, ...] = ()
+    stage4_page_restriction: Stage4PageRestrictionProvenance | None = None
 
     @model_validator(mode="after")
     def component_lists_are_unique(self) -> Self:
@@ -778,6 +818,16 @@ class RunProvenance(LexicalModel):
         _unique_components(self.requested_components)
         _unique_components(self.resolved_components)
         return self
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_stage4_restriction(
+        self,
+        serializer: Callable[[Any], Any],
+    ) -> dict[str, Any]:
+        payload = cast(dict[str, Any], serializer(self))
+        if payload.get("stage4_page_restriction") is None:
+            payload.pop("stage4_page_restriction", None)
+        return payload
 
 
 class ComponentResult(LexicalModel):

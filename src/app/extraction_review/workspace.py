@@ -711,7 +711,9 @@ def finding_page_number(finding: ReviewFindingRecord) -> int | None:
     return None
 
 
-def _is_reviewable(job: LocalLexicalJob) -> bool:
+def is_local_job_reviewable(job: LocalLexicalJob) -> bool:
+    """True when Stage 3 may open this local lexical job under the locked rules."""
+
     return (
         job.status is LocalJobStatus.COMPLETED
         and job.reviewed_html is not None
@@ -723,6 +725,10 @@ def _is_reviewable(job: LocalLexicalJob) -> bool:
         and job.publication.status is PublicationStatus.COMPLETED
         and has_usable_completed_component(job.extraction)
     )
+
+
+def _is_reviewable(job: LocalLexicalJob) -> bool:
+    return is_local_job_reviewable(job)
 
 
 def _highlights_for_page(

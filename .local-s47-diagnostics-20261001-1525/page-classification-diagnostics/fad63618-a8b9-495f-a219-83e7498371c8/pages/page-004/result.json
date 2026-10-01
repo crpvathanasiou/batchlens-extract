@@ -1,0 +1,248 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-4",
+    "page_number": 4,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-4",
+        "page_number": 4,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+            "label": "BILL_OF_MATERIALS",
+            "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+            "reason": "A structured table lists materials with description, part number, lot number, and other fields, identifying a bill of materials."
+          }
+        ],
+        "labels": [
+          "BILL_OF_MATERIALS"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-4",
+        "page_number": 4,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+            "label": "BILL_OF_PACKAGING_MATERIALS",
+            "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+            "reason": "This table is a dedicated list/register of materials with columns for description, part number, lot number, quantities, and verification, matching a bill of materials structure."
+          }
+        ],
+        "labels": [
+          "BILL_OF_PACKAGING_MATERIALS"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-4",
+        "page_number": 4,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_a2ea613c387fda1efb9026fafc35d712",
+            "label": "COVER_PAGE",
+            "quote": "Batch Record MBR-046",
+            "reason": "The page contains a title block identifying the batch record and its number, indicating it is a cover page."
+          },
+          {
+            "element_id": "node_470a31bf99c1f01ea711512cc6479141",
+            "label": "PRODUCT_BATCH_DETAILS",
+            "quote": "Title: Fexo A - Fexofenadine HCI tablets 60mg (F-7046)",
+            "reason": "The page includes a dedicated block with product name, strength, and identification, qualifying as product batch details."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "PRODUCT_BATCH_DETAILS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-4",
+      "page_number": 4,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 1,
+      "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "quote not found in normalized page text",
+      "label": "BILL_OF_MATERIALS",
+      "provenance": "call",
+      "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+      "reason": "A structured table lists materials with description, part number, lot number, and other fields, identifying a bill of materials."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "quote not found in normalized page text",
+      "label": "BILL_OF_PACKAGING_MATERIALS",
+      "provenance": "call",
+      "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+      "reason": "This table is a dedicated list/register of materials with columns for description, part number, lot number, quantities, and verification, matching a bill of materials structure."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_a2ea613c387fda1efb9026fafc35d712",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_a2ea613c387fda1efb9026fafc35d712",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "Batch Record MBR-046",
+      "reason": "The page contains a title block identifying the batch record and its number, indicating it is a cover page."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_470a31bf99c1f01ea711512cc6479141",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_470a31bf99c1f01ea711512cc6479141",
+      "label": "PRODUCT_BATCH_DETAILS",
+      "provenance": "call",
+      "quote": "Title: Fexo A - Fexofenadine HCI tablets 60mg (F-7046)",
+      "reason": "The page includes a dedicated block with product name, strength, and identification, qualifying as product batch details."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-4",
+      "page_number": 4,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 1,
+        "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+        "label": "BILL_OF_MATERIALS",
+        "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+        "reason": "A structured table lists materials with description, part number, lot number, and other fields, identifying a bill of materials.",
+        "verification": "unverified",
+        "verification_reason": "quote not found in normalized page text"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_6afab2725360d3328b5a34ac1aeb63f1",
+        "label": "BILL_OF_PACKAGING_MATERIALS",
+        "quote": "6. Bill Of Materials Description Part Number Quantity Req'd Lot No. Qty Staged Exp / Retest Performed By / Date QA Verified By / Date Fexofenadine Hydrochloride R-1057 CI0 6026 Avicel PH 102 (Microcrystalline cellulose) R-1002 P2098207 44",
+        "reason": "This table is a dedicated list/register of materials with columns for description, part number, lot number, quantities, and verification, matching a bill of materials structure.",
+        "verification": "unverified",
+        "verification_reason": "quote not found in normalized page text"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_a2ea613c387fda1efb9026fafc35d712",
+        "label": "COVER_PAGE",
+        "quote": "Batch Record MBR-046",
+        "reason": "The page contains a title block identifying the batch record and its number, indicating it is a cover page.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_a2ea613c387fda1efb9026fafc35d712"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_470a31bf99c1f01ea711512cc6479141",
+        "label": "PRODUCT_BATCH_DETAILS",
+        "quote": "Title: Fexo A - Fexofenadine HCI tablets 60mg (F-7046)",
+        "reason": "The page includes a dedicated block with product name, strength, and identification, qualifying as product batch details.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_470a31bf99c1f01ea711512cc6479141"
+      }
+    ],
+    "requires_review": true
+  }
+}

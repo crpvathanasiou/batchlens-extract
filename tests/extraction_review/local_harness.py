@@ -1,9 +1,10 @@
-"""Localhost Stage 3 extraction-review screen.
+"""Localhost Stage 3/4 extraction-review screen.
 
 Serves the real Vue workspace and extraction-review API against a caller-supplied
 data directory and approved-documents root. With ``--run-extraction``, first
 submits one U2.2 lexical job for the selected approved document, waits for a
-terminal status, then starts the same UI. Identity is the synthetic
+terminal status, then starts the same UI. Optional ``--config`` also wires the
+in-workspace classified Extract All path. Identity is the synthetic
 ``local-test-reviewer``. Binds to 127.0.0.1. Does not mock the review UI.
 """
 
@@ -31,6 +32,7 @@ from app.extraction_review.local_jobs import (
     LocalLexicalJobService,
     LocalLexicalJobServiceBusyError,
 )
+from app.extraction_review.stage4_local import LocalStage4Adapter, build_local_stage4_adapter
 from app.extraction_review.workspace import LOCAL_REVIEW_ACTOR, ExtractionReviewWorkspace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -153,13 +155,24 @@ def create_app(
     approved_documents_root: Path,
     static_dir: Path | None = None,
     initial_local_job_id: str | None = None,
+    config_path: Path | None = None,
+    stage4_adapter: LocalStage4Adapter | None = None,
+    compose_stage4: bool = False,
 ) -> FastAPI:
     review_js, _css = find_built_assets(static_dir)
     static = review_js.parent
     app = FastAPI(title="BatchLens local extraction review")
+    adapter = stage4_adapter
+    if adapter is None and compose_stage4:
+        adapter = build_local_stage4_adapter(
+            data_dir=data_dir,
+            approved_documents_root=approved_documents_root,
+            config_path=config_path,
+        )
     mount_extraction_review(
         app,
         ExtractionReviewWorkspace(data_dir, approved_documents_root, actor=LOCAL_REVIEW_ACTOR),
+        stage4_adapter=adapter,
     )
 
     def _screen() -> HTMLResponse:
@@ -206,7 +219,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--port", type=int, default=8767)
     result.add_argument("--job-id", default=None)
     result.add_argument("--review-revision-id", default=None)
-    result.add_argument("--config", default=None)
+    result.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Stage 2 execution YAML. Required with --run-extraction; also wires "
+            "in-workspace classified Extract All when the UI starts"
+        ),
+    )
     result.add_argument(
         "--action",
         choices=sorted(_ACTION_CHOICES),
@@ -360,11 +380,14 @@ def _print_ui_banner(
     approved: Path,
     url: str,
     local_job_id: str | None = None,
+    config_path: Path | None = None,
 ) -> None:
     print("Local extraction review")
     print(f"  data-dir: {data_dir}")
     print(f"  approved-documents: {approved}")
     print(f"  reviewer: {LOCAL_REVIEW_ACTOR}")
+    if config_path is not None:
+        print(f"  config: {config_path}")
     if local_job_id is not None:
         print(f"  local-job-id: {local_job_id}")
     print(f"  URL: {url}")
@@ -382,6 +405,7 @@ def main(
     approved = resolve_path(args.approved_documents_root)
     url = f"http://127.0.0.1:{args.port}/documents/local-extraction-review"
     local_job_id: str | None = None
+    config_path: Path | None = resolve_path(args.config) if args.config else None
 
     if args.run_extraction:
         missing = missing_run_extraction_args(args)
@@ -395,7 +419,7 @@ def main(
         assert args.config is not None
         assert args.job_id is not None
         assert args.review_revision_id is not None
-        config_path = resolve_path(args.config)
+        assert config_path is not None
         try:
             job = run_extraction_fn(
                 data_dir=data_dir,
@@ -438,9 +462,16 @@ def main(
 
     try:
         find_built_assets()
+        stage4_adapter = build_local_stage4_adapter(
+            data_dir=data_dir,
+            approved_documents_root=approved,
+            config_path=config_path,
+        )
         app_kwargs: dict[str, object] = {
             "data_dir": data_dir,
             "approved_documents_root": approved,
+            "stage4_adapter": stage4_adapter,
+            "config_path": config_path,
         }
         if local_job_id is not None:
             app_kwargs["initial_local_job_id"] = local_job_id
@@ -454,6 +485,7 @@ def main(
         approved=approved,
         url=url,
         local_job_id=local_job_id,
+        config_path=config_path,
     )
     serve(app, host="127.0.0.1", port=args.port)
     return 0

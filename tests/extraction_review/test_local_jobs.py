@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import threading
 import time
 import uuid
@@ -208,6 +207,7 @@ def _success_executor(
     started: threading.Event | None = None,
     fail_publication: bool = False,
     observed_config: list[EffectiveExecutionConfiguration] | None = None,
+    observed_call_shapes: list[tuple[int, ...]] | None = None,
 ) -> Any:
     def execute(
         config: EffectiveExecutionConfiguration,
@@ -215,6 +215,8 @@ def _success_executor(
     ) -> tuple[LexicalRunResult, PublicationResult]:
         if observed_config is not None:
             observed_config.append(config)
+        if observed_call_shapes is not None:
+            observed_call_shapes.append((2,))
         if started is not None:
             started.set()
         if block_until is not None:
@@ -268,20 +270,15 @@ def _success_executor(
                     retryable=False,
                 ),
             )
-
-        manifest_id = f"manifest-{run_id}"
         manifest_path = sink.run_directory / "manifest.json"
-        manifest_path.write_bytes(
-            json.dumps({"manifest_id": manifest_id, "run_id": run_id}).encode("utf-8")
-        )
-        publication = PublicationRecord(
-            status=PublicationStatus.COMPLETED,
-            final_manifest=FinalManifestClaim(manifest_id=manifest_id),
-        )
+        manifest_path.write_text("{}", encoding="utf-8")
         return run_result, PublicationResult(
             run_id=run_id,
             run_directory=sink.run_directory,
-            publication=publication,
+            publication=PublicationRecord(
+                status=PublicationStatus.COMPLETED,
+                final_manifest=FinalManifestClaim(manifest_id=f"manifest-{run_id}"),
+            ),
             manifest_path=manifest_path,
             artifacts=(),
             exit_code=0 if overall is ExtractionOutcome.COMPLETED else 1,
@@ -861,3 +858,36 @@ def test_persisted_errors_contain_no_local_paths(job_env: dict[str, Path]) -> No
         assert failed.error is not None
         assert failed.error.code == "UNEXPECTED_FAILURE"
         assert failed.error.message == "local job failed unexpectedly"
+
+
+def test_ordinary_submit_uses_legacy_two_argument_stage2_executor(
+    job_env: dict[str, Path],
+) -> None:
+    observed_shapes: list[int] = []
+
+    def legacy_executor(
+        config: EffectiveExecutionConfiguration,
+        sink: FilesystemEvidenceSink,
+    ) -> tuple[LexicalRunResult, PublicationResult]:
+        observed_shapes.append(2)
+        return _success_executor()(config, sink)
+
+    with LocalLexicalJobService(
+        job_env["data_dir"],
+        execute_stage2=legacy_executor,
+    ) as service:
+        queued = service.submit(
+            approved_documents_root=job_env["approved"],
+            job_id=DOC_JOB,
+            review_revision_id=REVISION,
+            config_path=job_env["config_path"],
+            action=ExtractionReviewAction.EXTRACT_MATERIALS,
+        )
+        _wait_for(lambda: service.get_job(queued.local_job_id).status is LocalJobStatus.COMPLETED)
+        job = service.get_job(queued.local_job_id)
+
+    assert observed_shapes == [2]
+    assert job.classified_extraction is None
+    assert "classified_extraction" not in job.model_dump(mode="json")
+    assert job.run is not None
+    assert "stage4_page_restriction" not in job.run.model_dump(mode="json")

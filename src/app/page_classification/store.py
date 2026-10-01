@@ -128,6 +128,25 @@ def derive_reviewed_html_identity_key(reviewed_html: ReviewedHtmlV1Input) -> str
     return hashlib.sha256(body).hexdigest()
 
 
+def canonical_classification_snapshot_bytes(state: CurrentClassificationState) -> bytes:
+    """UTF-8 canonical JSON bytes for one current classification state snapshot."""
+
+    payload = state.model_dump(mode="json")
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def classification_snapshot_sha256(state: CurrentClassificationState) -> str:
+    """Lower-case SHA-256 of the canonical classification snapshot bytes."""
+
+    return hashlib.sha256(canonical_classification_snapshot_bytes(state)).hexdigest()
+
+
 def _write_atomic_json(path: Path, state: CurrentClassificationState) -> None:
     temporary = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
     payload = state.model_dump(mode="json")

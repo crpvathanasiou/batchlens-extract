@@ -415,6 +415,41 @@ button:disabled {
   background: #fff0ee;
 }
 
+.bl-banner--info {
+  color: #245066;
+  background: #eef7fb;
+}
+
+.bl-classification-panel {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bl-line);
+  background: #f7fafb;
+}
+
+.bl-classification-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.bl-classification-meta {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.bl-classification-labels {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.bl-classification-labels li + li {
+  margin-top: 4px;
+}
+
 .bl-banner--conflict {
   display: flex;
   align-items: center;

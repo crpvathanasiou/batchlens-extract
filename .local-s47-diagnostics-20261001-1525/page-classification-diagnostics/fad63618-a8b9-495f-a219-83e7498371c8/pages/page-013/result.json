@@ -1,0 +1,326 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-13",
+    "page_number": 13,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-13",
+        "page_number": 13,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+            "label": "BILL_OF_MATERIALS",
+            "quote": "Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh",
+            "reason": "This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials."
+          },
+          {
+            "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+            "label": "EQUIPMENT_LIST",
+            "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00",
+            "reason": "This phrase identifies specific equipment by name and model used in the process, indicating an equipment list."
+          }
+        ],
+        "labels": [
+          "BILL_OF_MATERIALS",
+          "EQUIPMENT_LIST"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-13",
+        "page_number": 13,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_283039805229256bffdec56133659b76",
+            "label": "MANUFACTURING_INSTRUCTIONS",
+            "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+            "reason": "This block contains structured actionable directions for weighing, sieving, transferring, and blending materials in production."
+          },
+          {
+            "element_id": "node_7d0e103a8d2da37f3a79ddf9d5739d45",
+            "label": "PROCESS_EXECUTION_RECORD",
+            "quote": "30. Blend for 2 min: Start Time: min; End Time: min",
+            "reason": "This field records actual start and end times for a blending step, qualifying as operational execution data."
+          }
+        ],
+        "labels": [
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-13",
+        "page_number": 13,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+            "label": "COVER_PAGE",
+            "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This table identifies the batch record title, version, and institution, indicating a batch record cover page."
+          },
+          {
+            "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+            "label": "PRODUCT_BATCH_DETAILS",
+            "quote": "Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This block provides product name and strength details, qualifying as product/batch identifiers."
+          },
+          {
+            "element_id": "node_b025d0fe9bddf446ee79e7bdc0363f11",
+            "label": "DOCUMENTATION_INSTRUCTIONS",
+            "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+            "reason": "This step includes instructions for weighing materials and recording weights, indicating documentation instructions for process data entry."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "PRODUCT_BATCH_DETAILS",
+          "DOCUMENTATION_INSTRUCTIONS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-13",
+      "page_number": 13,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 1,
+      "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_7226e0528d3eeaadba2370ad864d0482",
+      "label": "BILL_OF_MATERIALS",
+      "provenance": "call",
+      "quote": "Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh",
+      "reason": "This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials."
+    },
+    {
+      "call_id": 1,
+      "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_7226e0528d3eeaadba2370ad864d0482",
+      "label": "EQUIPMENT_LIST",
+      "provenance": "call",
+      "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00",
+      "reason": "This phrase identifies specific equipment by name and model used in the process, indicating an equipment list."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_283039805229256bffdec56133659b76",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_283039805229256bffdec56133659b76",
+      "label": "MANUFACTURING_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+      "reason": "This block contains structured actionable directions for weighing, sieving, transferring, and blending materials in production."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_7d0e103a8d2da37f3a79ddf9d5739d45",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_7d0e103a8d2da37f3a79ddf9d5739d45",
+      "label": "PROCESS_EXECUTION_RECORD",
+      "provenance": "call",
+      "quote": "30. Blend for 2 min: Start Time: min; End Time: min",
+      "reason": "This field records actual start and end times for a blending step, qualifying as operational execution data."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_6f0c47144336bd608124dfd87d7d5e40",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This table identifies the batch record title, version, and institution, indicating a batch record cover page."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_6f0c47144336bd608124dfd87d7d5e40",
+      "label": "PRODUCT_BATCH_DETAILS",
+      "provenance": "call",
+      "quote": "Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This block provides product name and strength details, qualifying as product/batch identifiers."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_b025d0fe9bddf446ee79e7bdc0363f11",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_b025d0fe9bddf446ee79e7bdc0363f11",
+      "label": "DOCUMENTATION_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+      "reason": "This step includes instructions for weighing materials and recording weights, indicating documentation instructions for process data entry."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-13",
+      "page_number": 13,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 1,
+        "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+        "label": "BILL_OF_MATERIALS",
+        "quote": "Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh",
+        "reason": "This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_7226e0528d3eeaadba2370ad864d0482"
+      },
+      {
+        "call_id": 1,
+        "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+        "label": "EQUIPMENT_LIST",
+        "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00",
+        "reason": "This phrase identifies specific equipment by name and model used in the process, indicating an equipment list.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_7226e0528d3eeaadba2370ad864d0482"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_283039805229256bffdec56133659b76",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+        "reason": "This block contains structured actionable directions for weighing, sieving, transferring, and blending materials in production.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_283039805229256bffdec56133659b76"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_7d0e103a8d2da37f3a79ddf9d5739d45",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "30. Blend for 2 min: Start Time: min; End Time: min",
+        "reason": "This field records actual start and end times for a blending step, qualifying as operational execution data.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_7d0e103a8d2da37f3a79ddf9d5739d45"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+        "label": "COVER_PAGE",
+        "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This table identifies the batch record title, version, and institution, indicating a batch record cover page.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_6f0c47144336bd608124dfd87d7d5e40"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_6f0c47144336bd608124dfd87d7d5e40",
+        "label": "PRODUCT_BATCH_DETAILS",
+        "quote": "Title: Fexo A - - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This block provides product name and strength details, qualifying as product/batch identifiers.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_6f0c47144336bd608124dfd87d7d5e40"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_b025d0fe9bddf446ee79e7bdc0363f11",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "26. Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm;",
+        "reason": "This step includes instructions for weighing materials and recording weights, indicating documentation instructions for process data entry.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_b025d0fe9bddf446ee79e7bdc0363f11"
+      }
+    ],
+    "requires_review": true
+  }
+}

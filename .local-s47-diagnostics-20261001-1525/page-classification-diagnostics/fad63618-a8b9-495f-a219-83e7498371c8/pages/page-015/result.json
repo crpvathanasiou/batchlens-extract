@@ -1,0 +1,272 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-15",
+    "page_number": 15,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-15",
+        "page_number": 15,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [],
+        "labels": [],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-15",
+        "page_number": 15,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_6b22bb39ff95a3f03a3c62198c4862c8",
+            "label": "MANUFACTURING_INSTRUCTIONS",
+            "quote": "39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and",
+            "reason": "The numbered steps provide structured actionable directions for production processing and equipment adjustment."
+          },
+          {
+            "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+            "label": "PROCESS_EXECUTION_RECORD",
+            "quote": "Performed By / Date Verified By / Date",
+            "reason": "The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording."
+          },
+          {
+            "element_id": "node_38f59d49ed4f181109ce78a13f7ffaf5",
+            "label": "YIELD_CALCULATION",
+            "quote": "Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =",
+            "reason": "This section contains a dedicated yield calculation formula and fields for recording granulation yield."
+          }
+        ],
+        "labels": [
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD",
+          "YIELD_CALCULATION"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-15",
+        "page_number": 15,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_250e702441f7cc18b7282c3baff42382",
+            "label": "COVER_PAGE",
+            "quote": "Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This table block identifies the batch record title, version, and batch record number, indicating a cover page."
+          },
+          {
+            "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+            "label": "DOCUMENTATION_INSTRUCTIONS",
+            "quote": "Performed By / Date Verified By / Date",
+            "reason": "The table columns for 'Performed By / Date' and 'Verified By / Date' indicate instructions for documenting execution and verification of production steps."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "DOCUMENTATION_INSTRUCTIONS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-15",
+      "page_number": 15,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 2,
+      "element_id": "node_6b22bb39ff95a3f03a3c62198c4862c8",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_6b22bb39ff95a3f03a3c62198c4862c8",
+      "label": "MANUFACTURING_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and",
+      "reason": "The numbered steps provide structured actionable directions for production processing and equipment adjustment."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_962787e445c44d8410e93c6ddbd85c98",
+      "label": "PROCESS_EXECUTION_RECORD",
+      "provenance": "call",
+      "quote": "Performed By / Date Verified By / Date",
+      "reason": "The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_38f59d49ed4f181109ce78a13f7ffaf5",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_38f59d49ed4f181109ce78a13f7ffaf5",
+      "label": "YIELD_CALCULATION",
+      "provenance": "call",
+      "quote": "Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =",
+      "reason": "This section contains a dedicated yield calculation formula and fields for recording granulation yield."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_250e702441f7cc18b7282c3baff42382",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_250e702441f7cc18b7282c3baff42382",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This table block identifies the batch record title, version, and batch record number, indicating a cover page."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_962787e445c44d8410e93c6ddbd85c98",
+      "label": "DOCUMENTATION_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "Performed By / Date Verified By / Date",
+      "reason": "The table columns for 'Performed By / Date' and 'Verified By / Date' indicate instructions for documenting execution and verification of production steps."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-15",
+      "page_number": 15,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 2,
+        "element_id": "node_6b22bb39ff95a3f03a3c62198c4862c8",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and",
+        "reason": "The numbered steps provide structured actionable directions for production processing and equipment adjustment.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_6b22bb39ff95a3f03a3c62198c4862c8"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "Performed By / Date Verified By / Date",
+        "reason": "The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_962787e445c44d8410e93c6ddbd85c98"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_38f59d49ed4f181109ce78a13f7ffaf5",
+        "label": "YIELD_CALCULATION",
+        "quote": "Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =",
+        "reason": "This section contains a dedicated yield calculation formula and fields for recording granulation yield.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_38f59d49ed4f181109ce78a13f7ffaf5"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_250e702441f7cc18b7282c3baff42382",
+        "label": "COVER_PAGE",
+        "quote": "Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This table block identifies the batch record title, version, and batch record number, indicating a cover page.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_250e702441f7cc18b7282c3baff42382"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "Performed By / Date Verified By / Date",
+        "reason": "The table columns for 'Performed By / Date' and 'Verified By / Date' indicate instructions for documenting execution and verification of production steps.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_962787e445c44d8410e93c6ddbd85c98"
+      }
+    ],
+    "requires_review": true
+  }
+}

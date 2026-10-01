@@ -283,6 +283,7 @@ class CurrentClassificationState(PageClassificationModel):
     progress: ClassificationProgress
     page_results: tuple[CompletedPageClassificationResult, ...] = ()
     terminal_reason: str | None = None
+    classification_run_id: str | None = None
 
     @model_validator(mode="after")
     def _lifecycle_invariants(self) -> CurrentClassificationState:

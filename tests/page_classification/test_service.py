@@ -40,10 +40,21 @@ def _wait_for(predicate: Any, *, timeout: float = 15.0, interval: float = 0.05) 
 
 
 class EmptyWrapper:
+    default_model = "gpt-4.1-mini"
+    default_temperature = 0.0
+    timeout_seconds = 20.0
+    max_retries = 2
+
     async def generate_structured(self, **kwargs: Any) -> LLMCallResult[Any]:
         schema = kwargs["response_schema"]
         parsed = schema.model_validate({"labels": [], "status": "empty", "evidence": []})
-        return LLMCallResult(model_name="fake", raw_text="{}", parsed=parsed)
+        return LLMCallResult(
+            model_name=self.default_model,
+            raw_text="{}",
+            parsed=parsed,
+            attempts=1,
+            latency_ms=1.0,
+        )
 
 
 class BlockingRunner:
@@ -55,14 +66,34 @@ class BlockingRunner:
         self.release = threading.Event()
         self.calls = 0
 
-    async def classify_page(self, page: Any, *, on_complete: Any = None) -> Any:
+    async def classify_page(
+        self,
+        page: Any,
+        *,
+        on_complete: Any = None,
+        diagnostics: Any = None,
+    ) -> Any:
         self.calls += 1
         self.entered.set()
         assert self.release.wait(timeout=60.0)
-        return await self._inner.classify_page(page, on_complete=on_complete)
+        return await self._inner.classify_page(
+            page,
+            on_complete=on_complete,
+            diagnostics=diagnostics,
+        )
 
-    async def classify_document(self, document: Any, *, on_page_complete: Any = None) -> Any:
-        return await self._inner.classify_document(document, on_page_complete=on_page_complete)
+    async def classify_document(
+        self,
+        document: Any,
+        *,
+        on_page_complete: Any = None,
+        diagnostics: Any = None,
+    ) -> Any:
+        return await self._inner.classify_document(
+            document,
+            on_page_complete=on_page_complete,
+            diagnostics=diagnostics,
+        )
 
 
 class ExplodingRunner:
@@ -71,10 +102,20 @@ class ExplodingRunner:
         self._fail_after = fail_after
         self._completed = 0
 
-    async def classify_page(self, page: Any, *, on_complete: Any = None) -> Any:
+    async def classify_page(
+        self,
+        page: Any,
+        *,
+        on_complete: Any = None,
+        diagnostics: Any = None,
+    ) -> Any:
         if self._completed >= self._fail_after:
             raise RuntimeError("worker boom sk-secret")
-        result = await self._inner.classify_page(page, on_complete=on_complete)
+        result = await self._inner.classify_page(
+            page,
+            on_complete=on_complete,
+            diagnostics=diagnostics,
+        )
         self._completed += 1
         return result
 
@@ -167,11 +208,16 @@ def test_restart_marks_running_interrupted_without_calls(tmp_path: Path) -> None
     calls = {"count": 0}
 
     class CountingWrapper:
+        default_model = "gpt-4.1-mini"
+        default_temperature = 0.0
+        timeout_seconds = 20.0
+        max_retries = 2
+
         async def generate_structured(self, **kwargs: Any) -> LLMCallResult[Any]:
             calls["count"] += 1
             schema = kwargs["response_schema"]
             parsed = schema.model_validate({"labels": [], "status": "empty", "evidence": []})
-            return LLMCallResult(model_name="fake", raw_text="{}", parsed=parsed)
+            return LLMCallResult(model_name=self.default_model, raw_text="{}", parsed=parsed)
 
     service = PageClassificationService(
         tmp_path / "data",

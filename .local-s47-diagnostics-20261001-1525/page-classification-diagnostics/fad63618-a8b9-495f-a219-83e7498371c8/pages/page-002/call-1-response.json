@@ -1,0 +1,37 @@
+{
+  "attempts": 1,
+  "call_id": 1,
+  "call_outcome": {
+    "availability": "valid",
+    "binding": {
+      "page_html_id": "source-page-2",
+      "page_number": 2,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "call_id": 1,
+    "failure_reason": null,
+    "response": {
+      "evidence": [],
+      "labels": [],
+      "status": "ok"
+    }
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "latency_ms": 731.61,
+  "model_name": "gpt-4.1-mini",
+  "page_number": 2,
+  "parsed": {
+    "evidence": [],
+    "labels": [],
+    "status": "ok"
+  },
+  "raw_text": "{\"labels\":[],\"status\":\"ok\",\"evidence\":[]}"
+}

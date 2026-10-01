@@ -68,6 +68,7 @@ from app.lexical_extraction.contracts import (
     ReviewedHtmlV1Input,
     RunProvenance,
     SafeStructuredError,
+    Stage4PageRestrictionProvenance,
     UnitOccurrence,
     ValueOccurrence,
     validate_resolved_component_coverage,
@@ -233,6 +234,7 @@ class _HtmlValidation:
     validated_input: ReviewedHtmlV1Input
     pages_observed: int
     blocks_observed: int
+    page_numbers: frozenset[int]
 
 
 @dataclass
@@ -302,11 +304,20 @@ def fixed_rules_sha256() -> str:
 def run_lexical_extraction(
     config: EffectiveExecutionConfiguration,
     sink: EvidenceSink,
+    *,
+    page_allow_list: Sequence[int] | None = None,
+    stage4_page_restriction: Stage4PageRestrictionProvenance | None = None,
 ) -> LexicalRunResult:
     """Execute exactly the resolved component selection for one configuration.
 
     Validates reviewed HTML v1 fully, prefights the flat snapshot once, streams
     evidence through ``sink``, and returns honest outcomes plus monitoring.
+
+    ``page_allow_list`` is an optional Stage-4-only programmatic restriction of
+    existing reviewed-HTML page numbers. When absent, behavior is unchanged.
+    When present, dictionary and unit/value matching scan only those pages; page
+    skeletons are emitted only for scanned pages; the original HTML bytes and
+    SHA-256 identity remain those of the full approved document.
     """
 
     run_id = str(uuid.uuid4())
@@ -327,6 +338,8 @@ def run_lexical_extraction(
     validated_input: ReviewedHtmlV1Input | None = None
     knowledge: KnowledgeSnapshotIdentity | None = None
     results: dict[Component, ComponentResult] = {}
+    selected_pages: frozenset[int] | None = None
+    restriction_for_provenance: Stage4PageRestrictionProvenance | None = None
 
     def _finish_peak() -> None:
         peak, method = measure_peak_process_memory()
@@ -341,6 +354,11 @@ def run_lexical_extraction(
         html_started = time.perf_counter()
         try:
             html = _validate_html(config.input.reviewed_html_path)
+            selected_pages, restriction_for_provenance = _resolve_page_restriction(
+                page_allow_list=page_allow_list,
+                stage4_page_restriction=stage4_page_restriction,
+                known_page_numbers=html.page_numbers,
+            )
         except (ReviewedHtmlReadError, LexicalRunnerError, OSError) as exc:
             error = _map_exception(exc, component=None)
             monitor.record_stage(
@@ -447,6 +465,7 @@ def run_lexical_extraction(
                         sink=sink,
                         monitor=monitor,
                         run_id=run_id,
+                        allowed_page_numbers=selected_pages,
                     )
             l10_selected = tuple(
                 component
@@ -464,6 +483,7 @@ def run_lexical_extraction(
                     sink=sink,
                     monitor=monitor,
                     run_id=run_id,
+                    allowed_page_numbers=selected_pages,
                 )
                 results.update(l10_results)
         finally:
@@ -482,6 +502,7 @@ def run_lexical_extraction(
             validated_input=validated_input,
             knowledge=knowledge,
             monitor=monitor,
+            stage4_page_restriction=restriction_for_provenance,
         )
         validate_resolved_component_coverage(provenance, extraction)
         try:
@@ -578,6 +599,7 @@ def run_lexical_extraction(
                     validated_input=validated_input,
                     knowledge=knowledge,
                     monitor=monitor,
+                    stage4_page_restriction=restriction_for_provenance,
                 )
             return LexicalRunResult(
                 run_id=run_id,
@@ -647,10 +669,12 @@ def _validate_html(path: Path) -> _HtmlValidation:
 
     pages_observed = 0
     blocks_observed = 0
+    page_numbers: set[int] = set()
     try:
         for page in reader.iter_pages():
             pages_observed += 1
             blocks_observed += len(page.blocks)
+            page_numbers.add(page.page.page_number)
     except ReviewedHtmlReadError:
         raise
 
@@ -663,7 +687,66 @@ def _validate_html(path: Path) -> _HtmlValidation:
         validated_input=reader.validated_input,
         pages_observed=pages_observed,
         blocks_observed=blocks_observed,
+        page_numbers=frozenset(page_numbers),
     )
+
+
+def _resolve_page_restriction(
+    *,
+    page_allow_list: Sequence[int] | None,
+    stage4_page_restriction: Stage4PageRestrictionProvenance | None,
+    known_page_numbers: frozenset[int],
+) -> tuple[frozenset[int] | None, Stage4PageRestrictionProvenance | None]:
+    """Validate the optional Stage-4 allow-list against known reviewed-HTML pages."""
+
+    if page_allow_list is None:
+        if stage4_page_restriction is not None:
+            raise LexicalRunnerError(
+                "PAGE_RESTRICTION_WITHOUT_ALLOW_LIST",
+                "stage4_page_restriction requires an explicit page allow-list",
+            )
+        return None, None
+
+    if stage4_page_restriction is None:
+        raise LexicalRunnerError(
+            "PAGE_ALLOW_LIST_WITHOUT_RESTRICTION",
+            "page allow-list requires stage4_page_restriction provenance",
+        )
+
+    if len(page_allow_list) == 0:
+        raise LexicalRunnerError(
+            "PAGE_ALLOW_LIST_EMPTY",
+            "page allow-list must include at least one existing page number",
+        )
+
+    normalized: list[int] = []
+    seen: set[int] = set()
+    for raw in page_allow_list:
+        if type(raw) is not int or isinstance(raw, bool) or raw < 1:
+            raise LexicalRunnerError(
+                "PAGE_ALLOW_LIST_INVALID",
+                "page allow-list entries must be strict positive integers",
+            )
+        if raw in seen:
+            raise LexicalRunnerError(
+                "PAGE_ALLOW_LIST_DUPLICATE",
+                f"page allow-list contains duplicate page number {raw}",
+            )
+        if raw not in known_page_numbers:
+            raise LexicalRunnerError(
+                "PAGE_ALLOW_LIST_UNKNOWN",
+                f"page allow-list references nonexistent page number {raw}",
+            )
+        seen.add(raw)
+        normalized.append(raw)
+
+    ordered = tuple(sorted(normalized))
+    if stage4_page_restriction.selected_page_numbers != ordered:
+        raise LexicalRunnerError(
+            "PAGE_RESTRICTION_MISMATCH",
+            "stage4_page_restriction selected pages must match the sorted allow-list",
+        )
+    return frozenset(ordered), stage4_page_restriction
 
 
 def _run_dictionary_component(
@@ -677,6 +760,7 @@ def _run_dictionary_component(
     sink: EvidenceSink,
     monitor: RunMonitoringAccumulator,
     run_id: str,
+    allowed_page_numbers: frozenset[int] | None = None,
 ) -> ComponentResult:
     stage = f"component:{component.value}"
     started = time.perf_counter()
@@ -689,11 +773,15 @@ def _run_dictionary_component(
             component=component,
             html_path=html_path,
             expected_html_sha256=expected_html_sha256,
+            allowed_page_numbers=allowed_page_numbers,
         )
         terms = EligibleTermCounter(
             iter_eligible_terms(snapshot, (component,), batch_size=limits.sqlite_read_batch_rows)
         )
-        blocks = ReviewedHtmlBlockReplay(html_path)
+        blocks = ReviewedHtmlBlockReplay(
+            html_path,
+            allowed_page_numbers=allowed_page_numbers,
+        )
         discoveries = iter_raw_discoveries(
             terms,
             blocks,
@@ -793,6 +881,7 @@ def _run_l10_group(
     sink: EvidenceSink,
     monitor: RunMonitoringAccumulator,
     run_id: str,
+    allowed_page_numbers: frozenset[int] | None = None,
 ) -> dict[Component, ComponentResult]:
     stage = "component_group:l10"
     started = time.perf_counter()
@@ -811,6 +900,7 @@ def _run_l10_group(
                 component=component,
                 html_path=html_path,
                 expected_html_sha256=expected_html_sha256,
+                allowed_page_numbers=allowed_page_numbers,
             )
 
         param_counter: EligibleTermCounter | None = None
@@ -836,7 +926,10 @@ def _run_l10_group(
             )
             equipment_unit_terms = unit_counter
 
-        blocks = ReviewedHtmlBlockReplay(html_path)
+        blocks = ReviewedHtmlBlockReplay(
+            html_path,
+            allowed_page_numbers=allowed_page_numbers,
+        )
         stream = iter_parameter_unit_value_block_records(
             blocks,
             components=selected,
@@ -940,12 +1033,14 @@ def _emit_component_pages(
     component: Component,
     html_path: Path,
     expected_html_sha256: str,
+    allowed_page_numbers: frozenset[int] | None = None,
 ) -> None:
     """Stream page skeletons for one component from a fresh L03 reader.
 
-    Does not retain an all-page list. Empty pages are emitted in document order.
-    A changed or incomplete replay fails the component instead of claiming
-    completed coverage.
+    Does not retain an all-page list. Empty pages are emitted in document order
+    when unrestricted. When ``allowed_page_numbers`` is set, only those pages are
+    emitted; excluded pages receive no synthetic page records. A changed or
+    incomplete replay fails the component instead of claiming completed coverage.
     """
 
     try:
@@ -963,6 +1058,11 @@ def _emit_component_pages(
 
     try:
         for page in reader.iter_pages():
+            if (
+                allowed_page_numbers is not None
+                and page.page.page_number not in allowed_page_numbers
+            ):
+                continue
             try:
                 sink.write_page(
                     component,
@@ -1060,6 +1160,7 @@ def _build_provenance(
     validated_input: ReviewedHtmlV1Input,
     knowledge: KnowledgeSnapshotIdentity,
     monitor: RunMonitoringAccumulator,
+    stage4_page_restriction: Stage4PageRestrictionProvenance | None = None,
 ) -> RunProvenance:
     timings = tuple(
         ElapsedTiming(name=name, elapsed_ms=value)
@@ -1080,6 +1181,7 @@ def _build_provenance(
         dependency_versions=_dependency_versions(),
         timings=timings,
         measurements=tuple(measurements),
+        stage4_page_restriction=stage4_page_restriction,
     )
 
 

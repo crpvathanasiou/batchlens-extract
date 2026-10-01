@@ -157,12 +157,23 @@ class ReviewedHtmlBlockReplay:
     a later pass with a different digest or an incomplete read raises
     :class:`DictionaryMatchError`. Callers do not need to close this object;
     readers are scoped to each pass.
+
+    When ``allowed_page_numbers`` is supplied, only blocks from those existing
+    page numbers are yielded. The full HTML is still opened and fully consumed so
+    the SHA-256 identity remains the original document digest.
     """
 
-    def __init__(self, path: Path | str, *, chunk_size: int = 64 * 1024) -> None:
+    def __init__(
+        self,
+        path: Path | str,
+        *,
+        chunk_size: int = 64 * 1024,
+        allowed_page_numbers: frozenset[int] | None = None,
+    ) -> None:
         self._path = Path(path)
         self._chunk_size = chunk_size
         self._pinned_sha256: str | None = None
+        self._allowed_page_numbers = allowed_page_numbers
 
     @property
     def source_identity(self) -> str:
@@ -184,6 +195,11 @@ class ReviewedHtmlBlockReplay:
 
         try:
             for page in reader.iter_pages():
+                if (
+                    self._allowed_page_numbers is not None
+                    and page.page.page_number not in self._allowed_page_numbers
+                ):
+                    continue
                 for record in page.blocks:
                     yield record.block
         except ReviewedHtmlReadError as exc:

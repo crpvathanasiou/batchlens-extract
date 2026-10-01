@@ -1,0 +1,298 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-12",
+    "page_number": 12,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-12",
+        "page_number": 12,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [],
+        "labels": [],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-12",
+        "page_number": 12,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_774859858aa60481204f01706daf52ae",
+            "label": "MANUFACTURING_INSTRUCTIONS",
+            "quote": "21. Stop the drying process when desired granule moisture content is reached. Limit: NMT 1% of starting moisture Final Moisture: (%) 22. Sieve the granules using Mesh # 18 and transferee the material into appropriate bag and label: \"Fexo A ",
+            "reason": "Numbered stepwise directions for production processing including drying, sieving, and labeling."
+          },
+          {
+            "element_id": "node_774859858aa60481204f01706daf52ae",
+            "label": "PROCESS_EXECUTION_RECORD",
+            "quote": "Granulation end time: Pyrobutton data collection end time: NIR data collection end time: Final weight of granules: gm",
+            "reason": "Fields to record actual times and final granule weight during processing steps."
+          },
+          {
+            "element_id": "node_774859858aa60481204f01706daf52ae",
+            "label": "YIELD_CALCULATION",
+            "quote": "24. Calculate yield (%) = gm",
+            "reason": "Instruction and field to calculate and record yield percentage from granule weight."
+          }
+        ],
+        "labels": [
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD",
+          "YIELD_CALCULATION"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-12",
+        "page_number": 12,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_d646b445a7ccf5b8ad64a69f6684045b",
+            "label": "COVER_PAGE",
+            "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This table at the top identifies the batch record with title, version, and batch record number, typical of a cover page."
+          },
+          {
+            "element_id": "node_958bbc51ff4b5b85cc62e157514f6f51",
+            "label": "PRODUCT_BATCH_DETAILS",
+            "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This text block provides product name and strength, qualifying as product/batch details."
+          },
+          {
+            "element_id": "node_a8576057e664e74a1808dae947757e17",
+            "label": "DOCUMENTATION_INSTRUCTIONS",
+            "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+            "reason": "This table header indicates a section for recording execution and verification signatures and dates, typical documentation instructions for batch record entries."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "PRODUCT_BATCH_DETAILS",
+          "DOCUMENTATION_INSTRUCTIONS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-12",
+      "page_number": 12,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 2,
+      "element_id": "node_774859858aa60481204f01706daf52ae",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae",
+      "label": "MANUFACTURING_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "21. Stop the drying process when desired granule moisture content is reached. Limit: NMT 1% of starting moisture Final Moisture: (%) 22. Sieve the granules using Mesh # 18 and transferee the material into appropriate bag and label: \"Fexo A ",
+      "reason": "Numbered stepwise directions for production processing including drying, sieving, and labeling."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_774859858aa60481204f01706daf52ae",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae",
+      "label": "PROCESS_EXECUTION_RECORD",
+      "provenance": "call",
+      "quote": "Granulation end time: Pyrobutton data collection end time: NIR data collection end time: Final weight of granules: gm",
+      "reason": "Fields to record actual times and final granule weight during processing steps."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_774859858aa60481204f01706daf52ae",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae",
+      "label": "YIELD_CALCULATION",
+      "provenance": "call",
+      "quote": "24. Calculate yield (%) = gm",
+      "reason": "Instruction and field to calculate and record yield percentage from granule weight."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_d646b445a7ccf5b8ad64a69f6684045b",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_d646b445a7ccf5b8ad64a69f6684045b",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This table at the top identifies the batch record with title, version, and batch record number, typical of a cover page."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_958bbc51ff4b5b85cc62e157514f6f51",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_958bbc51ff4b5b85cc62e157514f6f51",
+      "label": "PRODUCT_BATCH_DETAILS",
+      "provenance": "call",
+      "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This text block provides product name and strength, qualifying as product/batch details."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_a8576057e664e74a1808dae947757e17",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_a8576057e664e74a1808dae947757e17",
+      "label": "DOCUMENTATION_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+      "reason": "This table header indicates a section for recording execution and verification signatures and dates, typical documentation instructions for batch record entries."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-12",
+      "page_number": 12,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 2,
+        "element_id": "node_774859858aa60481204f01706daf52ae",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "21. Stop the drying process when desired granule moisture content is reached. Limit: NMT 1% of starting moisture Final Moisture: (%) 22. Sieve the granules using Mesh # 18 and transferee the material into appropriate bag and label: \"Fexo A ",
+        "reason": "Numbered stepwise directions for production processing including drying, sieving, and labeling.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_774859858aa60481204f01706daf52ae",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "Granulation end time: Pyrobutton data collection end time: NIR data collection end time: Final weight of granules: gm",
+        "reason": "Fields to record actual times and final granule weight during processing steps.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_774859858aa60481204f01706daf52ae",
+        "label": "YIELD_CALCULATION",
+        "quote": "24. Calculate yield (%) = gm",
+        "reason": "Instruction and field to calculate and record yield percentage from granule weight.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_774859858aa60481204f01706daf52ae"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_d646b445a7ccf5b8ad64a69f6684045b",
+        "label": "COVER_PAGE",
+        "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This table at the top identifies the batch record with title, version, and batch record number, typical of a cover page.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_d646b445a7ccf5b8ad64a69f6684045b"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_958bbc51ff4b5b85cc62e157514f6f51",
+        "label": "PRODUCT_BATCH_DETAILS",
+        "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This text block provides product name and strength, qualifying as product/batch details.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_958bbc51ff4b5b85cc62e157514f6f51"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_a8576057e664e74a1808dae947757e17",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+        "reason": "This table header indicates a section for recording execution and verification signatures and dates, typical documentation instructions for batch record entries.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_a8576057e664e74a1808dae947757e17"
+      }
+    ],
+    "requires_review": true
+  }
+}

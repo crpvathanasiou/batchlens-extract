@@ -258,8 +258,7 @@ def test_run_extraction_requires_config_job_and_revision() -> None:
         "--review-revision-id",
     )
 
-    def refuse_create_app(*, data_dir: Path, approved_documents_root: Path) -> FastAPI:
-        del data_dir, approved_documents_root
+    def refuse_create_app(**_kwargs: object) -> FastAPI:
         return FastAPI()
 
     def refuse_extraction(**_kwargs: object) -> LocalLexicalJob:
@@ -286,7 +285,7 @@ def test_successful_run_extraction_closes_service_then_creates_ui(
     harness_env: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    created: dict[str, Path] = {}
+    created: dict[str, object] = {}
     captured_initial: dict[str, str | None] = {}
     served: list[FastAPI] = []
     closed: list[bool] = []
@@ -308,15 +307,22 @@ def test_successful_run_extraction_closes_service_then_creates_ui(
         data_dir: Path,
         approved_documents_root: Path,
         initial_local_job_id: str | None = None,
+        config_path: Path | None = None,
+        stage4_adapter: object | None = None,
+        **_kwargs: object,
     ) -> FastAPI:
         created["data_dir"] = data_dir
         created["approved"] = approved_documents_root
+        created["config_path"] = config_path
+        created["stage4"] = stage4_adapter is not None
         captured_initial["local_job_id"] = initial_local_job_id
         return create_app(
             data_dir=data_dir,
             approved_documents_root=approved_documents_root,
             static_dir=harness_env["static"],
             initial_local_job_id=initial_local_job_id,
+            config_path=config_path,
+            stage4_adapter=stage4_adapter,  # type: ignore[arg-type]
         )
 
     def serve(app: FastAPI, *, host: str, port: int) -> None:
@@ -403,8 +409,7 @@ def test_failed_interrupted_and_timeout_do_not_start_ui(
         del app, host, port
         ui_started["count"] += 1
 
-    def refuse_create_app(*, data_dir: Path, approved_documents_root: Path) -> FastAPI:
-        del data_dir, approved_documents_root
+    def refuse_create_app(**_kwargs: object) -> FastAPI:
         return FastAPI()
 
     def fail_run(**_kwargs: object) -> LocalLexicalJob:
@@ -522,11 +527,20 @@ def test_without_run_extraction_opens_existing_completed_jobs(
     served: list[FastAPI] = []
     extraction_calls = {"count": 0}
 
-    def create_app_fn(*, data_dir: Path, approved_documents_root: Path) -> FastAPI:
+    def create_app_fn(
+        *,
+        data_dir: Path,
+        approved_documents_root: Path,
+        config_path: Path | None = None,
+        stage4_adapter: object | None = None,
+        **_kwargs: object,
+    ) -> FastAPI:
         return create_app(
             data_dir=data_dir,
             approved_documents_root=approved_documents_root,
             static_dir=harness_env["static"],
+            config_path=config_path,
+            stage4_adapter=stage4_adapter,  # type: ignore[arg-type]
         )
 
     def serve(app: FastAPI, *, host: str, port: int) -> None:

@@ -24,6 +24,80 @@ export interface ExtractionFinding {
   removed_by_user: boolean
 }
 
+export interface ClassificationEvidenceItem {
+  label: string
+  quote: string | null
+  reason: string | null
+  element_id: string | null
+  evidence_verification: string | null
+  evidence_verification_reason: string | null
+  provenance?: string | null
+}
+
+export interface PageClassificationView {
+  page_number: number
+  kind: string
+  requires_review: boolean
+  is_provisional: boolean
+  applied_other_unclassified: boolean
+  labels: ClassificationEvidenceItem[]
+  evidence: ClassificationEvidenceItem[]
+  source_validation: {
+    has_unverified: boolean
+    requires_review: boolean
+    items: ClassificationEvidenceItem[]
+  }
+  eligibility: {
+    eligible_for_extraction: boolean
+    reason: string
+    excluded_by_policy: boolean
+  }
+}
+
+export interface ClassificationStateView {
+  job_id: string
+  review_revision_id: string
+  status: string
+  progress: {
+    total_pages: number
+    completed_pages: number
+    current_page_number: number | null
+  }
+  created_at: string
+  updated_at: string
+  finished_at: string | null
+  terminal_reason: string | null
+  pages: PageClassificationView[]
+  source: 'current' | 'job_snapshot'
+}
+
+export interface ApprovedDocumentSummary {
+  job_id: string
+  review_revision_id: string
+}
+
+export interface LexicalJobStatus {
+  local_job_id: string
+  job_id: string
+  review_revision_id: string
+  status: string
+  phase: string
+  action: string
+  submitted_at: string
+  started_at: string | null
+  finished_at: string | null
+  error_code: string | null
+  error_message: string | null
+  classified: boolean
+  selected_page_numbers: number[] | null
+  extraction_overall: string | null
+  reviewable: boolean
+}
+
+export type ExtractAllResult =
+  | { kind: 'submitted'; job: LexicalJobStatus }
+  | { kind: 'no_eligible_pages'; message: string }
+
 export interface OpenedExtractionReview {
   local_job_id: string
   job_id: string
@@ -34,6 +108,7 @@ export interface OpenedExtractionReview {
   approval_state: 'not_approved' | 'approved'
   pages: number[]
   findings: ExtractionFinding[]
+  classification?: ClassificationStateView | null
 }
 
 export interface ExtractionReviewOptions {
@@ -75,6 +150,84 @@ export type PageEdit =
       page_number: number
     }
 
+export const STAGE4_POLL_INTERVAL_MS = 1000
+
+export function isTerminalClassificationStatus(status: string | null | undefined): boolean {
+  return status === 'completed' || status === 'failed' || status === 'interrupted'
+}
+
+export function isTerminalLexicalStatus(status: string | null | undefined): boolean {
+  return status === 'completed' || status === 'failed' || status === 'interrupted'
+}
+
+/** Strip tabs/newlines so each TSV cell stays on one line. */
+export function sanitizeClassificationTsvValue(value: string): string {
+  return value.replace(/[\t\r\n]+/g, ' ').replace(/ +/g, ' ').trim()
+}
+
+function classificationStateMarkers(page: PageClassificationView): string[] {
+  const markers: string[] = []
+  if (page.kind === 'incomplete') markers.push('incomplete')
+  if (
+    page.kind === 'needs_review'
+    || page.requires_review
+    || page.source_validation.requires_review
+  ) {
+    markers.push('needs_review')
+  }
+  if (page.kind === 'empty') markers.push('empty')
+  if (page.is_provisional) markers.push('provisional')
+  if (page.source_validation.has_unverified) markers.push('unverified_evidence')
+  return [...new Set(markers)]
+}
+
+/** Second-column value for one page in the classifications TXT export. */
+export function formatPageClassificationColumn(page: PageClassificationView | null | undefined): string {
+  if (!page) return '[no completed classification result]'
+  const labels = page.labels
+    .map((item) => sanitizeClassificationTsvValue(item.label))
+    .filter((label) => label.length > 0)
+  if (labels.length === 0 && page.applied_other_unclassified) {
+    labels.push('OTHER_UNCLASSIFIED')
+  }
+  const markers = classificationStateMarkers(page)
+  const labelPart = labels.join('; ')
+  if (markers.length === 0) {
+    return labelPart.length > 0 ? labelPart : '[no completed classification result]'
+  }
+  const markerPart = `[${markers.join('; ')}]`
+  return labelPart.length > 0 ? `${labelPart} ${markerPart}` : markerPart
+}
+
+/** UTF-8 TSV body: Page number / Page classification, one row per page in order. */
+export function buildPageClassificationsTsv(
+  pageNumbers: readonly number[],
+  classification: ClassificationStateView,
+): string {
+  const byPage = new Map(classification.pages.map((page) => [page.page_number, page]))
+  const lines = ['Page number\tPage classification']
+  for (const pageNumber of pageNumbers) {
+    const cell = sanitizeClassificationTsvValue(
+      formatPageClassificationColumn(byPage.get(pageNumber)),
+    )
+    lines.push(`${pageNumber}\t${cell}`)
+  }
+  return `${lines.join('\n')}\n`
+}
+
+export function pageClassificationsDownloadFilename(input: {
+  source: 'current' | 'job_snapshot'
+  jobId: string
+  reviewRevisionId: string
+  localJobId?: string | null
+}): string {
+  const safe = (value: string) => value.replace(/[^A-Za-z0-9._-]+/g, '_')
+  if (input.source === 'job_snapshot' && input.localJobId) {
+    return `page-classifications-job-snapshot-${safe(input.localJobId)}.txt`
+  }
+  return `page-classifications-current-${safe(input.jobId)}-${safe(input.reviewRevisionId)}.txt`
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...init })
   const payload = (await response.json()) as T & { message?: string; code?: string }
@@ -112,6 +265,57 @@ export function createExtractionReviewApi(apiBaseUrl = '') {
     },
     resultsTxtUrl(localJobId: string): string {
       return `${root}/jobs/${encodeURIComponent(localJobId)}/results.txt`
+    },
+    listApprovedDocuments(): Promise<{ documents: ApprovedDocumentSummary[] }> {
+      return requestJson(`${root}/approved-documents`)
+    },
+    approvedDocumentPages(
+      jobId: string,
+      reviewRevisionId: string,
+    ): Promise<{ job_id: string; review_revision_id: string; pages: number[] }> {
+      return requestJson(
+        `${root}/approved-documents/${encodeURIComponent(jobId)}/${encodeURIComponent(reviewRevisionId)}/pages`,
+      )
+    },
+    approvedDocumentPage(
+      jobId: string,
+      reviewRevisionId: string,
+      pageNumber: number,
+    ): Promise<{ page_number: number; html: string }> {
+      return requestJson(
+        `${root}/approved-documents/${encodeURIComponent(jobId)}/${encodeURIComponent(reviewRevisionId)}/pages/${pageNumber}`,
+      )
+    },
+    getClassification(
+      jobId: string,
+      reviewRevisionId: string,
+    ): Promise<{ classification: ClassificationStateView | null }> {
+      return requestJson(
+        `${root}/approved-documents/${encodeURIComponent(jobId)}/${encodeURIComponent(reviewRevisionId)}/classification`,
+      )
+    },
+    startClassification(
+      jobId: string,
+      reviewRevisionId: string,
+    ): Promise<{ classification: ClassificationStateView | null }> {
+      return requestJson(
+        `${root}/approved-documents/${encodeURIComponent(jobId)}/${encodeURIComponent(reviewRevisionId)}/classify`,
+        { method: 'POST' },
+      )
+    },
+    extractAll(jobId: string, reviewRevisionId: string): Promise<ExtractAllResult> {
+      return requestJson(
+        `${root}/approved-documents/${encodeURIComponent(jobId)}/${encodeURIComponent(reviewRevisionId)}/extract-all`,
+        { method: 'POST' },
+      )
+    },
+    localJobStatus(localJobId: string): Promise<LexicalJobStatus> {
+      return requestJson(`${root}/local-jobs/${encodeURIComponent(localJobId)}`)
+    },
+    jobClassification(
+      localJobId: string,
+    ): Promise<{ classification: ClassificationStateView | null }> {
+      return requestJson(`${root}/jobs/${encodeURIComponent(localJobId)}/classification`)
     },
   }
 }

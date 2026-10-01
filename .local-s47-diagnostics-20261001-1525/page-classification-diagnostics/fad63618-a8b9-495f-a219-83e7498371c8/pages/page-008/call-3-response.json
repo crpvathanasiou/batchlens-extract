@@ -1,0 +1,83 @@
+{
+  "attempts": 1,
+  "call_id": 3,
+  "call_outcome": {
+    "availability": "valid",
+    "binding": {
+      "page_html_id": "source-page-8",
+      "page_number": 8,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "call_id": 3,
+    "failure_reason": null,
+    "response": {
+      "evidence": [
+        {
+          "element_id": "node_2c57e3acace733ec8b88e62cc0050fa0",
+          "label": "COVER_PAGE",
+          "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+          "reason": "The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record."
+        },
+        {
+          "element_id": "node_a92d055c455925dd94f616d2edefeaaf",
+          "label": "PRODUCT_BATCH_DETAILS",
+          "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+          "reason": "The title includes product name and strength, constituting dedicated product/batch identification details."
+        },
+        {
+          "element_id": "node_1ffdc789f42e0ea1523a6e4cc060a75e",
+          "label": "DOCUMENTATION_INSTRUCTIONS",
+          "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+          "reason": "The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification."
+        }
+      ],
+      "labels": [
+        "COVER_PAGE",
+        "PRODUCT_BATCH_DETAILS",
+        "DOCUMENTATION_INSTRUCTIONS"
+      ],
+      "status": "ok"
+    }
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "latency_ms": 2589.67,
+  "model_name": "gpt-4.1-mini",
+  "page_number": 8,
+  "parsed": {
+    "evidence": [
+      {
+        "element_id": "node_2c57e3acace733ec8b88e62cc0050fa0",
+        "label": "COVER_PAGE",
+        "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record."
+      },
+      {
+        "element_id": "node_a92d055c455925dd94f616d2edefeaaf",
+        "label": "PRODUCT_BATCH_DETAILS",
+        "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "The title includes product name and strength, constituting dedicated product/batch identification details."
+      },
+      {
+        "element_id": "node_1ffdc789f42e0ea1523a6e4cc060a75e",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+        "reason": "The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification."
+      }
+    ],
+    "labels": [
+      "COVER_PAGE",
+      "PRODUCT_BATCH_DETAILS",
+      "DOCUMENTATION_INSTRUCTIONS"
+    ],
+    "status": "ok"
+  },
+  "raw_text": "{\"labels\":[\"COVER_PAGE\",\"PRODUCT_BATCH_DETAILS\",\"DOCUMENTATION_INSTRUCTIONS\"],\"status\":\"ok\",\"evidence\":[{\"label\":\"COVER_PAGE\",\"quote\":\"UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets\",\"reason\":\"The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record.\",\"element_id\":\"node_2c57e3acace733ec8b88e62cc0050fa0\"},{\"label\":\"PRODUCT_BATCH_DETAILS\",\"quote\":\"Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets\",\"reason\":\"The title includes product name and strength, constituting dedicated product/batch identification details.\",\"element_id\":\"node_a92d055c455925dd94f616d2edefeaaf\"},{\"label\":\"DOCUMENTATION_INSTRUCTIONS\",\"quote\":\"9. Production Procedure Processing Step Performed By / Date Verified By / Date\",\"reason\":\"The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification.\",\"element_id\":\"node_1ffdc789f42e0ea1523a6e4cc060a75e\"}]}"
+}

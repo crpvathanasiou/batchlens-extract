@@ -136,6 +136,7 @@ class _ComponentStaging:
     pages_path: Path
     blocks_dir: Path
     page_count: int = 0
+    last_page_order: int | None = None
 
 
 def _bounded_message(message: str) -> str:
@@ -421,12 +422,17 @@ class FilesystemEvidenceSink:
                 "PAGE_DUPLICATE",
                 "duplicate page skeleton for the active component",
             )
-        expected_order = staging.page_count
-        if page.order != expected_order:
+        if page.order < 0:
             raise PublicationError(
                 "PAGE_ORDER",
-                "page skeleton order is not contiguous for the active component",
+                "page skeleton order must be non-negative",
             )
+        if staging.last_page_order is not None and page.order <= staging.last_page_order:
+            raise PublicationError(
+                "PAGE_ORDER",
+                "page skeleton order must strictly increase for the active component",
+            )
+        staging.last_page_order = page.order
         staging.page_count += 1
         block_path.write_bytes(b"")
         _write_page_meta(

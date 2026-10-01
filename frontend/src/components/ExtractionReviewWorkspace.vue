@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import {
+  STAGE4_POLL_INTERVAL_MS,
+  buildPageClassificationsTsv,
   createExtractionReviewApi,
+  isTerminalClassificationStatus,
+  isTerminalLexicalStatus,
+  pageClassificationsDownloadFilename,
+  type ApprovedDocumentSummary,
+  type ClassificationStateView,
   type ExtractionFinding,
   type ExtractionJobSummary,
   type ExtractionReviewOptions,
+  type LexicalJobStatus,
   type OpenedExtractionReview,
+  type PageClassificationView,
   type PageEdit,
 } from '../extractionReview'
 
@@ -43,6 +52,15 @@ const LEGEND_CATEGORIES: ReadonlyArray<{
   { id: 'other', short: 'Other', label: 'Other lexical category', hitClass: 'bl-hit--other' },
 ]
 
+const documents = ref<ApprovedDocumentSummary[]>([])
+const selectedDocumentKey = ref('')
+const documentPages = ref<number[]>([])
+const currentClassification = ref<ClassificationStateView | null>(null)
+const jobClassification = ref<ClassificationStateView | null>(null)
+const lexicalStatus = ref<LexicalJobStatus | null>(null)
+const noEligibleMessage = ref('')
+const stage4Busy = ref(false)
+
 const jobs = ref<ExtractionJobSummary[]>([])
 const review = ref<OpenedExtractionReview | null>(null)
 const activePage = ref<number | null>(null)
@@ -57,13 +75,62 @@ const pageRoot = ref<HTMLElement | null>(null)
 const renderedRoot = ref<HTMLElement | null>(null)
 const renderedPageHtml = ref('')
 
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
 const dirty = computed(() => Object.keys(drafts.value).length > 0)
 const approvalLabel = computed(() => (review.value?.approval_state === 'approved' ? 'Approved' : 'Not approved'))
-const pages = computed(() => review.value?.pages ?? [])
+const pages = computed(() => {
+  if (review.value) return review.value.pages
+  return documentPages.value
+})
 const pageIndex = computed(() => pages.value.indexOf(activePage.value ?? -1))
 const downloadDisabledReason = computed(() =>
   dirty.value ? 'Save before approval. Unsaved edits are not included.' : '',
 )
+
+const classificationRunning = computed(() => currentClassification.value?.status === 'running')
+const classificationTerminal = computed(() =>
+  isTerminalClassificationStatus(currentClassification.value?.status),
+)
+const canClassify = computed(
+  () =>
+    Boolean(selectedDocumentKey.value)
+    && !currentClassification.value
+    && !classificationRunning.value
+    && !stage4Busy.value
+    && !lexicalNonTerminal.value,
+)
+const canExtractAll = computed(
+  () =>
+    Boolean(selectedDocumentKey.value)
+    && classificationTerminal.value
+    && !classificationRunning.value
+    && !stage4Busy.value
+    && !lexicalNonTerminal.value,
+)
+const lexicalNonTerminal = computed(() => {
+  const status = lexicalStatus.value?.status
+  return Boolean(status) && !isTerminalLexicalStatus(status)
+})
+
+const displayedClassification = computed<ClassificationStateView | null>(() => {
+  if (review.value?.classification) return review.value.classification
+  if (jobClassification.value) return jobClassification.value
+  return currentClassification.value
+})
+
+const canDownloadClassifications = computed(
+  () =>
+    Boolean(selectedDocumentKey.value)
+    && displayedClassification.value != null
+    && pages.value.length > 0,
+)
+
+const activePageClassification = computed<PageClassificationView | null>(() => {
+  const state = displayedClassification.value
+  if (!state || activePage.value == null) return null
+  return state.pages.find((page) => page.page_number === activePage.value) ?? null
+})
 
 interface FindingRow {
   finding_id: string
@@ -127,6 +194,19 @@ const visibleRows = computed(() => {
     : pageRows.value
   return base.filter((row) => !isCategoryHidden(legendCategory(row.component)))
 })
+
+function documentKey(doc: ApprovedDocumentSummary): string {
+  return `${doc.job_id}::${doc.review_revision_id}`
+}
+
+function parseDocumentKey(key: string): ApprovedDocumentSummary | null {
+  const index = key.indexOf('::')
+  if (index <= 0) return null
+  return {
+    job_id: key.slice(0, index),
+    review_revision_id: key.slice(index + 2),
+  }
+}
 
 function rowFromFinding(finding: ExtractionFinding): FindingRow {
   return {
@@ -196,6 +276,55 @@ function jobLabel(job: ExtractionJobSummary): string {
   return `${action} · ${status}${finished} · ${suffix}`
 }
 
+function documentLabel(doc: ApprovedDocumentSummary): string {
+  return `${doc.job_id} / ${doc.review_revision_id}`
+}
+
+function clearPolling() {
+  if (pollTimer != null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function syncPolling() {
+  clearPolling()
+  const needsClassificationPoll = currentClassification.value?.status === 'running'
+  const needsLexicalPoll = lexicalNonTerminal.value
+  if (!needsClassificationPoll && !needsLexicalPoll) return
+  pollTimer = setInterval(() => {
+    void pollStage4()
+  }, STAGE4_POLL_INTERVAL_MS)
+}
+
+async function pollStage4() {
+  try {
+    if (currentClassification.value?.status === 'running') {
+      const selected = parseDocumentKey(selectedDocumentKey.value)
+      if (selected) {
+        const envelope = await api.getClassification(selected.job_id, selected.review_revision_id)
+        currentClassification.value = envelope.classification
+        if (isTerminalClassificationStatus(envelope.classification?.status)) {
+          // Keep terminal state visible; Extract All becomes available.
+        }
+      }
+    }
+    if (lexicalStatus.value && !isTerminalLexicalStatus(lexicalStatus.value.status)) {
+      const status = await api.localJobStatus(lexicalStatus.value.local_job_id)
+      lexicalStatus.value = status
+      if (isTerminalLexicalStatus(status.status) && status.reviewable) {
+        await loadJobs()
+        await selectJob(status.local_job_id)
+      }
+    }
+  } catch (error) {
+    clearPolling()
+    errorMessage.value = error instanceof Error ? error.message : 'Status refresh failed'
+  } finally {
+    syncPolling()
+  }
+}
+
 async function loadJobs() {
   jobs.value = (await api.listJobs()).jobs
   const initial = props.options.initialLocalJobId
@@ -204,23 +333,124 @@ async function loadJobs() {
   }
 }
 
+async function loadDocuments() {
+  try {
+    documents.value = (await api.listApprovedDocuments()).documents
+  } catch {
+    documents.value = []
+  }
+}
+
+async function selectDocument(key: string) {
+  const previousKey = selectedDocumentKey.value
+  if (
+    dirty.value
+    && review.value
+    && key !== previousKey
+  ) {
+    errorMessage.value = 'Save the current extraction result before switching documents.'
+    return
+  }
+
+  clearPolling()
+  noEligibleMessage.value = ''
+
+  const selected = parseDocumentKey(key)
+  if (!selected) {
+    selectedDocumentKey.value = key
+    review.value = null
+    jobClassification.value = null
+    drafts.value = {}
+    selectedFindingId.value = null
+    lexicalStatus.value = null
+    currentClassification.value = null
+    documentPages.value = []
+    activePage.value = null
+    pageHtml.value = ''
+    return
+  }
+
+  const leavingOpenReview = Boolean(
+    review.value
+    && key !== documentKey({
+      job_id: review.value.job_id,
+      review_revision_id: review.value.review_revision_id,
+    }),
+  )
+  if (leavingOpenReview) {
+    review.value = null
+    jobClassification.value = null
+    drafts.value = {}
+    selectedFindingId.value = null
+    lexicalStatus.value = null
+    viewMode.value = 'page'
+  }
+
+  selectedDocumentKey.value = key
+  currentClassification.value = null
+  stage4Busy.value = true
+  errorMessage.value = ''
+  try {
+    const pagesResponse = await api.approvedDocumentPages(selected.job_id, selected.review_revision_id)
+    documentPages.value = pagesResponse.pages
+    activePage.value = pagesResponse.pages[0] ?? null
+    const envelope = await api.getClassification(selected.job_id, selected.review_revision_id)
+    currentClassification.value = envelope.classification
+    await loadPage()
+    syncPolling()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Approved document could not be loaded'
+  } finally {
+    stage4Busy.value = false
+  }
+}
+
 async function selectJob(localJobId: string) {
   errorMessage.value = ''
   drafts.value = {}
   selectedFindingId.value = null
   viewMode.value = 'page'
+  noEligibleMessage.value = ''
+  clearPolling()
   const opened = await api.openJob(localJobId)
   review.value = opened
+  jobClassification.value = opened.classification ?? null
+  selectedDocumentKey.value = documentKey({
+    job_id: opened.job_id,
+    review_revision_id: opened.review_revision_id,
+  })
+  documentPages.value = opened.pages
   activePage.value = opened.pages[0] ?? null
+  try {
+    const envelope = await api.getClassification(opened.job_id, opened.review_revision_id)
+    currentClassification.value = envelope.classification
+  } catch {
+    currentClassification.value = null
+  }
   await loadPage()
+  syncPolling()
 }
 
 async function loadPage() {
-  if (!review.value || activePage.value == null) {
+  if (activePage.value == null) {
     pageHtml.value = ''
     return
   }
-  const page = await api.page(review.value.local_job_id, activePage.value)
+  if (review.value) {
+    const page = await api.page(review.value.local_job_id, activePage.value)
+    pageHtml.value = page.html
+    return
+  }
+  const selected = parseDocumentKey(selectedDocumentKey.value)
+  if (!selected) {
+    pageHtml.value = ''
+    return
+  }
+  const page = await api.approvedDocumentPage(
+    selected.job_id,
+    selected.review_revision_id,
+    activePage.value,
+  )
   pageHtml.value = page.html
 }
 
@@ -349,6 +579,7 @@ async function save() {
       review.value.current_revision_id,
       Object.values(drafts.value),
     )
+    jobClassification.value = review.value.classification ?? jobClassification.value
     drafts.value = {}
     await loadPage()
   } catch (error) {
@@ -368,6 +599,7 @@ async function approve() {
   errorMessage.value = ''
   try {
     review.value = await api.approve(review.value.local_job_id, review.value.current_revision_id)
+    jobClassification.value = review.value.classification ?? jobClassification.value
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Approval failed'
   } finally {
@@ -387,6 +619,67 @@ function downloadTxt() {
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+}
+
+function downloadClassificationsTxt() {
+  const classification = displayedClassification.value
+  if (!canDownloadClassifications.value || !classification) return
+  const body = buildPageClassificationsTsv(pages.value, classification)
+  const filename = pageClassificationsDownloadFilename({
+    source: classification.source,
+    jobId: classification.job_id,
+    reviewRevisionId: classification.review_revision_id,
+    localJobId: review.value?.local_job_id ?? null,
+  })
+  const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
+async function classifyPages() {
+  const selected = parseDocumentKey(selectedDocumentKey.value)
+  if (!selected || !canClassify.value) return
+  stage4Busy.value = true
+  errorMessage.value = ''
+  noEligibleMessage.value = ''
+  try {
+    const envelope = await api.startClassification(selected.job_id, selected.review_revision_id)
+    currentClassification.value = envelope.classification
+    syncPolling()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Classification could not be started'
+  } finally {
+    stage4Busy.value = false
+  }
+}
+
+async function extractAll() {
+  const selected = parseDocumentKey(selectedDocumentKey.value)
+  if (!selected || !canExtractAll.value) return
+  stage4Busy.value = true
+  errorMessage.value = ''
+  noEligibleMessage.value = ''
+  try {
+    const result = await api.extractAll(selected.job_id, selected.review_revision_id)
+    if (result.kind === 'no_eligible_pages') {
+      lexicalStatus.value = null
+      noEligibleMessage.value = result.message
+      return
+    }
+    lexicalStatus.value = result.job
+    syncPolling()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Extract All could not be submitted'
+  } finally {
+    stage4Busy.value = false
+  }
 }
 
 function focusSelected() {
@@ -428,15 +721,50 @@ function focusSelected() {
   target?.focus()
 }
 
+function classificationStatusLabel(state: ClassificationStateView | null): string {
+  if (!state) return 'Not classified'
+  if (state.status === 'running') {
+    const current = state.progress.current_page_number
+    return `Classifying page ${current ?? '?'} (${state.progress.completed_pages}/${state.progress.total_pages})`
+  }
+  if (state.status === 'completed') return 'Classification completed'
+  if (state.status === 'failed') return `Classification failed${state.terminal_reason ? `: ${state.terminal_reason}` : ''}`
+  if (state.status === 'interrupted') {
+    return `Classification interrupted${state.terminal_reason ? `: ${state.terminal_reason}` : ''}`
+  }
+  return state.status
+}
+
+function lexicalStatusLabel(status: LexicalJobStatus | null): string {
+  if (!status) return ''
+  if (isTerminalLexicalStatus(status.status) && !status.reviewable) {
+    const overall = status.extraction_overall ? ` (extraction ${status.extraction_overall})` : ''
+    return (
+      `Lexical processing/publication completed${overall}, but no usable completed ` +
+      'extraction component is available for review'
+    )
+  }
+  const phase = status.phase.replaceAll('_', ' ')
+  const overall = status.extraction_overall ? ` · extraction ${status.extraction_overall}` : ''
+  return `Lexical ${status.status} · ${phase}${overall}`
+}
+
 watch(activePage, (page, previous) => {
   if (page !== previous) void loadPage()
 })
 watch([selectedFindingId, drafts, pageHtml, hiddenCategories], () => {
   void focusSelected()
 }, { flush: 'post' })
+watch(selectedDocumentKey, () => {
+  clearPolling()
+})
 
-void loadJobs().catch((error: unknown) => {
-  errorMessage.value = error instanceof Error ? error.message : 'Extraction runs could not be loaded'
+onUnmounted(() => {
+  clearPolling()
+})
+
+void Promise.all([loadJobs(), loadDocuments()]).catch((error: unknown) => {
+  errorMessage.value = error instanceof Error ? error.message : 'Extraction workspace could not be loaded'
 })
 </script>
 
@@ -453,10 +781,29 @@ void loadJobs().catch((error: unknown) => {
         </span>
       </div>
       <label class="bl-job-picker">
+        <span class="bl-sr-only">Approved document</span>
+        <select
+          aria-label="Approved document"
+          :value="selectedDocumentKey"
+          :disabled="classificationRunning || lexicalNonTerminal || stage4Busy"
+          @change="selectDocument(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">Select an approved document</option>
+          <option
+            v-for="doc in documents"
+            :key="documentKey(doc)"
+            :value="documentKey(doc)"
+          >
+            {{ documentLabel(doc) }}
+          </option>
+        </select>
+      </label>
+      <label class="bl-job-picker">
         <span class="bl-sr-only">Extraction run</span>
         <select
           aria-label="Extraction run"
           :value="review?.local_job_id ?? ''"
+          :disabled="classificationRunning || lexicalNonTerminal || stage4Busy"
           @change="selectJob(($event.target as HTMLSelectElement).value)"
         >
           <option value="" disabled>Select a completed extraction run</option>
@@ -467,6 +814,23 @@ void loadJobs().catch((error: unknown) => {
       </label>
       <div class="bl-actions">
         <button
+          v-if="canClassify"
+          type="button"
+          class="bl-button"
+          :disabled="busy || stage4Busy"
+          @click="classifyPages"
+        >
+          Classify pages
+        </button>
+        <button
+          type="button"
+          class="bl-button"
+          :disabled="busy || stage4Busy || !canExtractAll"
+          @click="extractAll"
+        >
+          Extract All
+        </button>
+        <button
           type="button"
           class="bl-button"
           :disabled="busy || !review || dirty"
@@ -474,6 +838,15 @@ void loadJobs().catch((error: unknown) => {
           @click="downloadTxt"
         >
           Download TXT
+        </button>
+        <button
+          v-if="canDownloadClassifications"
+          type="button"
+          class="bl-button"
+          :disabled="busy || stage4Busy"
+          @click="downloadClassificationsTxt"
+        >
+          Download classifications TXT
         </button>
         <button type="button" class="bl-button" :disabled="busy || !dirty" @click="save">Save</button>
         <button
@@ -489,9 +862,24 @@ void loadJobs().catch((error: unknown) => {
 
     <p v-if="dirty" class="bl-banner">Save before approval. Unsaved edits are not included.</p>
     <p v-if="errorMessage" class="bl-banner bl-banner--error" role="alert">{{ errorMessage }}</p>
-    <p v-if="jobs.length === 0" class="bl-loading">No completed extraction runs.</p>
+    <p v-if="noEligibleMessage" class="bl-banner" role="status">{{ noEligibleMessage }}</p>
+    <p v-if="displayedClassification" class="bl-banner bl-banner--info" role="status">
+      {{ classificationStatusLabel(displayedClassification) }}
+      <span v-if="displayedClassification.source === 'job_snapshot'">
+        · Labels from this extraction run’s classification snapshot (informational; not Stage 3 approval)
+      </span>
+      <span v-else>
+        · Classification labels are informational and do not change Stage 3 final approval
+      </span>
+    </p>
+    <p v-if="lexicalStatus" class="bl-banner bl-banner--info" role="status">
+      {{ lexicalStatusLabel(lexicalStatus) }}
+    </p>
+    <p v-if="jobs.length === 0 && !selectedDocumentKey" class="bl-loading">
+      No completed extraction runs. Select an approved document to classify and Extract All.
+    </p>
 
-    <template v-if="review && activePage != null">
+    <template v-if="(review || selectedDocumentKey) && activePage != null">
       <nav class="bl-pagebar" aria-label="Page navigation">
         <button type="button" aria-label="Previous page" :disabled="pageIndex <= 0" @click="setPage(pages[pageIndex - 1])">‹</button>
         <label>
@@ -515,106 +903,147 @@ void loadJobs().catch((error: unknown) => {
       <div class="bl-workspace-grid">
         <section class="bl-html-page" aria-label="Reviewed page" ref="pageRoot" />
         <aside class="bl-findings" aria-label="Extraction findings">
-          <header class="bl-findings__toolbar">
-            <button type="button" :aria-pressed="viewMode === 'page'" @click="viewMode = 'page'">By page</button>
-            <button type="button" :aria-pressed="viewMode === 'all'" @click="viewMode = 'all'">All findings</button>
-            <button
-              v-if="viewMode === 'page'"
-              type="button"
-              class="bl-button"
-              aria-label="Add finding"
-              @click="startAddFinding"
-            >
-              + Add finding
-            </button>
-          </header>
-          <ul class="bl-hit-legend" aria-label="Highlight category visibility">
-            <li v-for="category in LEGEND_CATEGORIES" :key="category.id">
+          <section
+            v-if="displayedClassification"
+            class="bl-classification-panel"
+            aria-label="Page classification"
+          >
+            <header class="bl-classification-panel__head">
+              <strong>Page classification</strong>
+              <span class="bl-muted">Informational only</span>
+            </header>
+            <template v-if="activePageClassification">
+              <p class="bl-classification-meta">
+                Kind: {{ activePageClassification.kind }}
+                <span v-if="activePageClassification.requires_review"> · needs review</span>
+                <span v-if="activePageClassification.is_provisional"> · provisional</span>
+              </p>
+              <p class="bl-classification-meta">
+                Eligibility:
+                {{ activePageClassification.eligibility.eligible_for_extraction ? 'eligible' : 'excluded' }}
+                — {{ activePageClassification.eligibility.reason }}
+              </p>
+              <p class="bl-classification-meta">
+                Source validation:
+                {{ activePageClassification.source_validation.requires_review ? 'needs review' : 'ok' }}
+                <span v-if="activePageClassification.source_validation.has_unverified">
+                  · unverified evidence present
+                </span>
+              </p>
+              <ul class="bl-classification-labels">
+                <li v-for="(item, index) in activePageClassification.labels" :key="`${item.label}-${index}`">
+                  <strong>{{ item.label }}</strong>
+                  <span v-if="item.quote" class="bl-muted"> “{{ item.quote }}”</span>
+                  <span v-if="item.reason" class="bl-muted"> — {{ item.reason }}</span>
+                  <span v-if="item.element_id" class="bl-muted"> · {{ item.element_id }}</span>
+                </li>
+              </ul>
+            </template>
+            <p v-else class="bl-muted">No completed classification result for this page yet.</p>
+          </section>
+
+          <template v-if="review">
+            <header class="bl-findings__toolbar">
+              <button type="button" :aria-pressed="viewMode === 'page'" @click="viewMode = 'page'">By page</button>
+              <button type="button" :aria-pressed="viewMode === 'all'" @click="viewMode = 'all'">All findings</button>
               <button
+                v-if="viewMode === 'page'"
                 type="button"
-                class="bl-legend-toggle"
-                :class="{ 'is-off': isCategoryHidden(category.id) }"
-                :aria-label="`Toggle ${category.label} category visibility`"
-                :aria-pressed="!isCategoryHidden(category.id)"
-                @click="toggleCategoryVisibility(category.id)"
+                class="bl-button"
+                aria-label="Add finding"
+                @click="startAddFinding"
               >
-                <span class="bl-swatch" :class="category.hitClass">{{ category.short }}</span>
-                {{ category.label }}
+                + Add finding
               </button>
-            </li>
-          </ul>
-          <ol class="bl-finding-list">
-            <li
-              v-for="row in visibleRows"
-              :key="row.finding_id"
-              :class="{ 'is-removed': row.removed, 'is-draft': row.isLocalDraft }"
-            >
-              <div class="bl-finding-head">
+            </header>
+            <ul class="bl-hit-legend" aria-label="Highlight category visibility">
+              <li v-for="category in LEGEND_CATEGORIES" :key="category.id">
                 <button
                   type="button"
-                  class="bl-finding-select"
-                  :aria-current="selectedFindingId === row.finding_id ? 'true' : undefined"
-                  @click="selectFinding(row)"
+                  class="bl-legend-toggle"
+                  :class="{ 'is-off': isCategoryHidden(category.id) }"
+                  :aria-label="`Toggle ${category.label} category visibility`"
+                  :aria-pressed="!isCategoryHidden(category.id)"
+                  @click="toggleCategoryVisibility(category.id)"
                 >
-                  <span class="bl-finding-label">{{ componentLabel(row.component) || 'Finding' }}</span>
-                  <span
-                    v-if="viewMode === 'page'"
-                    class="bl-finding-text"
-                    :class="hitClass(row.component)"
-                  >{{ row.display_text }}</span>
-                  <span v-if="viewMode === 'all'" class="bl-finding-text-plain">{{ row.display_text }}</span>
-                  <small v-if="viewMode === 'all' && row.page_number">Page {{ row.page_number }}</small>
+                  <span class="bl-swatch" :class="category.hitClass">{{ category.short }}</span>
+                  {{ category.label }}
                 </button>
-              </div>
-              <p v-if="provenanceLabel(row)" class="bl-muted">{{ provenanceLabel(row) }}</p>
-              <div v-if="viewMode === 'page' && row.isLocalDraft" class="bl-finding-edit">
-                <label>
-                  Display text
-                  <input
-                    :aria-label="`Display text ${row.finding_id}`"
-                    placeholder="Enter finding text"
-                    :value="row.display_text"
-                    @change="updateRow(row, ($event.target as HTMLInputElement).value, row.component)"
-                  />
-                </label>
-                <label>
-                  Category
-                  <select
-                    :aria-label="`Category ${row.finding_id}`"
-                    :value="row.component"
-                    @change="updateRow(row, row.display_text, ($event.target as HTMLSelectElement).value)"
+              </li>
+            </ul>
+            <ol class="bl-finding-list">
+              <li
+                v-for="row in visibleRows"
+                :key="row.finding_id"
+                :class="{ 'is-removed': row.removed, 'is-draft': row.isLocalDraft }"
+              >
+                <div class="bl-finding-head">
+                  <button
+                    type="button"
+                    class="bl-finding-select"
+                    :aria-current="selectedFindingId === row.finding_id ? 'true' : undefined"
+                    @click="selectFinding(row)"
                   >
-                    <option v-for="[value, label] in COMPONENT_OPTIONS" :key="value" :value="value">{{ label }}</option>
-                  </select>
-                </label>
-                <button type="button" class="bl-button" @click="cancelDraft(row)">Cancel</button>
-              </div>
-              <div v-else-if="viewMode === 'page' && row.removed" class="bl-finding-edit">
-                <button type="button" class="bl-button" @click="restoreRow(row)">Restore</button>
-              </div>
-              <div v-else-if="viewMode === 'page'" class="bl-finding-edit">
-                <label>
-                  Display text
-                  <input
-                    :aria-label="`Display text ${row.finding_id}`"
-                    :value="row.display_text"
-                    @change="updateRow(row, ($event.target as HTMLInputElement).value, row.component)"
-                  />
-                </label>
-                <label>
-                  Category
-                  <select
-                    :aria-label="`Category ${row.finding_id}`"
-                    :value="row.component"
-                    @change="updateRow(row, row.display_text, ($event.target as HTMLSelectElement).value)"
-                  >
-                    <option v-for="[value, label] in COMPONENT_OPTIONS" :key="value" :value="value">{{ label }}</option>
-                  </select>
-                </label>
-                <button type="button" class="bl-button" @click="removeRow(row)">Remove</button>
-              </div>
-            </li>
-          </ol>
+                    <span class="bl-finding-label">{{ componentLabel(row.component) || 'Finding' }}</span>
+                    <span
+                      v-if="viewMode === 'page'"
+                      class="bl-finding-text"
+                      :class="hitClass(row.component)"
+                    >{{ row.display_text }}</span>
+                    <span v-if="viewMode === 'all'" class="bl-finding-text-plain">{{ row.display_text }}</span>
+                    <small v-if="viewMode === 'all' && row.page_number">Page {{ row.page_number }}</small>
+                  </button>
+                </div>
+                <p v-if="provenanceLabel(row)" class="bl-muted">{{ provenanceLabel(row) }}</p>
+                <div v-if="viewMode === 'page' && row.isLocalDraft" class="bl-finding-edit">
+                  <label>
+                    Display text
+                    <input
+                      :aria-label="`Display text ${row.finding_id}`"
+                      placeholder="Enter finding text"
+                      :value="row.display_text"
+                      @change="updateRow(row, ($event.target as HTMLInputElement).value, row.component)"
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      :aria-label="`Category ${row.finding_id}`"
+                      :value="row.component"
+                      @change="updateRow(row, row.display_text, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="[value, label] in COMPONENT_OPTIONS" :key="value" :value="value">{{ label }}</option>
+                    </select>
+                  </label>
+                  <button type="button" class="bl-button" @click="cancelDraft(row)">Cancel</button>
+                </div>
+                <div v-else-if="viewMode === 'page' && row.removed" class="bl-finding-edit">
+                  <button type="button" class="bl-button" @click="restoreRow(row)">Restore</button>
+                </div>
+                <div v-else-if="viewMode === 'page'" class="bl-finding-edit">
+                  <label>
+                    Display text
+                    <input
+                      :aria-label="`Display text ${row.finding_id}`"
+                      :value="row.display_text"
+                      @change="updateRow(row, ($event.target as HTMLInputElement).value, row.component)"
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      :aria-label="`Category ${row.finding_id}`"
+                      :value="row.component"
+                      @change="updateRow(row, row.display_text, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="[value, label] in COMPONENT_OPTIONS" :key="value" :value="value">{{ label }}</option>
+                    </select>
+                  </label>
+                  <button type="button" class="bl-button" @click="removeRow(row)">Remove</button>
+                </div>
+              </li>
+            </ol>
+          </template>
         </aside>
       </div>
     </template>

@@ -14,13 +14,19 @@ import re
 import secrets
 import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Final, Literal, TypeAlias
+from typing import Annotated, Any, Final, Literal, TypeAlias, cast
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    model_serializer,
+)
 
 from app.extraction_review.approved_documents import (
     ApprovedDocumentError,
@@ -42,12 +48,14 @@ from app.lexical_extraction.configuration import (
     resolve_components,
 )
 from app.lexical_extraction.contracts import (
+    STAGE4_CLASSIFIER_POLICY_VERSION,
     ExtractionOutcomeRecord,
     PublicationRecord,
     PublicationStatus,
     ReviewedHtmlV1Input,
     RunProvenance,
     SafeStructuredError,
+    Stage4PageRestrictionProvenance,
 )
 from app.lexical_extraction.publication import (
     FilesystemEvidenceSink,
@@ -60,10 +68,21 @@ from app.lexical_extraction.runner import (
     LexicalRunResult,
     run_lexical_extraction,
 )
+from app.page_classification.contracts import CurrentClassificationState, PreparedPageInput
+from app.page_classification.page_input import prepare_reviewed_document
+from app.page_classification.store import (
+    PageClassificationStore,
+    canonical_classification_snapshot_bytes,
+    classification_snapshot_sha256,
+)
 
 JOB_SCHEMA_VERSION: Final = "batchlens.extraction-local-job.v1"
 JOBS_DIR_NAME: Final = "extraction-jobs"
 RAW_RUNS_DIR_NAME: Final = "extraction-raw-runs"
+CLASSIFICATION_SNAPSHOT_FILENAME: Final = "classification.json"
+NO_ELIGIBLE_PAGES_MESSAGE: Final = (
+    "No pages are eligible for lexical extraction under the classification policy."
+)
 _MAX_ERROR_MESSAGE: Final = 200
 _LOCAL_JOB_ID_RE: Final = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -71,6 +90,16 @@ _LOCAL_JOB_ID_RE: Final = re.compile(
 
 Stage2Execute: TypeAlias = Callable[
     [EffectiveExecutionConfiguration, FilesystemEvidenceSink],
+    tuple[LexicalRunResult, PublicationResult],
+]
+
+ClassifiedStage2Execute: TypeAlias = Callable[
+    [
+        EffectiveExecutionConfiguration,
+        FilesystemEvidenceSink,
+        tuple[int, ...],
+        Stage4PageRestrictionProvenance,
+    ],
     tuple[LexicalRunResult, PublicationResult],
 ]
 
@@ -108,8 +137,38 @@ class LocalLexicalJobServiceBusyError(RuntimeError):
     """Close refused because one or more worker threads are still alive."""
 
 
+class ClassifiedFullExtractionError(ValueError):
+    """Fail-closed classified-full submission error before Stage 2 invocation."""
+
+    def __init__(self, code: str, message: str) -> None:
+        if not 1 <= len(message) <= _MAX_ERROR_MESSAGE:
+            raise ValueError("classified-full error message is not bounded")
+        self.code = code
+        self.message = message
+        super().__init__(f"{code}: {message}")
+
+
 class LocalLexicalJobModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ClassifiedExtractionContext(LocalLexicalJobModel):
+    """Per-run binding to the classification snapshot used for one lexical job."""
+
+    snapshot_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    selected_page_numbers: tuple[Annotated[int, Field(strict=True, ge=1)], ...]
+    classifier_policy_version: Literal["batchlens.page-classification-policy.v1"] = (
+        STAGE4_CLASSIFIER_POLICY_VERSION
+    )
+
+
+class NoEligiblePagesForExtraction(LocalLexicalJobModel):
+    """Non-error outcome when classification excludes every page from Stage 2."""
+
+    kind: Literal["no_eligible_pages"] = "no_eligible_pages"
+    message: Literal[
+        "No pages are eligible for lexical extraction under the classification policy."
+    ] = NO_ELIGIBLE_PAGES_MESSAGE
 
 
 class LocalLexicalJob(LocalLexicalJobModel):
@@ -133,6 +192,29 @@ class LocalLexicalJob(LocalLexicalJobModel):
     raw_run_relative_dir: Annotated[str, Field(min_length=1)] | None = None
     published_manifest: PublishedManifestReference | None = None
     error: SafeStructuredError | None = None
+    classified_extraction: ClassifiedExtractionContext | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_classified_extraction(
+        self,
+        serializer: Callable[[Any], Any],
+    ) -> dict[str, Any]:
+        payload = cast(dict[str, Any], serializer(self))
+        if payload.get("classified_extraction") is None:
+            payload.pop("classified_extraction", None)
+        return payload
+
+
+class ClassifiedFullJobSubmitted(LocalLexicalJobModel):
+    """Queued classified-full local lexical job ready for Stage 2 execution."""
+
+    kind: Literal["submitted"] = "submitted"
+    job: LocalLexicalJob
+
+
+ClassifiedFullSubmissionResult: TypeAlias = (
+    NoEligiblePagesForExtraction | ClassifiedFullJobSubmitted
+)
 
 
 class LocalLexicalJobService:
@@ -143,6 +225,7 @@ class LocalLexicalJobService:
         data_dir: Path,
         *,
         execute_stage2: Stage2Execute | None = None,
+        execute_classified_stage2: ClassifiedStage2Execute | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         resolved = data_dir.expanduser().resolve()
@@ -156,6 +239,7 @@ class LocalLexicalJobService:
 
         self._data_dir = resolved
         self._execute_stage2 = execute_stage2
+        self._execute_classified_stage2 = execute_classified_stage2
         self._clock = clock or _utc_now
         self._closed = False
         self._lock = threading.RLock()
@@ -241,6 +325,104 @@ class LocalLexicalJobService:
         thread.start()
         return job
 
+    def submit_classified_full_extraction(
+        self,
+        *,
+        approved_documents_root: Path,
+        job_id: str,
+        review_revision_id: str,
+        config_path: Path,
+        fuzzy_enabled: bool = False,
+    ) -> ClassifiedFullSubmissionResult:
+        """Submit Stage 2 ``full`` using the current classification page allow-list.
+
+        Reads the terminal classification for the selected approved reviewed HTML,
+        derives eligible pages from S4.1 decisions, writes an immutable per-run
+        classification snapshot beside the lexical job, and invokes Stage 2 only
+        for those pages. Returns a non-error ``no_eligible_pages`` result without
+        creating a job when every page is excluded.
+        """
+
+        if self._closed:
+            raise RuntimeError("local lexical job service is closed")
+        if type(fuzzy_enabled) is not bool:
+            raise TypeError("fuzzy_enabled must be a strict bool")
+
+        selected = ApprovedDocumentsRegistry(approved_documents_root).select(
+            job_id,
+            review_revision_id,
+        )
+        store = PageClassificationStore(self._data_dir)
+        classification = store.load(selected.reviewed_html)
+        if classification is None:
+            raise ClassifiedFullExtractionError(
+                "CLASSIFICATION_MISSING",
+                "no current classification state exists for the selected reviewed HTML",
+            )
+        if classification.reviewed_html != selected.reviewed_html:
+            raise ClassifiedFullExtractionError(
+                "CLASSIFICATION_BINDING_MISMATCH",
+                "classification binding does not match the selected reviewed HTML",
+            )
+        if classification.status == "running":
+            raise ClassifiedFullExtractionError(
+                "CLASSIFICATION_RUNNING",
+                "Extract All is unavailable while page classification is running",
+            )
+        if classification.status not in {"completed", "failed", "interrupted"}:
+            raise ClassifiedFullExtractionError(
+                "CLASSIFICATION_NOT_TERMINAL",
+                "classified full extraction requires a terminal classification state",
+            )
+
+        prepared = prepare_reviewed_document(
+            selected.html_path,
+            expected=selected.reviewed_html,
+        )
+        selected_pages = derive_classified_allow_list(prepared.pages, classification)
+        if not selected_pages:
+            return NoEligiblePagesForExtraction()
+
+        snapshot_digest = classification_snapshot_sha256(classification)
+        now = self._clock()
+        local_job_id = str(uuid.uuid4())
+        classified = ClassifiedExtractionContext(
+            snapshot_sha256=snapshot_digest,
+            selected_page_numbers=selected_pages,
+            classifier_policy_version=classification.classifier_policy_version,
+        )
+        job = LocalLexicalJob(
+            local_job_id=local_job_id,
+            job_id=job_id,
+            review_revision_id=review_revision_id,
+            action=ExtractionReviewAction.EXTRACT_ALL,
+            fuzzy_enabled=fuzzy_enabled,
+            status=LocalJobStatus.QUEUED,
+            phase=LocalJobPhase.QUEUED,
+            submitted_at=now,
+            classified_extraction=classified,
+        )
+        self._write_classification_snapshot(local_job_id, classification)
+        self._write_job(job)
+
+        thread = threading.Thread(
+            target=self._run_job,
+            name=f"local-lexical-job-{local_job_id}",
+            args=(
+                local_job_id,
+                Path(approved_documents_root),
+                Path(config_path),
+            ),
+            daemon=True,
+        )
+        with self._lock:
+            self._threads.append(thread)
+        thread.start()
+        return ClassifiedFullJobSubmitted(job=job)
+
+    def classification_snapshot_path(self, local_job_id: str) -> Path:
+        return self._jobs_dir / local_job_id / CLASSIFICATION_SNAPSHOT_FILENAME
+
     def get_job(self, local_job_id: str) -> LocalLexicalJob:
         if not _LOCAL_JOB_ID_RE.fullmatch(local_job_id):
             raise LocalLexicalJobNotFoundError(
@@ -291,6 +473,17 @@ class LocalLexicalJobService:
                     fuzzy_enabled=job.fuzzy_enabled,
                     output_directory=self._raw_runs_dir,
                 )
+                page_allow_list: tuple[int, ...] | None = None
+                stage4_restriction: Stage4PageRestrictionProvenance | None = None
+                if job.classified_extraction is not None:
+                    page_allow_list = tuple(sorted(job.classified_extraction.selected_page_numbers))
+                    stage4_restriction = Stage4PageRestrictionProvenance(
+                        selected_page_numbers=page_allow_list,
+                        classifier_policy_version=(
+                            job.classified_extraction.classifier_policy_version
+                        ),
+                        classification_snapshot_sha256=(job.classified_extraction.snapshot_sha256),
+                    )
                 sink = FilesystemEvidenceSink(
                     self._raw_runs_dir,
                     snapshot_directory=config.knowledge.snapshot_directory,
@@ -299,6 +492,8 @@ class LocalLexicalJobService:
                     local_job_id,
                     config,
                     sink,
+                    page_allow_list=page_allow_list,
+                    stage4_page_restriction=stage4_restriction,
                 )
                 self._finalize_from_stage2(
                     local_job_id,
@@ -316,7 +511,31 @@ class LocalLexicalJobService:
         local_job_id: str,
         config: EffectiveExecutionConfiguration,
         sink: FilesystemEvidenceSink,
+        *,
+        page_allow_list: tuple[int, ...] | None = None,
+        stage4_page_restriction: Stage4PageRestrictionProvenance | None = None,
     ) -> tuple[LexicalRunResult, PublicationResult]:
+        if page_allow_list is not None:
+            if stage4_page_restriction is None:
+                raise RuntimeError("classified Stage 2 invocation requires stage4_page_restriction")
+            if self._execute_classified_stage2 is not None:
+                return self._execute_classified_stage2(
+                    config,
+                    sink,
+                    page_allow_list,
+                    stage4_page_restriction,
+                )
+            run_result = run_lexical_extraction(
+                config,
+                sink,
+                page_allow_list=page_allow_list,
+                stage4_page_restriction=stage4_page_restriction,
+            )
+            job = self.get_job(local_job_id)
+            job = self._replace(job, phase=LocalJobPhase.PUBLISHING)
+            self._write_job(job)
+            return run_result, finalize_publication(sink, run_result)
+
         if self._execute_stage2 is not None:
             return self._execute_stage2(config, sink)
 
@@ -445,6 +664,25 @@ class LocalLexicalJobService:
     def _job_path(self, local_job_id: str) -> Path:
         return self._jobs_dir / f"{local_job_id}.json"
 
+    def _write_classification_snapshot(
+        self,
+        local_job_id: str,
+        state: CurrentClassificationState,
+    ) -> Path:
+        path = self.classification_snapshot_path(local_job_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = canonical_classification_snapshot_bytes(state)
+        temporary = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
+        try:
+            with temporary.open("xb") as stream:
+                stream.write(body)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return path
+
     def _write_job(self, job: LocalLexicalJob) -> None:
         path = self._job_path(job.local_job_id)
         temporary = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
@@ -471,6 +709,28 @@ class LocalLexicalJobService:
     @staticmethod
     def _replace(job: LocalLexicalJob, **changes: object) -> LocalLexicalJob:
         return job.model_copy(update=changes)
+
+
+def derive_classified_allow_list(
+    prepared_pages: Sequence[PreparedPageInput],
+    classification: CurrentClassificationState,
+) -> tuple[int, ...]:
+    """Derive document-order Stage 2 page numbers from classification decisions.
+
+    A completed classified page is excluded only when
+    ``eligible_for_extraction`` is false. Pages without a completed result,
+    including pages not reached before failed/interrupted classification,
+    remain selected. Document page order is preserved.
+    """
+
+    by_page = {item.binding.page_number: item for item in classification.page_results}
+    allowed: list[int] = []
+    for page in prepared_pages:
+        page_number = page.binding.page_number
+        result = by_page.get(page_number)
+        if result is None or result.eligibility.eligible_for_extraction:
+            allowed.append(page_number)
+    return tuple(allowed)
 
 
 def _build_effective_config(

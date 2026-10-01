@@ -1,0 +1,168 @@
+{
+  "asset_sha256": {
+    "prompts/01-materials-equipment.txt": "f96c9c12c7b3965f12446e271c1773dbd47ff65cdd70e2fab88a4a6ce2598145",
+    "prompts/02-process-operations-controls.txt": "f7c6953362d5d3bab96b83df30fcd707bbbe1f4315145f34608fe59da8e748c0",
+    "prompts/03-document-supporting-records.txt": "09718b4329b8c6c882d0ea6cc7b243b5c6dfa829b4503b31909c1bccb238d258",
+    "schemas/01-materials-equipment.schema.json": "e6b892f31b0a859ee55bd9902e7c79a3a0bf5191779d35b4b9c0099452df11fb",
+    "schemas/02-process-operations-controls.schema.json": "c2d6fd162cbdd3654c7a7e4950f8ca5c9e1bd1e44df34026a4913f2c162d2eb4",
+    "schemas/03-document-supporting-records.schema.json": "95dabfcaa1eacbae71074547217941b15b12bd1ee06cdad15dbb1fe648a13dbd"
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "created_at": "2026-10-01T12:22:07.267267+00:00",
+  "effective_settings": {
+    "max_output_tokens": null,
+    "max_retries": 2,
+    "model": "gpt-4.1-mini",
+    "output_token_limit_configured": false,
+    "temperature": 0.0,
+    "timeout_seconds": 20.0
+  },
+  "finished_at": "2026-10-01T12:23:56.501497+00:00",
+  "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+  "pages": [
+    {
+      "eligible_for_extraction": false,
+      "kind": "completed",
+      "page_html_id": "source-page-1",
+      "page_number": 1,
+      "requires_review": false
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "incomplete",
+      "page_html_id": "source-page-2",
+      "page_number": 2,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "incomplete",
+      "page_html_id": "source-page-3",
+      "page_number": 3,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-4",
+      "page_number": 4,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-5",
+      "page_number": 5,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-6",
+      "page_number": 6,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-7",
+      "page_number": 7,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-8",
+      "page_number": 8,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-9",
+      "page_number": 9,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-10",
+      "page_number": 10,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-11",
+      "page_number": 11,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-12",
+      "page_number": 12,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-13",
+      "page_number": 13,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-14",
+      "page_number": 14,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-15",
+      "page_number": 15,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-16",
+      "page_number": 16,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "needs_review",
+      "page_html_id": "source-page-17",
+      "page_number": 17,
+      "requires_review": true
+    },
+    {
+      "eligible_for_extraction": true,
+      "kind": "incomplete",
+      "page_html_id": "source-page-18",
+      "page_number": 18,
+      "requires_review": true
+    }
+  ],
+  "progress": {
+    "completed_pages": 18,
+    "current_page_number": null,
+    "total_pages": 18
+  },
+  "reviewed_html": {
+    "conversion_status": "SUCCEEDED",
+    "external_document_id": null,
+    "html_contract_version": 1,
+    "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+    "job_id": "local-fexofenadine",
+    "review_generation": 27,
+    "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+  },
+  "schema_version": "batchlens.page-classification-diagnostics.v1",
+  "status": "completed",
+  "terminal_reason": null,
+  "updated_at": "2026-10-01T12:23:56.501497+00:00"
+}

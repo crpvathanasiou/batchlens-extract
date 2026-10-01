@@ -1,0 +1,352 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-8",
+    "page_number": 8,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-8",
+        "page_number": 8,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+            "label": "BILL_OF_MATERIALS",
+            "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+            "reason": "This section lists multiple materials with names, codes, and required quantities as a material register."
+          },
+          {
+            "element_id": "node_154f362047b5694318d43e3f58b54ebb",
+            "label": "EQUIPMENT_LIST",
+            "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00 check the fill volume once ALL the materials are transferred to the twin shell blender container.",
+            "reason": "This step lists a specific equipment item, the 8qt V-twin shell blender with equipment ID UMB-00, as part of the process."
+          }
+        ],
+        "labels": [
+          "BILL_OF_MATERIALS",
+          "EQUIPMENT_LIST"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-8",
+        "page_number": 8,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+            "label": "FORMULATION_RECIPE",
+            "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+            "reason": "The table lists ingredients with target percentages and required amounts, constituting a formulation recipe."
+          },
+          {
+            "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+            "label": "MANUFACTURING_INSTRUCTIONS",
+            "quote": "1. Weigh the API and excipients separately into a suitable container/plastic bags in Room 670. Check for lumps and screen the material if required using an 18 mesh screen.",
+            "reason": "Stepwise actionable directions for production preparation and processing are provided."
+          },
+          {
+            "element_id": "node_12d5a204c0db05e16bf17cc35559dc3e",
+            "label": "PROCESS_EXECUTION_RECORD",
+            "quote": "Blend for 5 min: Start Time: min; End Time: min",
+            "reason": "Fields for recording actual start and end times of blending step indicate process execution recording."
+          }
+        ],
+        "labels": [
+          "FORMULATION_RECIPE",
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-8",
+        "page_number": 8,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_2c57e3acace733ec8b88e62cc0050fa0",
+            "label": "COVER_PAGE",
+            "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record."
+          },
+          {
+            "element_id": "node_a92d055c455925dd94f616d2edefeaaf",
+            "label": "PRODUCT_BATCH_DETAILS",
+            "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "The title includes product name and strength, constituting dedicated product/batch identification details."
+          },
+          {
+            "element_id": "node_1ffdc789f42e0ea1523a6e4cc060a75e",
+            "label": "DOCUMENTATION_INSTRUCTIONS",
+            "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+            "reason": "The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "PRODUCT_BATCH_DETAILS",
+          "DOCUMENTATION_INSTRUCTIONS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-8",
+      "page_number": 8,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 1,
+      "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00",
+      "label": "BILL_OF_MATERIALS",
+      "provenance": "call",
+      "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+      "reason": "This section lists multiple materials with names, codes, and required quantities as a material register."
+    },
+    {
+      "call_id": 1,
+      "element_id": "node_154f362047b5694318d43e3f58b54ebb",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_154f362047b5694318d43e3f58b54ebb",
+      "label": "EQUIPMENT_LIST",
+      "provenance": "call",
+      "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00 check the fill volume once ALL the materials are transferred to the twin shell blender container.",
+      "reason": "This step lists a specific equipment item, the 8qt V-twin shell blender with equipment ID UMB-00, as part of the process."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00",
+      "label": "FORMULATION_RECIPE",
+      "provenance": "call",
+      "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+      "reason": "The table lists ingredients with target percentages and required amounts, constituting a formulation recipe."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00",
+      "label": "MANUFACTURING_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "1. Weigh the API and excipients separately into a suitable container/plastic bags in Room 670. Check for lumps and screen the material if required using an 18 mesh screen.",
+      "reason": "Stepwise actionable directions for production preparation and processing are provided."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_12d5a204c0db05e16bf17cc35559dc3e",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_12d5a204c0db05e16bf17cc35559dc3e",
+      "label": "PROCESS_EXECUTION_RECORD",
+      "provenance": "call",
+      "quote": "Blend for 5 min: Start Time: min; End Time: min",
+      "reason": "Fields for recording actual start and end times of blending step indicate process execution recording."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_2c57e3acace733ec8b88e62cc0050fa0",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_2c57e3acace733ec8b88e62cc0050fa0",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_a92d055c455925dd94f616d2edefeaaf",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_a92d055c455925dd94f616d2edefeaaf",
+      "label": "PRODUCT_BATCH_DETAILS",
+      "provenance": "call",
+      "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "The title includes product name and strength, constituting dedicated product/batch identification details."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_1ffdc789f42e0ea1523a6e4cc060a75e",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_1ffdc789f42e0ea1523a6e4cc060a75e",
+      "label": "DOCUMENTATION_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+      "reason": "The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-8",
+      "page_number": 8,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 1,
+        "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+        "label": "BILL_OF_MATERIALS",
+        "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+        "reason": "This section lists multiple materials with names, codes, and required quantities as a material register.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00"
+      },
+      {
+        "call_id": 1,
+        "element_id": "node_154f362047b5694318d43e3f58b54ebb",
+        "label": "EQUIPMENT_LIST",
+        "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00 check the fill volume once ALL the materials are transferred to the twin shell blender container.",
+        "reason": "This step lists a specific equipment item, the 8qt V-twin shell blender with equipment ID UMB-00, as part of the process.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_154f362047b5694318d43e3f58b54ebb"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+        "label": "FORMULATION_RECIPE",
+        "quote": "Fexofenadine Hydrochloride (R-1057) - 15% Required 52.5 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 38.63% Required 135.21 gm; Weighed gm. Lactose 110M (Lactose monohydrate) (R-1012) - 38.63% Required 135.21 gm; We",
+        "reason": "The table lists ingredients with target percentages and required amounts, constituting a formulation recipe.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_f2b28fde2645247c2cd1c5091eb79d00",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "1. Weigh the API and excipients separately into a suitable container/plastic bags in Room 670. Check for lumps and screen the material if required using an 18 mesh screen.",
+        "reason": "Stepwise actionable directions for production preparation and processing are provided.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_f2b28fde2645247c2cd1c5091eb79d00"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_12d5a204c0db05e16bf17cc35559dc3e",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "Blend for 5 min: Start Time: min; End Time: min",
+        "reason": "Fields for recording actual start and end times of blending step indicate process execution recording.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_12d5a204c0db05e16bf17cc35559dc3e"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_2c57e3acace733ec8b88e62cc0050fa0",
+        "label": "COVER_PAGE",
+        "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "The top table identifies the batch record title, version, and supersede status, indicating a cover page for the batch record.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_2c57e3acace733ec8b88e62cc0050fa0"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_a92d055c455925dd94f616d2edefeaaf",
+        "label": "PRODUCT_BATCH_DETAILS",
+        "quote": "Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "The title includes product name and strength, constituting dedicated product/batch identification details.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_a92d055c455925dd94f616d2edefeaaf"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_1ffdc789f42e0ea1523a6e4cc060a75e",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "9. Production Procedure Processing Step Performed By / Date Verified By / Date",
+        "reason": "The table header defines columns for operator and verifier signatures/dates, indicating instructions for documenting execution and verification.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_1ffdc789f42e0ea1523a6e4cc060a75e"
+      }
+    ],
+    "requires_review": true
+  }
+}

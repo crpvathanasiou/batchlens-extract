@@ -1,0 +1,247 @@
+{
+  "action": "extract_all",
+  "classified_extraction": {
+    "classifier_policy_version": "batchlens.page-classification-policy.v1",
+    "selected_page_numbers": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "snapshot_sha256": "5ceb864801b0737eb6155ae57e33b175d19ebb0505e847293b8e226a6e5f40e7"
+  },
+  "error": null,
+  "extraction": {
+    "components": [
+      {
+        "blocks_considered": 708,
+        "component": "unit_operations",
+        "error": null,
+        "match_count": 20,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "process_steps",
+        "error": null,
+        "match_count": 4,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "materials",
+        "error": null,
+        "match_count": 128,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "equipment",
+        "error": null,
+        "match_count": 0,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "parameter_names",
+        "error": null,
+        "match_count": 3,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "units",
+        "error": null,
+        "match_count": 87,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "quantity_expressions",
+        "error": null,
+        "match_count": 55,
+        "outcome": "completed"
+      },
+      {
+        "blocks_considered": 708,
+        "component": "parameter_value_expressions",
+        "error": null,
+        "match_count": 55,
+        "outcome": "completed"
+      }
+    ],
+    "overall": "completed"
+  },
+  "finished_at": "2026-10-01T10:27:20.078260Z",
+  "fuzzy_enabled": false,
+  "job_id": "local-fexofenadine",
+  "local_job_id": "0d9bd3ed-6072-4e84-81c2-424be3ae5da2",
+  "phase": "completed",
+  "publication": {
+    "final_manifest": {
+      "manifest_id": "manifest-3ac05bf1-9530-40a0-b769-fb92677761aa",
+      "publication_status": "completed"
+    },
+    "status": "completed"
+  },
+  "published_manifest": {
+    "manifest_id": "manifest-3ac05bf1-9530-40a0-b769-fb92677761aa",
+    "manifest_sha256": "e02c10af1c583f42e27b2365c7b5e599db5af5e3294dd8feca7e95c3d8be840b"
+  },
+  "raw_run_relative_dir": "3ac05bf1-9530-40a0-b769-fb92677761aa",
+  "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27",
+  "reviewed_html": {
+    "conversion_status": "SUCCEEDED",
+    "external_document_id": null,
+    "html_contract_version": 1,
+    "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+    "job_id": "local-fexofenadine",
+    "review_generation": 27,
+    "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+  },
+  "run": {
+    "configuration_sha256": "01447856d8848a9f829f3151904ed02aea6d515e295c13aaa1e72a2795d6314d",
+    "dependency_versions": [
+      {
+        "name": "pyahocorasick",
+        "version": "2.3.1"
+      },
+      {
+        "name": "pydantic",
+        "version": "2.12.5"
+      },
+      {
+        "name": "pyyaml",
+        "version": "6.0.3"
+      }
+    ],
+    "engine_version": "0.1.0",
+    "fuzzy_requested": false,
+    "input_html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+    "knowledge": {
+      "database_sha256": "cd709652a4b4de5acf9ca8558a2423fb3e8ebf83e0fde5994cca47af922468f2",
+      "manifest_sha256": "c312cf8c455b0bcb816db906f7faaa3258dd9f28f9650ba12fa146049e390937",
+      "preparation_version": "flat-sqlite-1",
+      "schema_user_version": 1,
+      "snapshot_id": "flat-v1-a39c0b393ffdbd4e97ed"
+    },
+    "measurements": [
+      {
+        "name": "pages_observed",
+        "value": "18"
+      },
+      {
+        "name": "blocks_observed",
+        "value": "728"
+      },
+      {
+        "name": "eligible_terms",
+        "value": "4349737"
+      },
+      {
+        "name": "eligible_rows",
+        "value": "1720928"
+      },
+      {
+        "name": "candidates",
+        "value": "152"
+      },
+      {
+        "name": "peak_process_memory_bytes",
+        "value": "553615360"
+      }
+    ],
+    "requested_components": [],
+    "requested_presets": [
+      "full"
+    ],
+    "resolved_components": [
+      "unit_operations",
+      "process_steps",
+      "materials",
+      "equipment",
+      "parameter_names",
+      "units",
+      "quantity_expressions",
+      "parameter_value_expressions"
+    ],
+    "rules_sha256": "00b271d4f67c5e3003d609c7fefefded1ac8dcd8fef2a8e46f1ed9b938e3a755",
+    "rules_version": "lexical-internal-rules-v1",
+    "run_id": "3ac05bf1-9530-40a0-b769-fb92677761aa",
+    "schema_version": "batchlens.lexical-record.v1",
+    "stage4_page_restriction": {
+      "classification_snapshot_sha256": "5ceb864801b0737eb6155ae57e33b175d19ebb0505e847293b8e226a6e5f40e7",
+      "classifier_policy_version": "batchlens.page-classification-policy.v1",
+      "selected_page_numbers": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
+    },
+    "timings": [
+      {
+        "elapsed_ms": 45,
+        "name": "html_validation"
+      },
+      {
+        "elapsed_ms": 3848,
+        "name": "snapshot_preflight"
+      },
+      {
+        "elapsed_ms": 4885,
+        "name": "component:unit_operations"
+      },
+      {
+        "elapsed_ms": 2396,
+        "name": "component:process_steps"
+      },
+      {
+        "elapsed_ms": 202906,
+        "name": "component:materials"
+      },
+      {
+        "elapsed_ms": 1510,
+        "name": "component:equipment"
+      },
+      {
+        "elapsed_ms": 7824,
+        "name": "component_group:l10"
+      },
+      {
+        "elapsed_ms": 223435,
+        "name": "total"
+      }
+    ]
+  },
+  "schema_version": "batchlens.extraction-local-job.v1",
+  "started_at": "2026-10-01T10:23:36.548864Z",
+  "status": "completed",
+  "submitted_at": "2026-10-01T10:23:36.527864Z"
+}

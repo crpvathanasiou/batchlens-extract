@@ -21,6 +21,7 @@ from app.lexical_extraction.configuration import (
     resolve_components,
 )
 from app.lexical_extraction.contracts import (
+    STAGE4_CLASSIFIER_POLICY_VERSION,
     BlockRecord,
     Component,
     DictionaryOccurrence,
@@ -28,6 +29,7 @@ from app.lexical_extraction.contracts import (
     PageEvidence,
     Preset,
     SafeStructuredError,
+    Stage4PageRestrictionProvenance,
     UnitOccurrence,
     ValueOccurrence,
     validate_match_against_block,
@@ -36,6 +38,11 @@ from app.lexical_extraction.field_mapping import EligibleSearchTerm
 from app.lexical_extraction.knowledge_snapshot import (
     FLAT_SOURCE_TABLES,
     derive_snapshot_id,
+)
+from app.lexical_extraction.publication import (
+    FilesystemEvidenceSink,
+    finalize_publication,
+    load_final_manifest,
 )
 from app.lexical_extraction.runner import (
     EligibleTermCounter,
@@ -832,3 +839,150 @@ def test_complete_run_failure_preserves_identities_and_outcomes(tmp_path: Path) 
     assert sink.run_completed is False
     assert sink.run_aborted is not None
     assert sink.run_aborted.code == "SINK_COMPLETE_RUN_FAILED"
+
+
+def test_page_allow_list_scans_only_selected_pages(tmp_path: Path) -> None:
+    config = _config(tmp_path, components=(Component.MATERIALS,))
+    unrestricted = RecordingSink()
+    unrestricted_result = run_lexical_extraction(config, unrestricted)
+    assert unrestricted_result.validated_input is not None
+    assert unrestricted_result.provenance is not None
+    unrestricted_dump = unrestricted_result.provenance.model_dump(mode="json")
+    assert "stage4_page_restriction" not in unrestricted_dump
+    assert [page.page_number for page in unrestricted.pages_for(Component.MATERIALS)] == [1, 2, 3]
+    full_html_sha = unrestricted_result.validated_input.html_sha256
+    unrestricted_digest = unrestricted_result.provenance.configuration_sha256
+    assert unrestricted_digest == effective_configuration_sha256(config)
+
+    restriction = Stage4PageRestrictionProvenance(
+        selected_page_numbers=(1, 3),
+        classifier_policy_version=STAGE4_CLASSIFIER_POLICY_VERSION,
+        classification_snapshot_sha256="a" * 64,
+    )
+    restricted = RecordingSink()
+    restricted_result = run_lexical_extraction(
+        config,
+        restricted,
+        page_allow_list=(3, 1),
+        stage4_page_restriction=restriction,
+    )
+    assert restricted_result.pre_validation is None
+    assert restricted_result.validated_input is not None
+    assert restricted_result.validated_input.html_sha256 == full_html_sha
+    assert restricted_result.provenance is not None
+    assert restricted_result.provenance.input_html_sha256 == full_html_sha
+    assert restricted_result.provenance.configuration_sha256 == unrestricted_digest
+    assert restricted_result.provenance.stage4_page_restriction == restriction
+    assert [page.page_number for page in restricted.pages_for(Component.MATERIALS)] == [1, 3]
+    scanned_pages = {
+        record.block.page_number
+        for component, record in restricted.blocks
+        if component is Component.MATERIALS
+    }
+    assert scanned_pages <= {1, 3}
+    assert 2 not in scanned_pages
+
+    node_ids = {
+        record.block.node_id
+        for component, record in restricted.blocks
+        if component is Component.MATERIALS
+    }
+    assert "b3" in node_ids or any(
+        "NaCl" in record.block.text
+        for component, record in restricted.blocks
+        if component is Component.MATERIALS
+    )
+
+
+def test_page_allow_list_rejects_unknown_page(tmp_path: Path) -> None:
+    config = _config(tmp_path, components=(Component.MATERIALS,))
+    restriction = Stage4PageRestrictionProvenance(
+        selected_page_numbers=(1, 99),
+        classifier_policy_version=STAGE4_CLASSIFIER_POLICY_VERSION,
+        classification_snapshot_sha256="b" * 64,
+    )
+    sink = RecordingSink()
+    result = run_lexical_extraction(
+        config,
+        sink,
+        page_allow_list=(1, 99),
+        stage4_page_restriction=restriction,
+    )
+    assert result.pre_validation is not None
+    assert result.pre_validation.error.code == "PAGE_ALLOW_LIST_UNKNOWN"
+    assert result.extraction is None
+    assert result.provenance is None
+    assert sink.pages == []
+
+
+def test_page_allow_list_with_units_and_manifest(tmp_path: Path) -> None:
+    config = _config(
+        tmp_path,
+        presets=(Preset.MATERIALS_WITH_QUANTITIES,),
+        components=(),
+    )
+    restriction = Stage4PageRestrictionProvenance(
+        selected_page_numbers=(1,),
+        classifier_policy_version=STAGE4_CLASSIFIER_POLICY_VERSION,
+        classification_snapshot_sha256="c" * 64,
+    )
+    sink = FilesystemEvidenceSink(config.output.directory)
+    result = run_lexical_extraction(
+        config,
+        sink,
+        page_allow_list=(1,),
+        stage4_page_restriction=restriction,
+    )
+    publication = finalize_publication(sink, result)
+    assert publication.manifest_path is not None
+    manifest = load_final_manifest(publication.manifest_path)
+    assert "stage4_page_restriction" in manifest["provenance"]
+    assert manifest["provenance"]["stage4_page_restriction"]["selected_page_numbers"] == [1]
+    assert (
+        manifest["provenance"]["stage4_page_restriction"]["classification_snapshot_sha256"]
+        == "c" * 64
+    )
+    assert result.validated_input is not None
+    assert manifest["validated_input"]["html_sha256"] == result.validated_input.html_sha256
+
+
+def test_page_allow_list_excluding_page_one_preserves_source_orders(tmp_path: Path) -> None:
+    config = _config(
+        tmp_path,
+        components=(Component.MATERIALS,),
+    )
+    restriction = Stage4PageRestrictionProvenance(
+        selected_page_numbers=(2, 3),
+        classifier_policy_version=STAGE4_CLASSIFIER_POLICY_VERSION,
+        classification_snapshot_sha256="d" * 64,
+    )
+    sink = FilesystemEvidenceSink(config.output.directory)
+    result = run_lexical_extraction(
+        config,
+        sink,
+        page_allow_list=(2, 3),
+        stage4_page_restriction=restriction,
+    )
+    publication = finalize_publication(sink, result)
+    assert result.pre_validation is None
+    assert result.extraction is not None
+    assert result.extraction.overall is ExtractionOutcome.COMPLETED
+    assert all(
+        item.outcome is ExtractionOutcome.COMPLETED
+        for item in result.extraction.components
+        if item.component is Component.MATERIALS
+    )
+    assert result.provenance is not None
+    assert result.provenance.stage4_page_restriction == restriction
+    assert publication.manifest_path is not None
+    manifest = load_final_manifest(publication.manifest_path)
+    assert manifest["provenance"]["stage4_page_restriction"]["selected_page_numbers"] == [2, 3]
+
+    from app.lexical_extraction.publication import iter_component_pages
+
+    assert sink.run_directory is not None
+    artifact = sink.run_directory / sink.committed_artifacts[Component.MATERIALS].relative_path
+    pages = [streamed.page for streamed in iter_component_pages(artifact)]
+    assert [page.page_number for page in pages] == [2, 3]
+    assert [page.order for page in pages] == [1, 2]
+    assert 1 not in {page.page_number for page in pages}

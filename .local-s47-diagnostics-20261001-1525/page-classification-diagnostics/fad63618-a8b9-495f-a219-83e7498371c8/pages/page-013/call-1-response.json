@@ -1,0 +1,69 @@
+{
+  "attempts": 1,
+  "call_id": 1,
+  "call_outcome": {
+    "availability": "valid",
+    "binding": {
+      "page_html_id": "source-page-13",
+      "page_number": 13,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "call_id": 1,
+    "failure_reason": null,
+    "response": {
+      "evidence": [
+        {
+          "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+          "label": "BILL_OF_MATERIALS",
+          "quote": "Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh",
+          "reason": "This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials."
+        },
+        {
+          "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+          "label": "EQUIPMENT_LIST",
+          "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00",
+          "reason": "This phrase identifies specific equipment by name and model used in the process, indicating an equipment list."
+        }
+      ],
+      "labels": [
+        "BILL_OF_MATERIALS",
+        "EQUIPMENT_LIST"
+      ],
+      "status": "ok"
+    }
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "latency_ms": 2824.14,
+  "model_name": "gpt-4.1-mini",
+  "page_number": 13,
+  "parsed": {
+    "evidence": [
+      {
+        "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+        "label": "BILL_OF_MATERIALS",
+        "quote": "Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh",
+        "reason": "This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials."
+      },
+      {
+        "element_id": "node_7226e0528d3eeaadba2370ad864d0482",
+        "label": "EQUIPMENT_LIST",
+        "quote": "Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00",
+        "reason": "This phrase identifies specific equipment by name and model used in the process, indicating an equipment list."
+      }
+    ],
+    "labels": [
+      "BILL_OF_MATERIALS",
+      "EQUIPMENT_LIST"
+    ],
+    "status": "ok"
+  },
+  "raw_text": "{\"labels\":[\"BILL_OF_MATERIALS\",\"EQUIPMENT_LIST\"],\"status\":\"ok\",\"evidence\":[{\"label\":\"BILL_OF_MATERIALS\",\"quote\":\"Weigh the following extragranular portion: Granules (Fexo A granules + lot no) 85% Final granulation total blend 200 g; 85% granules Required 170 gm; Weighed gm. Avicel PH 102 (Microcrystalline cellulose) (R-1002) - 9% Required 18 gm; Weigh\",\"reason\":\"This section lists materials with names, codes, and quantities to be weighed, indicating a bill of materials.\",\"element_id\":\"node_7226e0528d3eeaadba2370ad864d0482\"},{\"label\":\"EQUIPMENT_LIST\",\"quote\":\"Carefully transfer ALL the weighed materials into 8qt V- twin shell blender i.e blender UMB-00\",\"reason\":\"This phrase identifies specific equipment by name and model used in the process, indicating an equipment list.\",\"element_id\":\"node_7226e0528d3eeaadba2370ad864d0482\"}]}"
+}

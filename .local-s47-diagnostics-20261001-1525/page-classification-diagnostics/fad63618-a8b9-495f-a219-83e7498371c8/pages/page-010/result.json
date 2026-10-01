@@ -1,0 +1,272 @@
+{
+  "applied_other_unclassified": false,
+  "binding": {
+    "page_html_id": "source-page-10",
+    "page_number": 10,
+    "reviewed_html": {
+      "conversion_status": "SUCCEEDED",
+      "external_document_id": null,
+      "html_contract_version": 1,
+      "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+      "job_id": "local-fexofenadine",
+      "review_generation": 27,
+      "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+    }
+  },
+  "call_outcomes": [
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-10",
+        "page_number": 10,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 1,
+      "failure_reason": null,
+      "response": {
+        "evidence": [],
+        "labels": [],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-10",
+        "page_number": 10,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 2,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_b0d672e59de03ac36dd375813b121478",
+            "label": "MANUFACTURING_INSTRUCTIONS",
+            "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+            "reason": "Structured actionable directions for production preparation and processing steps are given in a numbered list."
+          },
+          {
+            "element_id": "node_b0d672e59de03ac36dd375813b121478",
+            "label": "PROCESS_EXECUTION_RECORD",
+            "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+            "reason": "Fields for recording actual values and times for processing steps are provided, qualifying as execution record fields."
+          },
+          {
+            "element_id": "node_b0d672e59de03ac36dd375813b121478",
+            "label": "IN_PROCESS_CONTROL",
+            "quote": "15. During granulation increase the inlet air flow rate by 2 SCFM every 5 min. Record results in table below",
+            "reason": "Instructions to monitor and record process parameters during granulation indicate in-process control monitoring."
+          }
+        ],
+        "labels": [
+          "MANUFACTURING_INSTRUCTIONS",
+          "PROCESS_EXECUTION_RECORD",
+          "IN_PROCESS_CONTROL"
+        ],
+        "status": "ok"
+      }
+    },
+    {
+      "availability": "valid",
+      "binding": {
+        "page_html_id": "source-page-10",
+        "page_number": 10,
+        "reviewed_html": {
+          "conversion_status": "SUCCEEDED",
+          "external_document_id": null,
+          "html_contract_version": 1,
+          "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+          "job_id": "local-fexofenadine",
+          "review_generation": 27,
+          "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+        }
+      },
+      "call_id": 3,
+      "failure_reason": null,
+      "response": {
+        "evidence": [
+          {
+            "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+            "label": "COVER_PAGE",
+            "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+            "reason": "This table identifies the batch record title, version, and product, indicating a cover page for the batch record."
+          },
+          {
+            "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+            "label": "DOCUMENTATION_INSTRUCTIONS",
+            "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+            "reason": "This step lists specific process parameters to be recorded during production, indicating documentation instructions for operators."
+          }
+        ],
+        "labels": [
+          "COVER_PAGE",
+          "DOCUMENTATION_INSTRUCTIONS"
+        ],
+        "status": "ok"
+      }
+    }
+  ],
+  "eligibility": {
+    "binding": {
+      "page_html_id": "source-page-10",
+      "page_number": 10,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "eligible_for_extraction": true,
+    "excluded_by_policy": false,
+    "reason": "page requires review; page remains eligible"
+  },
+  "is_provisional": false,
+  "kind": "needs_review",
+  "labels": [
+    {
+      "call_id": 2,
+      "element_id": "node_b0d672e59de03ac36dd375813b121478",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "quote not found in normalized page text",
+      "label": "MANUFACTURING_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+      "reason": "Structured actionable directions for production preparation and processing steps are given in a numbered list."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_b0d672e59de03ac36dd375813b121478",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "quote not found in normalized page text",
+      "label": "PROCESS_EXECUTION_RECORD",
+      "provenance": "call",
+      "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+      "reason": "Fields for recording actual values and times for processing steps are provided, qualifying as execution record fields."
+    },
+    {
+      "call_id": 2,
+      "element_id": "node_b0d672e59de03ac36dd375813b121478",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_b0d672e59de03ac36dd375813b121478",
+      "label": "IN_PROCESS_CONTROL",
+      "provenance": "call",
+      "quote": "15. During granulation increase the inlet air flow rate by 2 SCFM every 5 min. Record results in table below",
+      "reason": "Instructions to monitor and record process parameters during granulation indicate in-process control monitoring."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "element_id not found on prepared page: node_8eaa0683d3f449312acf6bd919b8c3ad",
+      "label": "COVER_PAGE",
+      "provenance": "call",
+      "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+      "reason": "This table identifies the batch record title, version, and product, indicating a cover page for the batch record."
+    },
+    {
+      "call_id": 3,
+      "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+      "evidence_verification": "unverified",
+      "evidence_verification_reason": "quote not found in normalized page text",
+      "label": "DOCUMENTATION_INSTRUCTIONS",
+      "provenance": "call",
+      "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+      "reason": "This step lists specific process parameters to be recorded during production, indicating documentation instructions for operators."
+    }
+  ],
+  "reasons": [
+    "all three responses are ok with a nonempty label union",
+    "source evidence verification failed for one or more labels"
+  ],
+  "requires_review": true,
+  "response_statuses": [
+    "ok",
+    "ok",
+    "ok"
+  ],
+  "source_validation": {
+    "binding": {
+      "page_html_id": "source-page-10",
+      "page_number": 10,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "has_unverified": true,
+    "items": [
+      {
+        "call_id": 2,
+        "element_id": "node_b0d672e59de03ac36dd375813b121478",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+        "reason": "Structured actionable directions for production preparation and processing steps are given in a numbered list.",
+        "verification": "unverified",
+        "verification_reason": "quote not found in normalized page text"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_b0d672e59de03ac36dd375813b121478",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+        "reason": "Fields for recording actual values and times for processing steps are provided, qualifying as execution record fields.",
+        "verification": "unverified",
+        "verification_reason": "quote not found in normalized page text"
+      },
+      {
+        "call_id": 2,
+        "element_id": "node_b0d672e59de03ac36dd375813b121478",
+        "label": "IN_PROCESS_CONTROL",
+        "quote": "15. During granulation increase the inlet air flow rate by 2 SCFM every 5 min. Record results in table below",
+        "reason": "Instructions to monitor and record process parameters during granulation indicate in-process control monitoring.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_b0d672e59de03ac36dd375813b121478"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+        "label": "COVER_PAGE",
+        "quote": "UNIVERSITY OF MARYLAND School of Pharmacy Batch Record MBR-046 Supersedes: New Version: 1.0 Title: Fexo A - Fexofenadine 60mg (F-7046) HCI tablets",
+        "reason": "This table identifies the batch record title, version, and product, indicating a cover page for the batch record.",
+        "verification": "unverified",
+        "verification_reason": "element_id not found on prepared page: node_8eaa0683d3f449312acf6bd919b8c3ad"
+      },
+      {
+        "call_id": 3,
+        "element_id": "node_8eaa0683d3f449312acf6bd919b8c3ad",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "14. Before the granulation, record the following: Relative Humidity: (%) Temperature: (°c) LOD Initial blend: (%) Initial wt of binder sol: gm Atomization pressure: psi Binder sol flow rate: gm/min Granulation start time: Pyrobutton data...",
+        "reason": "This step lists specific process parameters to be recorded during production, indicating documentation instructions for operators.",
+        "verification": "unverified",
+        "verification_reason": "quote not found in normalized page text"
+      }
+    ],
+    "requires_review": true
+  }
+}

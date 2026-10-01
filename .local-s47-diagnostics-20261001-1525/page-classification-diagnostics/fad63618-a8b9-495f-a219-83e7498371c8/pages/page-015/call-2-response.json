@@ -1,0 +1,83 @@
+{
+  "attempts": 1,
+  "call_id": 2,
+  "call_outcome": {
+    "availability": "valid",
+    "binding": {
+      "page_html_id": "source-page-15",
+      "page_number": 15,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "call_id": 2,
+    "failure_reason": null,
+    "response": {
+      "evidence": [
+        {
+          "element_id": "node_6b22bb39ff95a3f03a3c62198c4862c8",
+          "label": "MANUFACTURING_INSTRUCTIONS",
+          "quote": "39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and",
+          "reason": "The numbered steps provide structured actionable directions for production processing and equipment adjustment."
+        },
+        {
+          "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+          "label": "PROCESS_EXECUTION_RECORD",
+          "quote": "Performed By / Date Verified By / Date",
+          "reason": "The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording."
+        },
+        {
+          "element_id": "node_38f59d49ed4f181109ce78a13f7ffaf5",
+          "label": "YIELD_CALCULATION",
+          "quote": "Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =",
+          "reason": "This section contains a dedicated yield calculation formula and fields for recording granulation yield."
+        }
+      ],
+      "labels": [
+        "MANUFACTURING_INSTRUCTIONS",
+        "PROCESS_EXECUTION_RECORD",
+        "YIELD_CALCULATION"
+      ],
+      "status": "ok"
+    }
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "latency_ms": 2661.31,
+  "model_name": "gpt-4.1-mini",
+  "page_number": 15,
+  "parsed": {
+    "evidence": [
+      {
+        "element_id": "node_6b22bb39ff95a3f03a3c62198c4862c8",
+        "label": "MANUFACTURING_INSTRUCTIONS",
+        "quote": "39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and",
+        "reason": "The numbered steps provide structured actionable directions for production processing and equipment adjustment."
+      },
+      {
+        "element_id": "node_962787e445c44d8410e93c6ddbd85c98",
+        "label": "PROCESS_EXECUTION_RECORD",
+        "quote": "Performed By / Date Verified By / Date",
+        "reason": "The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording."
+      },
+      {
+        "element_id": "node_38f59d49ed4f181109ce78a13f7ffaf5",
+        "label": "YIELD_CALCULATION",
+        "quote": "Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =",
+        "reason": "This section contains a dedicated yield calculation formula and fields for recording granulation yield."
+      }
+    ],
+    "labels": [
+      "MANUFACTURING_INSTRUCTIONS",
+      "PROCESS_EXECUTION_RECORD",
+      "YIELD_CALCULATION"
+    ],
+    "status": "ok"
+  },
+  "raw_text": "{\"labels\":[\"MANUFACTURING_INSTRUCTIONS\",\"PROCESS_EXECUTION_RECORD\",\"YIELD_CALCULATION\"],\"status\":\"ok\",\"evidence\":[{\"label\":\"MANUFACTURING_INSTRUCTIONS\",\"quote\":\"39. Turn on the tablet press, allow the machine to stabilize i.e. discard first 5 tablets and check the weight of the next 2 tablets. Adjust the height of the weight control cam to make 470+10 mg tablets. 40. Using the transducers and\",\"reason\":\"The numbered steps provide structured actionable directions for production processing and equipment adjustment.\",\"element_id\":\"node_6b22bb39ff95a3f03a3c62198c4862c8\"},{\"label\":\"PROCESS_EXECUTION_RECORD\",\"quote\":\"Performed By / Date Verified By / Date\",\"reason\":\"The table includes fields for operator and verifier signatures and dates for each production step, qualifying as operational recording.\",\"element_id\":\"node_962787e445c44d8410e93c6ddbd85c98\"},{\"label\":\"YIELD_CALCULATION\",\"quote\":\"Granulation Yield Yield =100 X weight of granulation weight of powder (350 gm) Yield =\",\"reason\":\"This section contains a dedicated yield calculation formula and fields for recording granulation yield.\",\"element_id\":\"node_38f59d49ed4f181109ce78a13f7ffaf5\"}]}"
+}

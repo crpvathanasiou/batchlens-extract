@@ -21,12 +21,21 @@ from app.page_classification.contracts import (
     CurrentClassificationState,
     PreparedDocument,
 )
+from app.page_classification.diagnostics import (
+    ClassificationDiagnosticSession,
+    DiagnosticPersistenceError,
+    begin_classification_diagnostics,
+    finalize_matching_interrupted_bundle,
+    new_classification_run_id,
+)
 from app.page_classification.page_input import prepare_reviewed_document
 from app.page_classification.runner import PageClassificationRunner
 from app.page_classification.store import PageClassificationStore
 
 _FIXED_INTERRUPT_REASON = "page classification was interrupted by service restart"
 _FIXED_WORKER_FAILURE_REASON = "page classification failed unexpectedly"
+_FIXED_DIAGNOSTIC_FAILURE_REASON = "page classification diagnostic persistence failed"
+_FIXED_CURRENT_STATE_FAILURE_REASON = "page classification current-state persistence failed"
 _MAX_TERMINAL_REASON = 200
 
 _BUSY_DATA_DIRS: set[Path] = set()
@@ -55,6 +64,7 @@ class PageClassificationService:
         self._store = PageClassificationStore(self._data_dir)
         self._lock = threading.RLock()
         self._worker_thread: threading.Thread | None = None
+        self._active_diagnostics: ClassificationDiagnosticSession | None = None
         self._interrupt_abandoned_classifications()
 
     @property
@@ -87,6 +97,35 @@ class PageClassificationService:
 
         prepared = prepare_reviewed_document(Path(reviewed_html_path), expected=expected)
         now = self._clock()
+        run_id = new_classification_run_id()
+        try:
+            diagnostics = begin_classification_diagnostics(
+                self._data_dir,
+                classification_run_id=run_id,
+                reviewed_html=prepared.reviewed_html,
+                total_pages=len(prepared.pages),
+                wrapper=self._wrapper,
+                clock=self._clock,
+            )
+        except DiagnosticPersistenceError as exc:
+            failed = CurrentClassificationState(
+                reviewed_html=prepared.reviewed_html,
+                status="failed",
+                created_at=now,
+                updated_at=now,
+                finished_at=now,
+                progress=ClassificationProgress(
+                    total_pages=len(prepared.pages),
+                    completed_pages=0,
+                    current_page_number=None,
+                ),
+                page_results=(),
+                terminal_reason=_bounded_reason(exc.safe_reason),
+                classification_run_id=run_id,
+            )
+            self._store.save(failed)
+            return failed
+
         initial = CurrentClassificationState(
             reviewed_html=prepared.reviewed_html,
             status="running",
@@ -102,15 +141,24 @@ class PageClassificationService:
             ),
             page_results=(),
             terminal_reason=None,
+            classification_run_id=run_id,
         )
 
         with _BUSY_LOCK:
             if self._data_dir in _BUSY_DATA_DIRS:
+                diagnostics.finalize(
+                    "failed",
+                    terminal_reason="a page classification worker is already active",
+                )
                 raise PageClassificationBusyError(
                     "a page classification worker is already active for this data directory"
                 )
             worker = self._worker_thread
             if worker is not None and worker.is_alive():
+                diagnostics.finalize(
+                    "failed",
+                    terminal_reason="a page classification worker is already active",
+                )
                 raise PageClassificationBusyError(
                     "a page classification worker is already active for this data directory"
                 )
@@ -118,10 +166,12 @@ class PageClassificationService:
 
         try:
             self._store.save(initial)
+            with self._lock:
+                self._active_diagnostics = diagnostics
             thread = threading.Thread(
                 target=self._run_worker,
                 name="page-classification-worker",
-                args=(prepared,),
+                args=(prepared, diagnostics),
                 daemon=True,
             )
             with self._lock:
@@ -132,22 +182,46 @@ class PageClassificationService:
                 _BUSY_DATA_DIRS.discard(self._data_dir)
             with self._lock:
                 self._worker_thread = None
+                self._active_diagnostics = None
+            try:
+                diagnostics.finalize(
+                    "failed",
+                    terminal_reason=_FIXED_DIAGNOSTIC_FAILURE_REASON,
+                )
+            except Exception:  # noqa: BLE001 - best-effort diagnostic finalize
+                pass
             raise
         return initial
 
-    def _run_worker(self, prepared: PreparedDocument) -> None:
+    def _run_worker(
+        self,
+        prepared: PreparedDocument,
+        diagnostics: ClassificationDiagnosticSession,
+    ) -> None:
         reviewed_html = prepared.reviewed_html
         try:
-            asyncio.run(self._classify_async(prepared))
+            asyncio.run(self._classify_async(prepared, diagnostics))
+        except DiagnosticPersistenceError as exc:
+            self._mark_failed(reviewed_html, exc.safe_reason, diagnostics=diagnostics)
         except Exception:
-            self._mark_failed(reviewed_html, _FIXED_WORKER_FAILURE_REASON)
+            self._mark_failed(
+                reviewed_html,
+                _FIXED_WORKER_FAILURE_REASON,
+                diagnostics=diagnostics,
+            )
         finally:
             with _BUSY_LOCK:
                 _BUSY_DATA_DIRS.discard(self._data_dir)
             with self._lock:
                 self._worker_thread = None
+                if self._active_diagnostics is diagnostics:
+                    self._active_diagnostics = None
 
-    async def _classify_async(self, prepared: PreparedDocument) -> None:
+    async def _classify_async(
+        self,
+        prepared: PreparedDocument,
+        diagnostics: ClassificationDiagnosticSession,
+    ) -> None:
         reviewed_html = prepared.reviewed_html
         state = self._require_current(reviewed_html)
         completed: list[CompletedPageClassificationResult] = list(state.page_results)
@@ -166,26 +240,23 @@ class PageClassificationService:
                 }
             )
             self._store.save(state)
+            diagnostics.mark_page_progress(
+                current_page_number=page.binding.page_number,
+                completed_pages=len(completed),
+            )
 
-            result = await self._runner.classify_page(page)
+            result = await self._runner.classify_page(page, diagnostics=diagnostics)
             completed.append(result)
             now = self._clock()
             if index + 1 == len(prepared.pages):
-                final = CurrentClassificationState(
+                self._complete_classification(
                     reviewed_html=reviewed_html,
-                    status="completed",
                     created_at=state.created_at,
-                    updated_at=now,
-                    finished_at=now,
-                    progress=ClassificationProgress(
-                        total_pages=len(prepared.pages),
-                        completed_pages=len(completed),
-                        current_page_number=None,
-                    ),
-                    page_results=tuple(completed),
-                    terminal_reason=None,
+                    completed=completed,
+                    classification_run_id=state.classification_run_id,
+                    diagnostics=diagnostics,
+                    now=now,
                 )
-                self._store.save(final)
                 return
 
             next_page = prepared.pages[index + 1].binding.page_number
@@ -203,23 +274,69 @@ class PageClassificationService:
             self._store.save(state)
 
         now = self._clock()
+        self._complete_classification(
+            reviewed_html=reviewed_html,
+            created_at=state.created_at,
+            completed=completed,
+            classification_run_id=state.classification_run_id,
+            diagnostics=diagnostics,
+            now=now,
+        )
+
+    def _complete_classification(
+        self,
+        *,
+        reviewed_html: ReviewedHtmlV1Input,
+        created_at: datetime,
+        completed: list[CompletedPageClassificationResult],
+        classification_run_id: str | None,
+        diagnostics: ClassificationDiagnosticSession,
+        now: datetime,
+    ) -> None:
+        """Finalize the diagnostic completed manifest before claiming current completed."""
+
         final = CurrentClassificationState(
             reviewed_html=reviewed_html,
             status="completed",
-            created_at=state.created_at,
+            created_at=created_at,
             updated_at=now,
             finished_at=now,
             progress=ClassificationProgress(
-                total_pages=len(prepared.pages),
+                total_pages=len(completed),
                 completed_pages=len(completed),
                 current_page_number=None,
             ),
             page_results=tuple(completed),
             terminal_reason=None,
+            classification_run_id=classification_run_id,
         )
-        self._store.save(final)
+        # Fail closed: never persist completed current-state until the required
+        # completed diagnostic manifest write succeeds.
+        diagnostics.finalize("completed", completed_pages=len(completed))
+        try:
+            self._store.save(final)
+        except Exception:
+            try:
+                diagnostics.finalize(
+                    "failed",
+                    terminal_reason=_FIXED_CURRENT_STATE_FAILURE_REASON,
+                    completed_pages=len(completed),
+                )
+            except Exception:  # noqa: BLE001 - best-effort compensation
+                pass
+            self._mark_failed(
+                reviewed_html,
+                _FIXED_CURRENT_STATE_FAILURE_REASON,
+                diagnostics=None,
+            )
 
-    def _mark_failed(self, reviewed_html: ReviewedHtmlV1Input, reason: str) -> None:
+    def _mark_failed(
+        self,
+        reviewed_html: ReviewedHtmlV1Input,
+        reason: str,
+        *,
+        diagnostics: ClassificationDiagnosticSession | None = None,
+    ) -> None:
         try:
             state = self._store.load(reviewed_html)
         except Exception:  # noqa: BLE001 - best-effort terminal persistence
@@ -227,6 +344,15 @@ class PageClassificationService:
         if state is None:
             return
         if state.status in {"completed", "failed", "interrupted"}:
+            if diagnostics is not None:
+                try:
+                    diagnostics.finalize(
+                        "failed",
+                        terminal_reason=_bounded_reason(reason),
+                        completed_pages=state.progress.completed_pages,
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
             return
         now = self._clock()
         failed = state.model_copy(
@@ -246,6 +372,15 @@ class PageClassificationService:
             self._store.save(failed)
         except Exception:  # noqa: BLE001 - best-effort terminal persistence
             return
+        if diagnostics is not None:
+            try:
+                diagnostics.finalize(
+                    "failed",
+                    terminal_reason=_bounded_reason(reason),
+                    completed_pages=failed.progress.completed_pages,
+                )
+            except Exception:  # noqa: BLE001
+                return
 
     def _require_current(
         self,
@@ -284,6 +419,11 @@ class PageClassificationService:
                 }
             )
             self._store.save(interrupted)
+            finalize_matching_interrupted_bundle(
+                self._data_dir,
+                interrupted,
+                clock=self._clock,
+            )
 
 
 def _bounded_reason(message: str) -> str:

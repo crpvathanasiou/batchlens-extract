@@ -1,0 +1,69 @@
+{
+  "attempts": 1,
+  "call_id": 3,
+  "call_outcome": {
+    "availability": "valid",
+    "binding": {
+      "page_html_id": "source-page-6",
+      "page_number": 6,
+      "reviewed_html": {
+        "conversion_status": "SUCCEEDED",
+        "external_document_id": null,
+        "html_contract_version": 1,
+        "html_sha256": "e38333226b2beb96a01a4566233064a2e399beabb6e92bd63eeca25f46e2f7d5",
+        "job_id": "local-fexofenadine",
+        "review_generation": 27,
+        "review_revision_id": "f489826a-37bc-45e8-a13c-b648caf28b27"
+      }
+    },
+    "call_id": 3,
+    "failure_reason": null,
+    "response": {
+      "evidence": [
+        {
+          "element_id": "node_7bc141bbfebfb842cb21d52e093b7359",
+          "label": "COVER_PAGE",
+          "quote": "Batch Record MBR-046",
+          "reason": "The page contains a batch record title and identifier indicating it is a cover page for the batch record."
+        },
+        {
+          "element_id": "node_146bf608e0d99f1882dae49c13de742c",
+          "label": "DOCUMENTATION_INSTRUCTIONS",
+          "quote": "8. Area Clearance Step Performed By / Date QA Verified By / Date 1. GMP Processing Area(s): Room: 2. Review the GMP Processing Area Logbook(s) and ensure that the Logbook(s) is (are) complete, and up-to-date. 3. Review all applicable GMP...",
+          "reason": "The table lists steps with columns for 'Performed By / Date' and 'QA Verified By / Date', indicating instructions for documenting area clearance activities."
+        }
+      ],
+      "labels": [
+        "COVER_PAGE",
+        "DOCUMENTATION_INSTRUCTIONS"
+      ],
+      "status": "ok"
+    }
+  },
+  "classification_run_id": "fad63618-a8b9-495f-a219-83e7498371c8",
+  "latency_ms": 2238.34,
+  "model_name": "gpt-4.1-mini",
+  "page_number": 6,
+  "parsed": {
+    "evidence": [
+      {
+        "element_id": "node_7bc141bbfebfb842cb21d52e093b7359",
+        "label": "COVER_PAGE",
+        "quote": "Batch Record MBR-046",
+        "reason": "The page contains a batch record title and identifier indicating it is a cover page for the batch record."
+      },
+      {
+        "element_id": "node_146bf608e0d99f1882dae49c13de742c",
+        "label": "DOCUMENTATION_INSTRUCTIONS",
+        "quote": "8. Area Clearance Step Performed By / Date QA Verified By / Date 1. GMP Processing Area(s): Room: 2. Review the GMP Processing Area Logbook(s) and ensure that the Logbook(s) is (are) complete, and up-to-date. 3. Review all applicable GMP...",
+        "reason": "The table lists steps with columns for 'Performed By / Date' and 'QA Verified By / Date', indicating instructions for documenting area clearance activities."
+      }
+    ],
+    "labels": [
+      "COVER_PAGE",
+      "DOCUMENTATION_INSTRUCTIONS"
+    ],
+    "status": "ok"
+  },
+  "raw_text": "{\"labels\":[\"COVER_PAGE\",\"DOCUMENTATION_INSTRUCTIONS\"],\"status\":\"ok\",\"evidence\":[{\"label\":\"COVER_PAGE\",\"quote\":\"Batch Record MBR-046\",\"reason\":\"The page contains a batch record title and identifier indicating it is a cover page for the batch record.\",\"element_id\":\"node_7bc141bbfebfb842cb21d52e093b7359\"},{\"label\":\"DOCUMENTATION_INSTRUCTIONS\",\"quote\":\"8. Area Clearance Step Performed By / Date QA Verified By / Date 1. GMP Processing Area(s): Room: 2. Review the GMP Processing Area Logbook(s) and ensure that the Logbook(s) is (are) complete, and up-to-date. 3. Review all applicable GMP...\",\"reason\":\"The table lists steps with columns for 'Performed By / Date' and 'QA Verified By / Date', indicating instructions for documenting area clearance activities.\",\"element_id\":\"node_146bf608e0d99f1882dae49c13de742c\"}]}"
+}
