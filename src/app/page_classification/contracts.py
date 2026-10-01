@@ -79,6 +79,7 @@ class PreparedPageInput(PageClassificationModel):
     page_html_fragment: str = Field(min_length=1)
     readable_text: str
     element_text_by_id: dict[str, str]
+    ambiguous_element_ids: frozenset[str]
 
 
 class PreparedDocument(PageClassificationModel):

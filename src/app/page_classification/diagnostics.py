@@ -228,8 +228,9 @@ class ClassificationDiagnosticSession:
         error_code: str,
         error_message: str,
         outcome: CallOutcome,
+        parse_diagnostics: Mapping[str, Any] | None = None,
     ) -> None:
-        record = {
+        record: dict[str, Any] = {
             "classification_run_id": self.classification_run_id,
             "page_number": page_number,
             "call_id": call_id,
@@ -239,6 +240,13 @@ class ClassificationDiagnosticSession:
             },
             "call_outcome": persist_call_outcome(outcome).model_dump(mode="json"),
         }
+        if parse_diagnostics is not None:
+            record["model_name"] = parse_diagnostics.get("model_name")
+            record["raw_text"] = parse_diagnostics.get("raw_text")
+            record["refusal_text"] = parse_diagnostics.get("refusal_text")
+            record["attempts"] = parse_diagnostics.get("attempts")
+            record["latency_ms"] = parse_diagnostics.get("latency_ms")
+            record["structured_output_error"] = parse_diagnostics.get("structured_output_error")
         path = self._page_dir(page_number) / f"call-{call_id}-response.json"
         self._write_json(path, record)
 

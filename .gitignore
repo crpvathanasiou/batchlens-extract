@@ -30,11 +30,16 @@ out/
 
 # Local document-review acceptance inputs and persistent state contain protected data.
 manual-input/
+.local-extraction-approved/
 .local-review-data/
 .local-extraction-data/
 .local-extraction-review-data/
 .local-s45-acceptance-20261001-124001/
 .local-s47-diagnostics-20261001-1525/
+.local-s47-diagnostics-20261001-1535/
+.local-s47-diagnostics-20261001-1735/
+.local-s47-diagnostics-20261001-1828/
+
 
 # Reproducible frontend build output is produced by `npm --prefix frontend run build`.
 src/app/document_review/static/

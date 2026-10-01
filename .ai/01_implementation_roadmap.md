@@ -21,12 +21,15 @@ Do not invent a full implementation schedule, deadline, or milestone estimates.
 - FastAPI factory, injectable settings, logging, `/health` `/ready` `/version`
 - Python 3.11 / Poetry / Ruff / Pyright strict / pytest
 - Multistage Docker + Compose, including Node 22.12 review-frontend build
-- Optional unwired OpenAI wrapper with fake-based tests
+- Optional OpenAI wrapper with fake-based tests; reused by Stage 4 local page classification
 - Optional document conversion and document-review slices in the working tree (feature-flagged; local harness accepted; not AWS integration-verified)
 
 Scripts: `lint`, `format-check`, `format`, `typecheck`, `test`, `quality`, `dev`, `docker-up`, `docker-down` under `scripts/`.
 
-Remaining gaps: pharmaceutical extraction, recipe graph UI, rules/Audit, persistent audit ledger, AWS deploy verification.
+Remaining gaps: pharmaceutical recipe assembly, recipe graph UI, rules/Audit,
+persistent audit ledger, AWS deploy verification, Stage 3/4 production mount/auth,
+classifier editing/history/approval, LLM entity extraction, duplicate-upload/
+fingerprint/reuse.
 
 Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations: [04_code_map.md](04_code_map.md).
 
@@ -46,12 +49,14 @@ Operational detail: [03_common_handoff.md](03_common_handoff.md). Code locations
 | U2.1 — Approved Documents Registry and validation | Read-only discovery/selection of reviewed HTML under a caller-supplied approved-documents root; Stage 2 reader validation | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
 | U2.2 — Local persisted serialized lexical jobs | Local Stage 2/L13 background jobs with atomic job JSON, raw-run registration, one execution at a time per data dir | MUST | DONE / test-verified (see [03](03_common_handoff.md)) |
 | U3 — Stage 3 local extraction-review workspace | Local harness API + Vue workspace: open completed runs, page highlights, edit/save/TXT/approve; per-run isolation; `--run-extraction` + `initialLocalJobId` | MUST | DONE / test-verified / manually verified local slice (see [03](03_common_handoff.md)); production mount/auth out of scope |
-| Page classification / page-policy exclusion | Exclude or classify pages before lexical search | — | FUTURE / not implemented |
-| Duplicate-upload / execution-fingerprint / run reuse | Detect duplicate PDFs, fingerprint runs, cache/reuse completed extractions | — | FUTURE / out of Stage 3 mini-project scope |
-| Stage 3 production API mount / auth | Mount extraction-review in production FastAPI with real auth | — | FUTURE / out of this mini-project |
+| Stage 4 — Page classification and extraction routing | Local MVP: three calls/page, current-state classification, conservative eligibility, classified Extract All into Stage 2 `full`, immutable per-job snapshot, Vue/API integration | MUST | DONE / test-verified / recorded local end-to-end acceptance (see [03](03_common_handoff.md)); production mount/auth and model-quality guarantees out of scope |
+| Duplicate-upload / execution-fingerprint / run reuse | Detect duplicate PDFs, fingerprint runs, cache/reuse completed extractions | — | FUTURE / deferred |
+| Stage 3/4 production API mount / auth | Mount extraction-review and Stage 4 routes in production FastAPI with real auth | — | FUTURE / deferred |
 | M-Design — Pipeline & contracts design | Remaining extraction-pipeline semantics and contracts in 05 (+ 06–08 implications) | MUST | PLANNED |
-| LLM wrapper hardening / redesign | Harden/redesign for extraction integration | — | DEFERRED |
+| LLM wrapper hardening / redesign | Harden/redesign beyond the existing wrapper reused by Stage 4 | — | DEFERRED |
 | Graph / association / recipe assembly | Interactive graph, entity associations, pharmaceutical recipe assembly | — | FUTURE / not implemented |
+| Classifier label editing / classifier approval / classification history | Human edit or approve classifier labels; persist classification revision history | — | DEFERRED / outside Stage 4 local MVP |
+| LLM entity extraction | LLM-based pharmaceutical entity/relationship extraction | — | FUTURE / not implemented |
 
 ```text
 MUST / SHOULD / COULD
@@ -185,14 +190,22 @@ M0 (DONE)
 → Conversion + HITL review slices (DONE in working tree; local acceptance complete; not cloud-verified)
 → Stage 2 L01–L13 lexical engine (DONE / user-accepted)
 → Stage 3 Extraction Review Workspace U1–U3 local slice (DONE / test-verified / manually verified)
-→ Intended-use / regulatory-boundary and audit/provenance design (next; no audit-log implementation)
+→ Stage 4 Page Classification and Extraction Routing local MVP (DONE / test-verified / recorded local acceptance)
+→ Intended-use / regulatory-boundary and audit/provenance design (next unfinished design boundary; no audit-log implementation)
 → M-Design remaining extraction pipeline/contracts
 → Broader extraction productization (after design; not yet defined)
 ```
 
-Safe deferrals / out of Stage 3 mini-project: Neo4j, GraphRAG, catalogs/RAG, Audit product /
-rules layer, audit-ledger implementation, wrapper hardening, enterprise integrations,
-production Stage 3 mount/auth, page classification, duplicate-upload/fingerprint/reuse.
+Explicit Stage 4 deferrals (not reopen as Stage 4 scope): production API mounting/
+authentication; classifier label editing, classifier approval, or classification
+history; LLM entity extraction; graph/association/recipe-assembly; generic queues /
+cross-process locking; SQLite review/classification stores; automatic approvals;
+broader audit/history infrastructure; any claim that live model quality is
+guaranteed by contract tests.
+
+Other safe deferrals: Neo4j, GraphRAG, catalogs/RAG, Audit product / rules layer,
+audit-ledger implementation, wrapper hardening beyond current reuse, enterprise
+integrations, duplicate-upload/fingerprint/reuse.
 
 ---
 
@@ -200,16 +213,20 @@ production Stage 3 mount/auth, page classification, duplicate-upload/fingerprint
 
 Operational detail: [03_common_handoff.md](03_common_handoff.md).
 
-**Current:** Stage 3 — Extraction Review Workspace local U1–U3 slice is
-**implemented**, **test-verified**, and **manually verified**. Stage 2/L13 remains
-the independent Lexical Extraction Engine. Stage 1 document approval is unchanged.
-AWS/production integration remains unverified.
+**Current:** Stages 1–3 remain locked baselines. Stage 4 local MVP is
+**implemented**, **test-verified**, and has **recorded local** end-to-end
+acceptance (configured OpenAI classification plus classified Extract All).
+AWS/production integration and live classification quality remain unverified as
+product guarantees.
 
-**Next:** intended-use / regulatory-boundary and audit/provenance design before any
-audit-log implementation. Stage 3 production mount/auth, page classification,
-duplicate-upload/fingerprint/reuse, LLM, and graph/association work remain future
-or out of this mini-project. Extraction M-Design remains later.
+**Next unfinished boundary:** intended-use / regulatory-boundary and
+audit/provenance design before any audit-log implementation. Do not reopen
+completed Stage 1–4 local MVP work. Production mount/auth, classifier
+editing/history/approval, duplicate-upload/fingerprint/reuse, LLM entity
+extraction, and graph/association/recipe assembly remain deferred. Extraction
+M-Design remains later.
 
 **L01–L13 progress (user-accepted lexical engine):** contracts through filesystem
 publication/CLI under `src/app/lexical_extraction/`. Stage 3 consumes completed
-published local runs; it does not redesign L01–L13.
+published local runs; Stage 4 optionally restricts Stage 2 `full` to eligible
+pages. Neither redesigns L01–L13 matching.

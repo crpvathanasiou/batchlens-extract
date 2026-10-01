@@ -1,8 +1,9 @@
 """Prepare a reviewed-HTML document once, then derive and look up page inputs.
 
 Uses the existing reviewed-HTML v1 reader for complete-document validation.
-Page fragments, readable text, and HTML-id maps are derived from the same
-validated document bytes. Subsequent page selection does not revalidate.
+Page fragments, readable text, and page-local identifier maps are derived from
+the same validated document bytes. Subsequent page selection does not
+revalidate.
 """
 
 from __future__ import annotations
@@ -69,6 +70,12 @@ _BLOCK_SEPARATOR_TAGS: Final = frozenset(
 )
 _CELL_TAGS: Final = frozenset({"td", "th"})
 _WHITESPACE_RE: Final = re.compile(r"\s+")
+_SUPPORTED_IDENTIFIER_ATTRS: Final = (
+    "id",
+    "data-node-id",
+    "data-element-id",
+    "data-table-id",
+)
 
 
 class PageInputError(Exception):
@@ -188,6 +195,7 @@ def _derive_prepared_pages(
                 page_html_fragment=page.fragment,
                 readable_text=page.readable_text,
                 element_text_by_id=dict(page.element_text_by_id),
+                ambiguous_element_ids=frozenset(page.ambiguous_element_ids),
             )
         )
     return tuple(prepared)
@@ -224,6 +232,7 @@ class _ExtractedPage:
         "fragment",
         "readable_text",
         "element_text_by_id",
+        "ambiguous_element_ids",
     )
 
     def __init__(
@@ -234,20 +243,84 @@ class _ExtractedPage:
         fragment: str,
         readable_text: str,
         element_text_by_id: dict[str, str],
+        ambiguous_element_ids: frozenset[str],
     ) -> None:
         self.page_number = page_number
         self.page_html_id = page_html_id
         self.fragment = fragment
         self.readable_text = readable_text
         self.element_text_by_id = element_text_by_id
+        self.ambiguous_element_ids = ambiguous_element_ids
+
+
+class _IdentifiedElement:
+    """One DOM element that carries at least one supported identifier attribute."""
+
+    __slots__ = ("node_id", "parent_node_id", "values", "is_article_wrapper", "parts")
+
+    def __init__(
+        self,
+        *,
+        node_id: int,
+        parent_node_id: int | None,
+        values: frozenset[str],
+        is_article_wrapper: bool,
+    ) -> None:
+        self.node_id = node_id
+        self.parent_node_id = parent_node_id
+        self.values = values
+        self.is_article_wrapper = is_article_wrapper
+        self.parts: list[str] = []
+
+
+def _identifier_values(attr_map: dict[str, str]) -> frozenset[str]:
+    return frozenset(
+        value for attr in _SUPPORTED_IDENTIFIER_ATTRS if (value := attr_map.get(attr, "")) != ""
+    )
+
+
+def _is_article_wrapper(tag: str, attr_map: dict[str, str]) -> bool:
+    return tag == "article" and "element" in attr_map.get("class", "").split()
+
+
+def _is_wrapper_content_pair(first: _IdentifiedElement, second: _IdentifiedElement) -> bool:
+    if first.is_article_wrapper and not second.is_article_wrapper:
+        return second.parent_node_id == first.node_id
+    if second.is_article_wrapper and not first.is_article_wrapper:
+        return first.parent_node_id == second.node_id
+    return False
+
+
+def _resolve_identifier_maps(
+    identified: dict[int, _IdentifiedElement],
+) -> tuple[dict[str, str], frozenset[str]]:
+    by_value: dict[str, list[_IdentifiedElement]] = {}
+    for element in identified.values():
+        for value in element.values:
+            by_value.setdefault(value, []).append(element)
+
+    resolved: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for value, elements in by_value.items():
+        if len(elements) == 1:
+            resolved[value] = "".join(elements[0].parts)
+            continue
+        if len(elements) == 2 and _is_wrapper_content_pair(elements[0], elements[1]):
+            wrapper = elements[0] if elements[0].is_article_wrapper else elements[1]
+            resolved[value] = "".join(wrapper.parts)
+            continue
+        ambiguous.add(value)
+    return resolved, frozenset(ambiguous)
 
 
 class _PageContentExtractor(HTMLParser):
-    """Build readable page text, HTML-id maps, and exact section.page source spans.
+    """Build readable page text, identifier maps, and exact section.page source spans.
 
     Entity references are preserved in readable text so evidence normalization
     performs exactly one decode pass later. Fragments are sliced from the
     original source using parser positions for the recognized section.page tags.
+    Identifier lookup accepts exact values from id, data-node-id,
+    data-element-id, and data-table-id without failing the page on duplicates.
     """
 
     def __init__(self, source: str) -> None:
@@ -264,9 +337,9 @@ class _PageContentExtractor(HTMLParser):
         self._start_offset: int | None = None
         self._readable_parts: list[str] = []
         self._skip_depth = 0
-        self._id_stack: list[str | None] = []
-        self._id_parts: dict[str, list[str]] = {}
-        self._seen_ids: set[str] = set()
+        self._next_node_id = 0
+        self._open_nodes: list[tuple[int, _IdentifiedElement | None]] = []
+        self._identified: dict[int, _IdentifiedElement] = {}
         self._pending_separator = False
         self._pending_cell_space = False
 
@@ -297,8 +370,8 @@ class _PageContentExtractor(HTMLParser):
             return
         if tag in _SKIP_READABLE_TAGS and self._skip_depth > 0:
             self._skip_depth -= 1
-        if self._id_stack:
-            self._id_stack.pop()
+        if self._open_nodes:
+            self._open_nodes.pop()
         if tag in _BLOCK_SEPARATOR_TAGS:
             self._pending_separator = True
             self._pending_cell_space = False
@@ -364,24 +437,20 @@ class _PageContentExtractor(HTMLParser):
         self._start_offset = _source_offset(self._source, line, column)
         self._readable_parts = []
         self._skip_depth = 0
-        self._id_stack = []
-        self._id_parts = {}
-        self._seen_ids = set()
+        self._next_node_id = 0
+        self._open_nodes = []
+        self._identified = {}
         self._pending_separator = False
         self._pending_cell_space = False
-        self._register_id(page_id)
-        self._id_stack.append(page_id)
+        self._push_element("section", attr_map)
 
     def _enter_tag(self, tag: str, attr_map: dict[str, str]) -> None:
         if tag == "section":
             self._section_depth += 1
         if tag in _SKIP_READABLE_TAGS:
             self._skip_depth += 1
-        element_id = attr_map.get("id") or None
-        if element_id is not None:
-            self._register_id(element_id)
         if tag not in _VOID_TAGS:
-            self._id_stack.append(element_id)
+            self._push_element(tag, attr_map)
         if self._skip_depth > 0:
             return
         if tag == "br":
@@ -396,23 +465,31 @@ class _PageContentExtractor(HTMLParser):
             self._pending_separator = True
             self._pending_cell_space = False
 
-    def _register_id(self, element_id: str) -> None:
-        if element_id in self._seen_ids:
-            self.error = PageInputError(
-                "DUPLICATE_HTML_ID",
-                f"duplicate HTML id on prepared page: {element_id}",
+    def _push_element(self, tag: str, attr_map: dict[str, str]) -> None:
+        parent_node_id = self._open_nodes[-1][0] if self._open_nodes else None
+        values = _identifier_values(attr_map)
+        node_id = self._alloc_node_id()
+        identified: _IdentifiedElement | None = None
+        if values:
+            identified = _IdentifiedElement(
+                node_id=node_id,
+                parent_node_id=parent_node_id,
+                values=values,
+                is_article_wrapper=_is_article_wrapper(tag, attr_map),
             )
-            return
-        self._seen_ids.add(element_id)
-        self._id_parts.setdefault(element_id, [])
+            self._identified[node_id] = identified
+        self._open_nodes.append((node_id, identified))
 
-    def _active_ids(self) -> list[str]:
-        return [item for item in self._id_stack if item is not None]
+    def _alloc_node_id(self) -> int:
+        node_id = self._next_node_id
+        self._next_node_id += 1
+        return node_id
 
     def _append_raw(self, chunk: str) -> None:
         self._readable_parts.append(chunk)
-        for active_id in self._active_ids():
-            self._id_parts[active_id].append(chunk)
+        for _node_id, identified in self._open_nodes:
+            if identified is not None:
+                identified.parts.append(chunk)
 
     def _emit_text(self, data: str) -> None:
         prefix = ""
@@ -438,15 +515,15 @@ class _PageContentExtractor(HTMLParser):
             self._capturing = False
             return
         fragment = self._source[self._start_offset : end_offset]
+        element_text_by_id, ambiguous_element_ids = _resolve_identifier_maps(self._identified)
         self.pages.append(
             _ExtractedPage(
                 page_number=self._page_number,
                 page_html_id=self._page_html_id,
                 fragment=fragment,
                 readable_text="".join(self._readable_parts),
-                element_text_by_id={
-                    element_id: "".join(parts) for element_id, parts in self._id_parts.items()
-                },
+                element_text_by_id=element_text_by_id,
+                ambiguous_element_ids=ambiguous_element_ids,
             )
         )
         self._capturing = False
@@ -455,9 +532,8 @@ class _PageContentExtractor(HTMLParser):
         self._page_html_id = None
         self._start_offset = None
         self._readable_parts = []
-        self._id_stack = []
-        self._id_parts = {}
-        self._seen_ids = set()
+        self._open_nodes = []
+        self._identified = {}
 
 
 __all__ = [

@@ -63,8 +63,8 @@ def test_prompt_label_lists_match_models(
     for label in labels:
         assert label in text
     listed: list[str] = []
-    if "Allowed labels, in output order:\n" in text:
-        block = text.split("Allowed labels, in output order:\n", 1)[1]
+    if "Allowed labels:\n" in text:
+        block = text.split("Allowed labels:\n", 1)[1]
         for line in block.splitlines():
             stripped = line.strip()
             if not stripped:
@@ -74,7 +74,7 @@ def test_prompt_label_lists_match_models(
             elif listed:
                 break
     else:
-        block = text.split("ALLOWED LABELS AND DEFINITIONS (output in this order)\n", 1)[1]
+        block = text.split("ALLOWED LABELS AND DEFINITIONS\n", 1)[1]
         for line in block.splitlines():
             stripped = line.strip()
             if not stripped:
@@ -90,6 +90,61 @@ def test_prompt_label_lists_match_models(
                     break
     assert listed == list(labels)
     assert list(model.LABEL_ORDER) == list(labels)  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(("filename", "model", "labels"), PROMPT_FILES)
+def test_prompts_do_not_require_label_or_evidence_order(
+    filename: str,
+    model: type[object],
+    labels: tuple[str, ...],
+) -> None:
+    del model, labels
+    text = (PROMPTS / filename).read_text(encoding="utf-8")
+    assert "in output order" not in text
+    assert "output in this order" not in text
+    assert "in the same order as labels" not in text
+    assert "in definition order" not in text
+    assert "in the listed order" not in text
+    assert "in any order" in text
+
+
+_IDENTIFIER_CONTRACT_MARKERS = (
+    "id, data-node-id, data-element-id, or data-table-id",
+    "smallest identifiable element containing the complete quote",
+    "nearest identifiable ancestor",
+    "Use null when no suitable identifier exists",
+    "Never invent, repair, or convert",
+)
+
+
+@pytest.mark.parametrize(("filename", "model", "labels"), PROMPT_FILES)
+def test_prompts_express_supported_identifier_contract(
+    filename: str,
+    model: type[object],
+    labels: tuple[str, ...],
+) -> None:
+    del model, labels
+    text = (PROMPTS / filename).read_text(encoding="utf-8")
+    for marker in _IDENTIFIER_CONTRACT_MARKERS:
+        assert marker in text
+    assert "not substitutes for id" not in text
+
+
+@pytest.mark.parametrize(("filename", "model"), SCHEMA_FILES)
+def test_schema_element_id_description_matches_supported_identifiers(
+    filename: str,
+    model: type[object],
+) -> None:
+    schema = cast(dict[str, Any], model.model_json_schema(mode="validation"))  # type: ignore[attr-defined]
+    items = cast(dict[str, Any], schema["properties"]["evidence"]["items"])
+    ref = cast(str, items["$ref"]).split("/")[-1]
+    defs = cast(dict[str, Any], schema["$defs"])
+    description = cast(str, defs[ref]["properties"]["element_id"]["description"])
+    assert "id, data-node-id, data-element-id, or data-table-id" in description
+    assert "smallest identifiable element" in description
+    assert "Never invent, repair, or convert" in description
+    on_disk = json.loads((SCHEMAS / filename).read_text(encoding="utf-8"))
+    assert on_disk == schema
 
 
 @pytest.mark.parametrize(("filename", "model", "labels"), PROMPT_FILES)

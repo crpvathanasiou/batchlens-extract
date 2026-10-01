@@ -336,7 +336,9 @@ def test_provenance_and_hash_mismatch_rejected(tmp_path: Path) -> None:
         prepare_reviewed_document(tampered, expected=expected)
 
 
-def test_absent_page_and_duplicate_html_id_rejected(tmp_path: Path) -> None:
+def test_absent_page_still_rejected_and_duplicate_ids_are_ambiguous(
+    tmp_path: Path,
+) -> None:
     html_path = tmp_path / "reviewed.html"
     html_path.write_bytes(FIXTURE.read_bytes())
     document = prepare_reviewed_document(html_path)
@@ -346,12 +348,41 @@ def test_absent_page_and_duplicate_html_id_rejected(tmp_path: Path) -> None:
     duplicate = _wrap(
         '<section class="page" id="source-page-1" data-page="1">'
         '<article class="element" data-kind="text" data-element-id="a">'
-        '<p id="dup" data-node-id="a">one</p>'
-        '<p id="dup" data-node-id="b">two</p>'
+        '<p id="dup" data-node-id="a">one shared</p>'
+        '<p id="dup" data-node-id="b">two shared</p>'
         "</article></section>"
     )
-    with pytest.raises(PageInputError, match="DUPLICATE_HTML_ID"):
-        prepare_reviewed_document(_write(tmp_path / "dup.html", duplicate))
+    page = get_prepared_page(
+        prepare_reviewed_document(_write(tmp_path / "dup.html", duplicate)),
+        1,
+    )
+    assert "dup" in page.ambiguous_element_ids
+    assert "dup" not in page.element_text_by_id
+    # Article/content alias for "a" remains resolvable; sibling "dup" is not.
+    assert "a" in page.element_text_by_id
+    outcomes = (
+        validate_call_response(
+            page.binding,
+            1,
+            {
+                "labels": ["BILL_OF_MATERIALS"],
+                "status": "ok",
+                "evidence": [
+                    {
+                        "label": "BILL_OF_MATERIALS",
+                        "quote": "one shared",
+                        "reason": "Ambiguous identifier.",
+                        "element_id": "dup",
+                    }
+                ],
+            },
+        ),
+        missing_call(page.binding, 2),
+        missing_call(page.binding, 3),
+    )
+    item = validate_source_evidence(page, outcomes).items[0]
+    assert item.verification == "unverified"
+    assert item.verification_reason == "element_id is ambiguous on prepared page: dup"
 
 
 def test_source_evidence_null_omitted_wrong_and_noncontaining_ids(
@@ -487,6 +518,236 @@ def test_source_evidence_null_omitted_wrong_and_noncontaining_ids(
 
     # Quote on page 3 id is not accepted for page 2 checks above; confirm page 3 has it.
     assert "approval-block" in page3.element_text_by_id
+
+
+def _evidence_outcome(
+    binding: object,
+    *,
+    quote: str,
+    element_id: str | None,
+    reason: str = "Identifier check.",
+) -> CallOutcome:
+    return validate_call_response(
+        binding,  # type: ignore[arg-type]
+        1,
+        {
+            "labels": ["BILL_OF_MATERIALS"],
+            "status": "ok",
+            "evidence": [
+                {
+                    "label": "BILL_OF_MATERIALS",
+                    "quote": quote,
+                    "reason": reason,
+                    "element_id": element_id,
+                }
+            ],
+        },
+    )
+
+
+def test_supported_identifier_attributes_resolve_individually(tmp_path: Path) -> None:
+    body = (
+        '<section class="page" id="source-page-1" data-page="1">'
+        '<article class="element" data-kind="text" data-element-id="wrap-id">'
+        '<p id="by-html-id" data-node-id="wrap-id">From html id</p>'
+        "</article>"
+        '<article class="element" data-kind="text" data-element-id="wrap-node">'
+        '<p data-node-id="by-node-id">From node id</p>'
+        "</article>"
+        '<article class="element" data-kind="text" data-element-id="by-element-id">'
+        '<p data-node-id="by-element-id">From element id wrapper alias</p>'
+        "</article>"
+        '<article class="element" data-kind="table" data-element-id="by-table-id">'
+        '<table data-table-id="by-table-id"><tbody><tr>'
+        '<td rowspan="1" colspan="1" data-row="1" data-column="1" '
+        'data-node-id="cell-by-table">From table id</td>'
+        "</tr></tbody></table>"
+        "</article>"
+        "</section>"
+    )
+    page = get_prepared_page(
+        prepare_reviewed_document(_write(tmp_path / "attrs.html", _wrap(body))),
+        1,
+    )
+    cases = (
+        ("by-html-id", "From html id"),
+        ("by-node-id", "From node id"),
+        ("by-element-id", "From element id wrapper alias"),
+        ("by-table-id", "From table id"),
+    )
+    for element_id, quote in cases:
+        assert element_id in page.element_text_by_id
+        assert element_id not in page.ambiguous_element_ids
+        item = validate_source_evidence(
+            page,
+            (
+                _evidence_outcome(page.binding, quote=quote, element_id=element_id),
+                missing_call(page.binding, 2),
+                missing_call(page.binding, 3),
+            ),
+        ).items[0]
+        assert item.verification == "verified", element_id
+
+
+def test_multi_attr_same_element_counts_as_one_target(tmp_path: Path) -> None:
+    body = (
+        '<section class="page" id="source-page-1" data-page="1">'
+        '<article class="element" data-kind="text" data-element-id="wrap">'
+        '<p id="shared-key" data-node-id="shared-key" '
+        'data-element-id="shared-key" data-table-id="shared-key">'
+        "Same element multi-attr"
+        "</p>"
+        "</article></section>"
+    )
+    page = get_prepared_page(
+        prepare_reviewed_document(_write(tmp_path / "multi.html", _wrap(body))),
+        1,
+    )
+    assert "shared-key" in page.element_text_by_id
+    assert "shared-key" not in page.ambiguous_element_ids
+    item = validate_source_evidence(
+        page,
+        (
+            _evidence_outcome(
+                page.binding,
+                quote="Same element multi-attr",
+                element_id="shared-key",
+            ),
+            missing_call(page.binding, 2),
+            missing_call(page.binding, 3),
+        ),
+    ).items[0]
+    assert item.verification == "verified"
+
+
+def test_article_wrapper_direct_content_alias_resolves_to_wrapper(
+    tmp_path: Path,
+) -> None:
+    html_path = tmp_path / "reviewed.html"
+    html_path.write_bytes(FIXTURE.read_bytes())
+    page2 = get_prepared_page(prepare_reviewed_document(html_path), 2)
+    assert "mat-table" in page2.element_text_by_id
+    assert "mat-table" not in page2.ambiguous_element_ids
+    assert "Sodium Chloride" in page2.element_text_by_id["mat-table"]
+    item = validate_source_evidence(
+        page2,
+        (
+            _evidence_outcome(
+                page2.binding,
+                quote="Sodium Chloride",
+                element_id="mat-table",
+            ),
+            missing_call(page2.binding, 2),
+            missing_call(page2.binding, 3),
+        ),
+    ).items[0]
+    assert item.verification == "verified"
+
+
+def test_nested_non_direct_shared_identifier_is_ambiguous(tmp_path: Path) -> None:
+    body = (
+        '<section class="page" id="source-page-1" data-page="1">'
+        '<article class="element" data-kind="text" data-element-id="outer">'
+        '<section id="inner-section">'
+        '<p id="inner-p" data-node-id="outer">Nested body</p>'
+        "</section>"
+        "</article></section>"
+    )
+    page = get_prepared_page(
+        prepare_reviewed_document(_write(tmp_path / "nested.html", _wrap(body))),
+        1,
+    )
+    assert "outer" in page.ambiguous_element_ids
+    assert "outer" not in page.element_text_by_id
+    item = validate_source_evidence(
+        page,
+        (
+            _evidence_outcome(page.binding, quote="Nested body", element_id="outer"),
+            missing_call(page.binding, 2),
+            missing_call(page.binding, 3),
+        ),
+    ).items[0]
+    assert item.verification == "unverified"
+    assert item.verification_reason == "element_id is ambiguous on prepared page: outer"
+
+
+def test_missing_identifier_and_cross_page_scope(tmp_path: Path) -> None:
+    html_path = tmp_path / "reviewed.html"
+    html_path.write_bytes(FIXTURE.read_bytes())
+    document = prepare_reviewed_document(html_path)
+    page2 = get_prepared_page(document, 2)
+    page3 = get_prepared_page(document, 3)
+
+    missing = validate_source_evidence(
+        page2,
+        (
+            _evidence_outcome(
+                page2.binding,
+                quote="Sodium Chloride",
+                element_id="no-such-identifier",
+            ),
+            missing_call(page2.binding, 2),
+            missing_call(page2.binding, 3),
+        ),
+    ).items[0]
+    assert missing.verification == "unverified"
+    assert missing.verification_reason == (
+        "element_id not found on prepared page: no-such-identifier"
+    )
+
+    assert "approval-block" in page3.element_text_by_id
+    assert "approval-block" not in page2.element_text_by_id
+    cross = validate_source_evidence(
+        page2,
+        (
+            _evidence_outcome(
+                page2.binding,
+                quote="Sodium Chloride",
+                element_id="approval-block",
+            ),
+            missing_call(page2.binding, 2),
+            missing_call(page2.binding, 3),
+        ),
+    ).items[0]
+    assert cross.verification == "unverified"
+    assert cross.verification_reason == ("element_id not found on prepared page: approval-block")
+
+
+def test_quote_must_lie_in_resolved_target_not_elsewhere_on_page(
+    tmp_path: Path,
+) -> None:
+    html_path = tmp_path / "reviewed.html"
+    html_path.write_bytes(FIXTURE.read_bytes())
+    page2 = get_prepared_page(prepare_reviewed_document(html_path), 2)
+
+    inside = validate_source_evidence(
+        page2,
+        (
+            _evidence_outcome(
+                page2.binding,
+                quote="Sodium Chloride",
+                element_id="materials-table",
+            ),
+            missing_call(page2.binding, 2),
+            missing_call(page2.binding, 3),
+        ),
+    ).items[0]
+    assert inside.verification == "verified"
+
+    elsewhere = validate_source_evidence(
+        page2,
+        (
+            _evidence_outcome(
+                page2.binding,
+                quote="Sodium Chloride",
+                element_id="equipment-table",
+            ),
+            missing_call(page2.binding, 2),
+            missing_call(page2.binding, 3),
+        ),
+    ).items[0]
+    assert elsewhere.verification == "unverified"
+    assert elsewhere.verification_reason == "quote not found in normalized element text"
 
 
 def test_mismatched_bindings_rejected_for_source_validation(tmp_path: Path) -> None:

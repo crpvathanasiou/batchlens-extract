@@ -1,6 +1,6 @@
 # 05 — Pipeline Contracts
 
-**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 — Extraction Review Workspace **U1–U3 local slice is implemented**, **test-verified**, and **manually verified** (current-state review per `local_job_id`, approved-document selection, local Stage 2/L13 jobs, local UI/API/harness). Production mount/auth, page classification, duplicate-upload/fingerprint/reuse, SQLite review store, graph/association work, LLM, and automatic approval remain **out of this mini-project** or **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader extraction productization remains **OPEN**.
+**Status:** Document conversion and optional human review **are implemented** in code (not production-qualified). L01–L13 lexical building blocks (contracts through CLI and atomic final-manifest publication) **are implemented**, **test-verified**, and **user-accepted**. Stage 3 — Extraction Review Workspace **U1–U3 local slice is implemented**, **test-verified**, and **manually verified**. Stage 4 — Page Classification and Extraction Routing **local MVP is implemented**, **test-verified**, and has **recorded local** end-to-end acceptance (configured OpenAI plus classified Extract All). Production mount/auth, classifier editing/approval/history, duplicate-upload/fingerprint/reuse, SQLite review/classification stores, graph/association work, LLM entity extraction, and automatic approval remain **deferred** or **unimplemented**. Rules/Audit evaluation and a persistent audit ledger are **not implemented**. Broader pharmaceutical recipe-assembly productization remains **OPEN**.
 
 Primary owner of pipeline responsibilities, data semantics, and lifecycle invariants. Product boundaries: [00_project_reference.md](00_project_reference.md). Engineering errors: [02_code_quality_standards.md](02_code_quality_standards.md). Check selection: [08_check_selection_strategy.md](08_check_selection_strategy.md). Security of artifacts: [06_security_and_data_handling.md](06_security_and_data_handling.md).
 
@@ -234,7 +234,8 @@ independent of human approval; fuzzy defaults off.
 - `hasRelatedSynonym` aliases are searchable.
 - Short literals under three code points and `context_required` UO terms remain excluded.
 - Per-page de-duplication buffering is bounded by `result_buffer_records`.
-- Page classification and page-policy exclusion remain future work (not implemented).
+- Stage 4 may restrict Stage 2 `full` to an explicit eligible-page allow-list;
+  unrestricted Stage 2 behavior is unchanged when no restriction is supplied.
 
 ### U1 — current review state
 
@@ -318,10 +319,146 @@ reviews/approvals.
 
 ### Exclusions
 
-**Out of this mini-project / not implemented:** production API mount/auth; page
-classification; duplicate-upload / fingerprint / reuse; SQLite review store; job-history
-projection; graph/association/LLM work; automatic approval; Stage 1 document-review
-behavior changes; Stage 2 redesign.
+**Deferred / not implemented here:** production API mount/auth; classifier label
+editing, classifier approval, or classification history; duplicate-upload /
+fingerprint / reuse; SQLite review/classification stores; job-history projection;
+graph/association/LLM-entity work; automatic approval; Stage 1 document-review
+behavior changes; Stage 2 matching redesign. Stage 4 page classification and
+conservative routing are implemented separately (§9b).
+
+## 9b. Stage 4 — Page Classification and Extraction Routing (local MVP)
+
+Code: `src/app/page_classification/` (`contracts`, `page_input`,
+`page_classification_schemas`, `rules`, `runner`, `service`, `store`,
+`diagnostics`, `prompts/`, `json_schemas/`), adapter
+`src/app/extraction_review/stage4_local.py`, classified jobs in
+`local_jobs.py`, harness API `src/app/api/extraction_reviews.py`, Vue
+`ExtractionReviewWorkspace` / `extractionReview.ts`. Policy version
+`batchlens.page-classification-policy.v1`; current-state schema
+`batchlens.page-classification-current.v1`.
+
+Human-facing summaries:
+`docs/BatchLens-Stage4-Page-Classification-Overview-EN.md`,
+`docs/BatchLens-Stage4-Detailed-Local-Guide-EN.md`.
+
+### Input
+
+Canonical input is one Stage 1 reviewed HTML v1 file and existing producer
+provenance (`job_id`, review revision, generation, conversion status, and
+SHA-256 of the HTML bytes after a complete read). The document is prepared once;
+each page keeps its page number and page HTML id. The classifier receives the
+complete page HTML fragment. Reviewed HTML bytes and page identities are not
+rewritten.
+
+### Three fixed calls and response rules
+
+For every page, three independent structured calls run serially:
+
+1. Materials and equipment
+2. Process, operations, and controls
+3. Document and supporting records
+
+Returned labels must come only from each call’s locked allowed set. Exactly one
+evidence item is required per returned label. Quote and reason are each 1–240
+characters. Labels and evidence are order-independent for validity and retain
+received order; evidence associates by its own `label` field, not list position.
+Empty label lists are allowed when the call status permits. Contract violations
+are rejected without silent repair.
+
+`OTHER_UNCLASSIFIED` is application-generated only. The model cannot return it.
+The application assigns it when all three calls are structurally valid with
+status `ok` and the merged label union is empty; that page requires review and
+remains eligible for extraction.
+
+### Source-aware evidence validation
+
+Validation proves location, not semantic correctness of the label. Normalization
+is exactly one HTML-entity decode plus whitespace collapsing, applied uniformly
+to page text, element text, and quotes. Readable source excludes scripts, styles,
+and comments. Supported exact identifier values come from `id`, `data-node-id`,
+`data-element-id`, or `data-table-id` on the current page only. When the same
+identifier appears on exactly two elements that are an `article.element` wrapper
+and its direct content child, the article wrapper is used; other multi-matches are
+ambiguous. Missing or ambiguous identifiers, or a quote outside the resolved
+target, preserve the label and evidence but mark that item unverified and require
+review. Unverified evidence does **not** by itself make a page ineligible.
+
+### Conservative eligibility / exclusion
+
+A page is excluded from lexical extraction only when every final label belongs to
+the fixed exclusion set **and** the result is fully valid, non-empty, exclusively
+exclusion labels, with no incomplete, failed, invalid, conflicting,
+`needs_review`, or unverified-source-evidence state. Implemented exclusion
+labels:
+
+```text
+NON_RELATED
+COVER_PAGE
+TABLE_OF_CONTENTS
+DOCUMENTATION_INSTRUCTIONS
+REFERENCE_DOCUMENTATION
+SIGNATURE_LOG
+SIGNATURE_APPROVAL
+ACKNOWLEDGEMENT
+BATCH_REVIEW_DISPOSITION
+DOCUMENT_CHANGE_HISTORY
+```
+
+Every other page remains eligible, including empty, `OTHER_UNCLASSIFIED`
+fallback, mixed, `needs_review`, incomplete, failed, interrupted/unprocessed, or
+source-unverified pages.
+
+### Stage 2 routing and provenance
+
+**Extract All** submits existing Stage 2 `full` on the selected eligible pages
+only. When no page restriction is supplied, Stage 2 behavior is unchanged.
+Restricted runs record `Stage4PageRestrictionProvenance` (selected pages,
+classifier policy version, classification-snapshot SHA-256) on run provenance.
+Stage 2 does not create synthetic records for skipped pages. If every page is
+excluded, the outcome is informational `no_eligible_pages` and no empty Stage 2
+job is submitted.
+
+### Persistence, diagnostics, and immutable job snapshot
+
+One current classification state per reviewed-HTML identity:
+
+```text
+<data-dir>/page-classifications/<sha256(reviewed-html-binding)>/current-classification.json
+```
+
+Bounded diagnostic bundles under
+`<data-dir>/page-classification-diagnostics/<classification-run-id>/`
+retain the newest five valid bundles. When Extract All submits a classified
+lexical job, an immutable snapshot is stored as
+`extraction-jobs/<local-job-id>/classification.json`; later reclassification of
+the current document does not rewrite that snapshot. Interrupted in-progress work
+reloads as `interrupted` without automatic resume. Within one local application
+process, one active classifier worker is allowed per data directory — not
+cross-process locking or a generic queue.
+
+### Distinct approval / outcome concerns
+
+Keep these separate:
+
+1. Classification call / current-classification status
+2. Per-page eligibility / exclusion for Stage 2
+3. Stage 2 lexical processing / publication status
+4. Stage 3 final **Approve extraction result**
+
+Stage 1 source-document approval is separate from Stage 4 classification.
+Classification labels are informational beside lexical findings and never replace
+findings or alter Stage 3 approval meaning. There is no classifier history,
+classifier approval, label editing, SQLite classification store, or automatic
+approval.
+
+### Evidence class
+
+Focused automated suites under `tests/page_classification/`, Stage 4-related
+`tests/extraction_review/`, and Stage 2 page-restriction coverage in
+`tests/lexical_extraction/` are **test-verified**. Recorded local harness
+acceptance with configured OpenAI plus classified Extract All is **manually
+verified** for that local journey. Live model quality and pharmaceutical
+correctness of labels remain **unverified** as product guarantees.
 
 ## 10. L02 execution configuration (implemented loader, not an extractor)
 
@@ -489,8 +626,9 @@ cues stay false. L05 does not calculate edit distance.
 aggregation, runner/CLI, monitoring, and publication remain unimplemented at L05.
 Dictionary search omits short literals (under three Unicode code points) and
 explicitly `context_required` unit-operation terms; `hasRelatedSynonym` aliases
-remain searchable. Normalization helpers are L06. Page classification /
-page-policy exclusion remain future work.
+remain searchable. Normalization helpers are L06. Stage 4 page classification /
+conservative page restriction are implemented separately (§9b); L05 itself does
+not classify pages.
 
 ## 14. L06 fixed V1 comparison normalization, offsets, and boundaries
 

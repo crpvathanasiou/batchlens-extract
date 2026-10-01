@@ -372,6 +372,9 @@ def test_failed_and_invalid_calls_and_source_evidence_needs_review(tmp_path: Pat
     failed_response = json.loads((page_dir / "call-1-response.json").read_text(encoding="utf-8"))
     assert failed_response["error"]["code"] == "UPSTREAM_SERVICE_ERROR"
     assert failed_response["call_outcome"]["availability"] == "failed"
+    assert failed_response["raw_text"] is None
+    assert failed_response["refusal_text"] is None
+    assert failed_response["structured_output_error"]["stage"] == "provider_response_unavailable"
     assert "sk-secret" not in json.dumps(failed_response)
     invalid_response = json.loads((page_dir / "call-2-response.json").read_text(encoding="utf-8"))
     assert invalid_response["call_outcome"]["availability"] == "invalid"
@@ -424,8 +427,166 @@ def test_parsing_error_is_safe_failed_call_record(tmp_path: Path) -> None:
         ).read_text(encoding="utf-8")
     )
     assert response["error"]["code"] == "MODEL_OUTPUT_PARSING_ERROR"
+    assert response["error"]["message"] == (
+        "classifier call failed: structured output parsing error"
+    )
     assert "sk-secret" not in json.dumps(response)
     assert response["call_outcome"]["availability"] == "failed"
+    assert response["raw_text"] is None
+    assert response["refusal_text"] is None
+    assert response["structured_output_error"] is None
+
+
+def test_call_3_schema_validation_failure_preserves_raw_text_in_diagnostics(
+    tmp_path: Path,
+) -> None:
+    html = (
+        f"{_root()}"
+        '<head><meta charset="utf-8"><title>Reviewed document</title></head><body><main>'
+        '<section class="page" id="source-page-1" data-page="1">'
+        '<article class="element" data-kind="text" data-element-id="a1">'
+        '<p id="n1" data-node-id="n1">Only page</p></article></section>'
+        "</main></body></html>"
+    )
+    html_path = _write_html(tmp_path, html)
+    prepared = prepare_reviewed_document(html_path)
+    rejected_raw = json.dumps(
+        {
+            "labels": ["NOT_A_REAL_LABEL"],
+            "status": "ok",
+            "evidence": [
+                {
+                    "label": "NOT_A_REAL_LABEL",
+                    "quote": "Only page",
+                    "reason": "bad label",
+                    "element_id": None,
+                }
+            ],
+        }
+    )
+    wrapper = SettingsWrapper(
+        handlers={
+            DocumentSupportingResponse: ModelOutputParsingError(
+                "structured response failed validation",
+                raw_text=rejected_raw,
+                model_name="gpt-4.1-mini",
+                attempts=1,
+                latency_ms=42.5,
+                structured_output_error={
+                    "stage": "schema_validation",
+                    "error_type": "ValidationError",
+                    "message": "structured response failed validation",
+                    "validation_errors": [
+                        {
+                            "loc": ["labels", "0"],
+                            "type": "literal_error",
+                            "msg": "Input should be ...",
+                        }
+                    ],
+                },
+            ),
+        }
+    )
+    service = PageClassificationService(
+        tmp_path / "data-call3-parse",
+        wrapper,  # type: ignore[arg-type]
+        clock=lambda: FIXED_NOW,
+    )
+    service.start_classification(html_path, expected=prepared.reviewed_html)
+    _wait_completed(service, prepared.reviewed_html)
+    final = service.get_current(prepared.reviewed_html)
+    assert final is not None
+    run_id = final.classification_run_id
+    assert run_id is not None
+    response = json.loads(
+        (
+            diagnostics_root(tmp_path / "data-call3-parse")
+            / run_id
+            / "pages"
+            / "page-001"
+            / "call-3-response.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert response["error"]["code"] == "MODEL_OUTPUT_PARSING_ERROR"
+    assert response["error"]["message"] == (
+        "classifier call failed: structured output parsing error"
+    )
+    assert response["raw_text"] == rejected_raw
+    assert response["refusal_text"] is None
+    assert response["model_name"] == "gpt-4.1-mini"
+    assert response["attempts"] == 1
+    assert response["latency_ms"] == 42.5
+    assert response["structured_output_error"]["stage"] == "schema_validation"
+    assert response["structured_output_error"]["validation_errors"][0]["loc"] == [
+        "labels",
+        "0",
+    ]
+    assert response["call_outcome"]["availability"] == "failed"
+    text = json.dumps(response)
+    assert "sk-" not in text
+    assert "traceback" not in text.lower()
+    assert '"input"' not in text
+    assert "authorization" not in text.lower()
+
+
+def test_refusal_preserves_exact_refusal_text_in_diagnostics(tmp_path: Path) -> None:
+    html = (
+        f"{_root()}"
+        '<head><meta charset="utf-8"><title>Reviewed document</title></head><body><main>'
+        '<section class="page" id="source-page-1" data-page="1">'
+        '<article class="element" data-kind="text" data-element-id="a1">'
+        '<p id="n1" data-node-id="n1">Only page</p></article></section>'
+        "</main></body></html>"
+    )
+    html_path = _write_html(tmp_path, html)
+    prepared = prepare_reviewed_document(html_path)
+    refusal = "I refuse to classify this page under the requested schema."
+    wrapper = SettingsWrapper(
+        handlers={
+            DocumentSupportingResponse: ModelOutputParsingError(
+                "structured response refused",
+                raw_text=None,
+                refusal_text=refusal,
+                model_name="gpt-4.1-mini",
+                attempts=1,
+                latency_ms=11.0,
+                structured_output_error={
+                    "stage": "refusal",
+                    "error_type": "Refusal",
+                    "message": "model refused structured response",
+                    "validation_errors": [],
+                },
+            ),
+        }
+    )
+    service = PageClassificationService(
+        tmp_path / "data-refusal",
+        wrapper,  # type: ignore[arg-type]
+        clock=lambda: FIXED_NOW,
+    )
+    service.start_classification(html_path, expected=prepared.reviewed_html)
+    _wait_completed(service, prepared.reviewed_html)
+    final = service.get_current(prepared.reviewed_html)
+    assert final is not None
+    run_id = final.classification_run_id
+    assert run_id is not None
+    response = json.loads(
+        (
+            diagnostics_root(tmp_path / "data-refusal")
+            / run_id
+            / "pages"
+            / "page-001"
+            / "call-3-response.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert response["error"]["code"] == "MODEL_OUTPUT_PARSING_ERROR"
+    assert response["error"]["message"] == (
+        "classifier call failed: structured output parsing error"
+    )
+    assert response["refusal_text"] == refusal
+    assert response["raw_text"] is None
+    assert response["structured_output_error"]["stage"] == "refusal"
+    assert "traceback" not in json.dumps(response).lower()
 
 
 def test_source_evidence_mismatch_is_needs_review_not_diagnostic_failure(

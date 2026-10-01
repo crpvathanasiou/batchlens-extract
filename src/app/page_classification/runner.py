@@ -167,12 +167,14 @@ class PageClassificationRunner:
                 reason=_safe_call_failure_reason(exc),
             )
             if diagnostics is not None:
+                parse_diagnostics = _diagnostic_failure_fields(exc)
                 diagnostics.write_call_response_failure(
                     page_number=page.binding.page_number,
                     call_id=call_id,
                     error_code=_safe_error_code(exc),
                     error_message=_safe_call_failure_reason(exc),
                     outcome=outcome,
+                    parse_diagnostics=parse_diagnostics or None,
                 )
             return outcome
 
@@ -234,3 +236,32 @@ def _safe_error_code(exc: BaseException) -> str:
     if isinstance(exc, GuardrailBlockedError):
         return "GUARDRAIL_BLOCKED"
     return "CLASSIFIER_CALL_FAILED"
+
+
+def _diagnostic_failure_fields(exc: BaseException) -> dict[str, object]:
+    """Optional diagnostic enrichment for failed-call artifacts."""
+
+    if isinstance(exc, ModelOutputParsingError):
+        return {
+            "model_name": exc.model_name,
+            "raw_text": exc.raw_text,
+            "refusal_text": exc.refusal_text,
+            "attempts": exc.attempts,
+            "latency_ms": exc.latency_ms,
+            "structured_output_error": exc.structured_output_error,
+        }
+    if isinstance(exc, UpstreamServiceError):
+        return {
+            "model_name": None,
+            "raw_text": None,
+            "refusal_text": None,
+            "attempts": None,
+            "latency_ms": None,
+            "structured_output_error": {
+                "stage": "provider_response_unavailable",
+                "error_type": "ProviderResponseUnavailable",
+                "message": "provider did not return a usable completion",
+                "validation_errors": [],
+            },
+        }
+    return {}

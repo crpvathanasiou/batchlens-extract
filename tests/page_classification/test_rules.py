@@ -72,6 +72,103 @@ def _triple(
     )
 
 
+def test_unverified_identifier_keeps_labels_needs_review_and_extraction_eligibility(
+    page2: Any,
+) -> None:
+    binding = page2.binding
+    merged = merge_page_classification(
+        page2,
+        _triple(
+            binding,
+            _call(
+                binding,
+                1,
+                labels=["BILL_OF_MATERIALS"],
+                evidence=[
+                    _evidence(
+                        "BILL_OF_MATERIALS",
+                        "Sodium Chloride",
+                        "no-such-identifier",
+                    )
+                ],
+            ),
+            _call(binding, 2, labels=[]),
+            _call(binding, 3, labels=[]),
+        ),
+    )
+    assert merged.kind == "needs_review"
+    assert merged.requires_review is True
+    assert merged.source_validation.has_unverified is True
+    assert [item.label for item in merged.labels] == ["BILL_OF_MATERIALS"]
+    assert merged.labels[0].quote == "Sodium Chloride"
+    assert merged.labels[0].element_id == "no-such-identifier"
+    assert merged.labels[0].evidence_verification == "unverified"
+    assert "not found" in (merged.labels[0].evidence_verification_reason or "")
+    eligibility = decide_extraction_eligibility(merged)
+    assert eligibility.eligible_for_extraction is True
+    assert eligibility.excluded_by_policy is False
+
+
+def test_ambiguous_identifier_keeps_extraction_eligibility(page2: Any) -> None:
+    binding = page2.binding
+    page2_mut = page2.model_copy(
+        update={
+            "ambiguous_element_ids": frozenset({"materials-table"}),
+            "element_text_by_id": {
+                key: value
+                for key, value in page2.element_text_by_id.items()
+                if key != "materials-table"
+            },
+        }
+    )
+    merged = merge_page_classification(
+        page2_mut,
+        _triple(
+            binding,
+            _call(
+                binding,
+                1,
+                labels=["BILL_OF_MATERIALS"],
+                evidence=[_evidence("BILL_OF_MATERIALS", "Sodium Chloride", "materials-table")],
+            ),
+            _call(binding, 2, labels=[]),
+            _call(binding, 3, labels=[]),
+        ),
+    )
+    assert merged.requires_review is True
+    assert merged.labels[0].evidence_verification == "unverified"
+    assert "ambiguous" in (merged.labels[0].evidence_verification_reason or "")
+    assert decide_extraction_eligibility(merged).eligible_for_extraction is True
+
+
+def test_out_of_order_evidence_associates_by_label_not_position(page2: Any) -> None:
+    binding = page2.binding
+    labels = ["EQUIPMENT_LIST", "BILL_OF_MATERIALS"]
+    evidence = [
+        _evidence("BILL_OF_MATERIALS", "Sodium Chloride", "materials-table"),
+        _evidence("EQUIPMENT_LIST", "Mixer MX-01", "equipment-table"),
+    ]
+    assert [item["label"] for item in evidence] != labels
+    merged = merge_page_classification(
+        page2,
+        _triple(
+            binding,
+            _call(binding, 1, labels=labels, evidence=evidence),
+            _call(binding, 2, labels=[]),
+            _call(binding, 3, labels=[]),
+        ),
+    )
+    by_label = {item.label: item for item in merged.labels}
+    assert by_label["BILL_OF_MATERIALS"].quote == "Sodium Chloride"
+    assert by_label["BILL_OF_MATERIALS"].element_id == "materials-table"
+    assert by_label["EQUIPMENT_LIST"].quote == "Mixer MX-01"
+    assert by_label["EQUIPMENT_LIST"].element_id == "equipment-table"
+    assert [item.label for item in merged.labels] == [
+        "BILL_OF_MATERIALS",
+        "EQUIPMENT_LIST",
+    ]
+
+
 def test_missing_failed_invalid_independently_keep_provisional_findings(page2: Any) -> None:
     binding = page2.binding
     valid = _call(

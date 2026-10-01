@@ -53,7 +53,7 @@
               "type": "null"
             }
           ],
-          "description": "Exact existing HTML id of the quoted element or its closest containing element with an id; null when none exists. Never invent an id, selector, or page number.",
+          "description": "Exact unmodified value from id, data-node-id, data-element-id, or data-table-id on the smallest identifiable element containing the complete quote, or its nearest identifiable ancestor; null when no suitable identifier exists. Never invent, repair, or convert an identifier, selector, or page number.",
           "title": "Element Id"
         }
       },
@@ -71,7 +71,7 @@
   "description": "Call 3: the 19 document and supporting-record labels.",
   "properties": {
     "labels": {
-      "description": "All supported labels from this call's allowed set, with no duplicates, in the order listed in its prompt. An empty list is allowed.",
+      "description": "All supported labels from this call's allowed set, with no duplicates, in any order. An empty list is allowed.",
       "items": {
         "enum": [
           "NON_RELATED",
@@ -110,7 +110,7 @@
       "type": "string"
     },
     "evidence": {
-      "description": "Exactly one evidence item per returned label, in the same order. No missing or extra items. Use [] when labels=[].",
+      "description": "Exactly one evidence item per returned label, in any order. Associate each item by its own label field. No missing or extra items. Use [] when labels=[].",
       "items": {
         "$ref": "#/$defs/LabelEvidence_Literal__NON_RELATED____COVER_PAGE____PRODUCT_BATCH_DETAILS____TABLE_OF_CONTENTS____DOCUMENTATION_INSTRUCTIONS____EXPERIMENTAL_OBJECTIVES____REFERENCE_DOCUMENTATION____CHAIN_OF_IDENTITY_AND_CUSTODY____INVENTORY_TRANSACTION____COMMENT_LOG____EXCEPTION_DEVIATION_LOG____SIGNATURE_LOG____SIGNATURE_APPROVAL____ACKNOWLEDGEMENT____BATCH_CONCLUSION____BATCH_REVIEW_DISPOSITION____DOCUMENT_CHANGE_HISTORY____APPENDIX____CERTIFICATE___"
       },

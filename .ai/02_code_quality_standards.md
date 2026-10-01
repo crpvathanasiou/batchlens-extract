@@ -207,7 +207,7 @@ Pydantic v2 + Pydantic Settings
 Docker + Docker Compose (Node 22.12 review-frontend builder stage)
 Ruff + Pyright (strict) + pytest
 Optional document conversion + document review (feature-flagged; not AWS-verified)
-Optional async OpenAI LLM wrapper (present, not wired to product flows)
+Optional async OpenAI LLM wrapper (present; reused by Stage 4 local page classification through existing `app.llm`; not a multi-provider redesign)
 ```
 
 ### Approved deployment direction (not implemented)
@@ -221,7 +221,7 @@ Detailed AWS service selection follows document-processing requirements. Do not 
 ### Optional / deferred technology guidance
 
 * The existing OpenAI wrapper is a **reusable optional asset**. Its presence does **not** commit BatchLens Extract’s extraction architecture to OpenAI.
-* Prefer reuse of the existing wrapper only when an approved design selects OpenAI (or compatible chat-completions usage) for a concrete integration.
+* Prefer reuse of the existing wrapper only when an approved design selects OpenAI (or compatible chat-completions usage) for a concrete integration. Stage 4 local page classification is one such approved reuse through the existing `app.llm` boundary.
 * Do not introduce speculative multi-provider factories, Neo4j, GraphRAG, queues, or persistence layers solely because they might be useful later.
 * Graph visualization must be generatable deterministically from extracted data; Neo4j/GraphRAG are deferred and not required for the recipe graph.
 

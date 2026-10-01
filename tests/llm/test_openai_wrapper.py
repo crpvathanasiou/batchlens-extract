@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,7 +15,8 @@ from app.exceptions import (
     UpstreamServiceError,
 )
 from app.llm.guardrails import BaseGuardrail, GuardrailResult, MaxPromptLengthGuardrail
-from app.llm.openai_wrapper import AsyncOpenAIWrapper
+from app.llm.openai_wrapper import AsyncOpenAIWrapper, strict_json_schema_response_format
+from app.page_classification.page_classification_schemas import MaterialEquipmentResponse
 
 
 class DummyStructuredResponse(BaseModel):
@@ -51,76 +54,66 @@ class RejectOutputGuardrail(BaseGuardrail):
 
 
 class FakeTextMessage:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: str, *, refusal: str | None = None) -> None:
         self.content = content
+        self.refusal = refusal
 
 
 class FakeTextChoice:
-    def __init__(self, content: str) -> None:
-        self.message = FakeTextMessage(content)
+    def __init__(self, content: str, *, refusal: str | None = None) -> None:
+        self.message = FakeTextMessage(content, refusal=refusal)
 
 
 class FakeTextCompletion:
-    def __init__(self, content: str) -> None:
-        self.choices = [FakeTextChoice(content)]
-
-
-class FakeStructuredMessage:
-    def __init__(self, parsed: Any = None, content: str = "") -> None:
-        self.parsed = parsed
-        self.content = content
-
-
-class FakeStructuredChoice:
-    def __init__(self, parsed: Any = None, content: str = "") -> None:
-        self.message = FakeStructuredMessage(parsed=parsed, content=content)
-
-
-class FakeStructuredCompletion:
-    def __init__(self, parsed: Any = None, content: str = "") -> None:
-        self.choices = [FakeStructuredChoice(parsed=parsed, content=content)]
+    def __init__(self, content: str, *, refusal: str | None = None) -> None:
+        self.choices = [FakeTextChoice(content, refusal=refusal)]
 
 
 class FakeChatCompletions:
-    def __init__(self, text_response: str = "ok") -> None:
+    def __init__(
+        self,
+        text_response: str = "ok",
+        *,
+        structured_content: str | None = None,
+        structured_refusal: str | None = None,
+        raise_on_structured: Exception | None = None,
+    ) -> None:
         self._text_response = text_response
+        self._structured_content = structured_content
+        self._structured_refusal = structured_refusal
+        self._raise_on_structured = raise_on_structured
         self.create_calls = 0
+        self.last_kwargs: dict[str, Any] | None = None
 
     async def create(self, **kwargs: Any) -> FakeTextCompletion:
         self.create_calls += 1
+        self.last_kwargs = dict(kwargs)
+        if "response_format" in kwargs:
+            if self._raise_on_structured is not None:
+                raise self._raise_on_structured
+            content = (
+                self._text_response
+                if self._structured_content is None
+                else self._structured_content
+            )
+            return FakeTextCompletion(content, refusal=self._structured_refusal)
         return FakeTextCompletion(self._text_response)
 
 
-class FakeBetaChatCompletions:
-    def __init__(self, parsed_response: Any = None, content: str = "") -> None:
-        self._parsed_response = parsed_response
-        self._content = content
-
-    async def parse(self, **kwargs: Any) -> FakeStructuredCompletion:
-        return FakeStructuredCompletion(
-            parsed=self._parsed_response,
-            content=self._content,
-        )
-
-
 class FakeChat:
-    def __init__(self, text_response: str = "ok") -> None:
-        self.completions = FakeChatCompletions(text_response=text_response)
-
-
-class FakeBetaChat:
-    def __init__(self, parsed_response: Any = None, content: str = "") -> None:
-        self.completions = FakeBetaChatCompletions(
-            parsed_response=parsed_response,
-            content=content,
-        )
-
-
-class FakeBeta:
-    def __init__(self, parsed_response: Any = None, content: str = "") -> None:
-        self.chat = FakeBetaChat(
-            parsed_response=parsed_response,
-            content=content,
+    def __init__(
+        self,
+        text_response: str = "ok",
+        *,
+        structured_content: str | None = None,
+        structured_refusal: str | None = None,
+        raise_on_structured: Exception | None = None,
+    ) -> None:
+        self.completions = FakeChatCompletions(
+            text_response=text_response,
+            structured_content=structured_content,
+            structured_refusal=structured_refusal,
+            raise_on_structured=raise_on_structured,
         )
 
 
@@ -129,13 +122,15 @@ class FakeAsyncOpenAIClient:
         self,
         *,
         text_response: str = "plain text response",
-        parsed_response: Any = None,
         structured_content: str = '{"decision":"allow","risk_level":"low"}',
+        structured_refusal: str | None = None,
+        raise_on_structured: Exception | None = None,
     ) -> None:
-        self.chat = FakeChat(text_response=text_response)
-        self.beta = FakeBeta(
-            parsed_response=parsed_response,
-            content=structured_content,
+        self.chat = FakeChat(
+            text_response=text_response,
+            structured_content=structured_content,
+            structured_refusal=structured_refusal,
+            raise_on_structured=raise_on_structured,
         )
 
 
@@ -144,30 +139,14 @@ class FakeFailingTextChatCompletions:
         raise RuntimeError("text call failed")
 
 
-class FakeFailingStructuredChatCompletions:
-    async def parse(self, **kwargs: Any) -> FakeStructuredCompletion:
-        raise RuntimeError("structured parse failed")
-
-
 class FakeFailingChat:
     def __init__(self) -> None:
         self.completions = FakeFailingTextChatCompletions()
 
 
-class FakeFailingBetaChat:
-    def __init__(self) -> None:
-        self.completions = FakeFailingStructuredChatCompletions()
-
-
-class FakeFailingBeta:
-    def __init__(self) -> None:
-        self.chat = FakeFailingBetaChat()
-
-
 class FakeFailingAsyncOpenAIClient:
     def __init__(self) -> None:
         self.chat = FakeFailingChat()
-        self.beta = FakeFailingBeta()
 
 
 class FakeTimeoutThenSucceedChatCompletions:
@@ -190,7 +169,6 @@ class FakeTimeoutThenSucceedChat:
 class FakeRetryableAsyncOpenAIClient:
     def __init__(self, *, text_response: str = "recovered") -> None:
         self.chat = FakeTimeoutThenSucceedChat(text_response=text_response)
-        self.beta = FakeBeta()
 
 
 @pytest.mark.asyncio
@@ -215,12 +193,7 @@ async def test_generate_text_returns_plain_text_result() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_structured_returns_parsed_pydantic_object() -> None:
-    parsed = DummyStructuredResponse(
-        decision="allow",
-        risk_level="low",
-    )
     client = FakeAsyncOpenAIClient(
-        parsed_response=parsed,
         structured_content='{"decision":"allow","risk_level":"low"}',
     )
 
@@ -233,6 +206,7 @@ async def test_generate_structured_returns_parsed_pydantic_object() -> None:
     result = await wrapper.generate_structured(
         prompt="Classify this message",
         response_schema=DummyStructuredResponse,
+        system_prompt="Be precise.",
     )
 
     assert result.model_name == "gpt-test"
@@ -240,7 +214,51 @@ async def test_generate_structured_returns_parsed_pydantic_object() -> None:
     assert isinstance(result.parsed, DummyStructuredResponse)
     assert result.parsed.decision == "allow"
     assert result.parsed.risk_level == "low"
+    assert result.raw_text == '{"decision":"allow","risk_level":"low"}'
     assert result.attempts == 1
+    assert client.chat.completions.last_kwargs is not None
+    assert client.chat.completions.last_kwargs["messages"] == [
+        {"role": "system", "content": "Be precise."},
+        {"role": "user", "content": "Classify this message"},
+    ]
+    assert client.chat.completions.last_kwargs["temperature"] == 0.0
+    assert client.chat.completions.last_kwargs["model"] == "gpt-test"
+    response_format = client.chat.completions.last_kwargs["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "DummyStructuredResponse"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["schema"] == DummyStructuredResponse.model_json_schema(
+        mode="validation"
+    )
+    assert response_format == strict_json_schema_response_format(DummyStructuredResponse)
+
+
+def test_strict_json_schema_response_format_matches_pydantic_and_avoids_private_sdk() -> None:
+    import app.llm.openai_wrapper as wrapper_module
+
+    source = Path(wrapper_module.__file__).read_text(encoding="utf-8")
+    assert "openai.lib._" not in source
+    assert "type_to_response_format_param" not in source
+    assert not hasattr(wrapper_module, "type_to_response_format_param")
+
+    payload = strict_json_schema_response_format(MaterialEquipmentResponse)
+    assert payload["type"] == "json_schema"
+    assert payload["json_schema"]["name"] == "MaterialEquipmentResponse"
+    assert payload["json_schema"]["strict"] is True
+    assert payload["json_schema"]["schema"] == MaterialEquipmentResponse.model_json_schema(
+        mode="validation"
+    )
+    asset = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "app"
+            / "page_classification"
+            / "json_schemas"
+            / "01-materials-equipment.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert payload["json_schema"]["schema"] == asset
 
 
 @pytest.mark.asyncio
@@ -279,9 +297,7 @@ async def test_generate_text_blocks_when_output_guardrail_fails() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_structured_blocks_when_prompt_too_long() -> None:
-    client = FakeAsyncOpenAIClient(
-        parsed_response=DummyStructuredResponse(decision="allow", risk_level="low")
-    )
+    client = FakeAsyncOpenAIClient()
 
     wrapper = AsyncOpenAIWrapper(
         client=client,
@@ -298,11 +314,8 @@ async def test_generate_structured_blocks_when_prompt_too_long() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_structured_raises_parsing_error_when_parsed_is_none() -> None:
-    client = FakeAsyncOpenAIClient(
-        parsed_response=None,
-        structured_content="",
-    )
+async def test_generate_structured_raises_parsing_error_when_content_empty() -> None:
+    client = FakeAsyncOpenAIClient(structured_content="")
 
     wrapper = AsyncOpenAIWrapper(
         client=client,
@@ -310,11 +323,95 @@ async def test_generate_structured_raises_parsing_error_when_parsed_is_none() ->
         default_temperature=0.0,
     )
 
-    with pytest.raises(ModelOutputParsingError):
+    with pytest.raises(ModelOutputParsingError) as raised:
         await wrapper.generate_structured(
             prompt="Return structured output",
             response_schema=DummyStructuredResponse,
         )
+    assert raised.value.raw_text == ""
+    assert raised.value.structured_output_error is not None
+    assert raised.value.structured_output_error["stage"] == "empty_content"
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_preserves_raw_text_on_malformed_json() -> None:
+    raw = "{not-json"
+    client = FakeAsyncOpenAIClient(structured_content=raw)
+    wrapper = AsyncOpenAIWrapper(
+        client=client,
+        default_model="gpt-test",
+        default_temperature=0.0,
+    )
+
+    with pytest.raises(ModelOutputParsingError) as raised:
+        await wrapper.generate_structured(
+            prompt="Classify",
+            response_schema=DummyStructuredResponse,
+        )
+    assert raised.value.raw_text == raw
+    assert raised.value.model_name == "gpt-test"
+    assert raised.value.attempts == 1
+    assert raised.value.latency_ms is not None
+    assert raised.value.structured_output_error is not None
+    assert raised.value.structured_output_error["stage"] == "json_decode"
+    assert raised.value.structured_output_error["error_type"] == "JSONDecodeError"
+    assert raised.value.structured_output_error["validation_errors"] == []
+    decode_error = raised.value.structured_output_error["decode_error"]
+    assert decode_error["msg"]
+    assert isinstance(decode_error["lineno"], int)
+    assert isinstance(decode_error["colno"], int)
+    assert isinstance(decode_error["pos"], int)
+    assert raised.value.refusal_text is None
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_preserves_raw_text_on_schema_validation() -> None:
+    raw = json.dumps({"decision": "allow", "risk_level": 7})
+    client = FakeAsyncOpenAIClient(structured_content=raw)
+    wrapper = AsyncOpenAIWrapper(
+        client=client,
+        default_model="gpt-test",
+        default_temperature=0.0,
+    )
+
+    with pytest.raises(ModelOutputParsingError) as raised:
+        await wrapper.generate_structured(
+            prompt="Classify",
+            response_schema=DummyStructuredResponse,
+        )
+    assert raised.value.raw_text == raw
+    assert raised.value.structured_output_error is not None
+    assert raised.value.structured_output_error["stage"] == "schema_validation"
+    assert raised.value.structured_output_error["error_type"] == "ValidationError"
+    errors = raised.value.structured_output_error["validation_errors"]
+    assert isinstance(errors, list) and errors
+    assert "loc" in errors[0]
+    assert "type" in errors[0]
+    assert "msg" in errors[0]
+    assert "input" not in errors[0]
+    assert "risk_level" in errors[0]["loc"]
+    assert raised.value.refusal_text is None
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_preserves_exact_refusal_text() -> None:
+    refusal = "I cannot classify this document because it requests prohibited content."
+    client = FakeAsyncOpenAIClient(structured_content="", structured_refusal=refusal)
+    wrapper = AsyncOpenAIWrapper(
+        client=client,
+        default_model="gpt-test",
+        default_temperature=0.0,
+    )
+
+    with pytest.raises(ModelOutputParsingError) as raised:
+        await wrapper.generate_structured(
+            prompt="Classify",
+            response_schema=DummyStructuredResponse,
+        )
+    assert raised.value.refusal_text == refusal
+    assert raised.value.raw_text is None or raised.value.raw_text == ""
+    assert raised.value.structured_output_error is not None
+    assert raised.value.structured_output_error["stage"] == "refusal"
 
 
 @pytest.mark.asyncio
@@ -345,7 +442,28 @@ async def test_generate_structured_raises_parsing_error_on_unexpected_failure() 
         max_retries=0,
     )
 
-    with pytest.raises(ModelOutputParsingError):
+    with pytest.raises(ModelOutputParsingError) as raised:
+        await wrapper.generate_structured(
+            prompt="Classify",
+            response_schema=DummyStructuredResponse,
+        )
+    assert raised.value.raw_text is None
+    assert raised.value.refusal_text is None
+    assert raised.value.structured_output_error is not None
+    assert raised.value.structured_output_error["stage"] == "provider_response_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_timeout_raises_upstream_without_raw_text() -> None:
+    client = FakeAsyncOpenAIClient(raise_on_structured=TimeoutError("timed out"))
+    wrapper = AsyncOpenAIWrapper(
+        client=client,
+        default_model="gpt-test",
+        default_temperature=0.0,
+        max_retries=0,
+    )
+
+    with pytest.raises(UpstreamServiceError):
         await wrapper.generate_structured(
             prompt="Classify",
             response_schema=DummyStructuredResponse,

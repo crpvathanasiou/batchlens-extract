@@ -129,6 +129,7 @@ def validate_source_evidence(
                 element_id=evidence.element_id,
                 normalized_page=normalized_page,
                 element_text_by_id=page.element_text_by_id,
+                ambiguous_element_ids=page.ambiguous_element_ids,
             )
             items.append(item)
     has_unverified = any(item.verification == "unverified" for item in items)
@@ -327,6 +328,7 @@ def _validate_one_evidence(
     element_id: str | None,
     normalized_page: str,
     element_text_by_id: dict[str, str],
+    ambiguous_element_ids: frozenset[str],
 ) -> EvidenceValidationItem:
     normalized_quote = normalize_evidence_text(quote)
     if not normalized_quote:
@@ -358,6 +360,16 @@ def _validate_one_evidence(
             element_id=element_id,
             verification="verified",
             verification_reason=None,
+        )
+    if element_id in ambiguous_element_ids:
+        return EvidenceValidationItem(
+            call_id=call_id,
+            label=label,
+            quote=quote,
+            reason=reason,
+            element_id=element_id,
+            verification="unverified",
+            verification_reason=f"element_id is ambiguous on prepared page: {element_id}",
         )
     element_text = element_text_by_id.get(element_id)
     if element_text is None:

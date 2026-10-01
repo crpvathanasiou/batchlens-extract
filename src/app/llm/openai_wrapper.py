@@ -9,6 +9,7 @@ the async client is injected by the caller (tests use fakes; production uses
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -16,7 +17,7 @@ from typing import Any, Generic, Protocol, TypeVar, cast
 
 from openai import APIError, APITimeoutError
 from openai.types.chat import ChatCompletionMessageParam
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.exceptions import (
     GuardrailBlockedError,
@@ -30,6 +31,19 @@ def _empty_notes() -> list[dict[str, Any]]:
     return []
 
 
+def strict_json_schema_response_format(response_schema: type[BaseModel]) -> dict[str, Any]:
+    """Build a public strict JSON Schema response_format from a Pydantic v2 model."""
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": response_schema.__name__,
+            "strict": True,
+            "schema": response_schema.model_json_schema(mode="validation"),
+        },
+    }
+
+
 # -----------------------------------------------------------------------------
 # Protocols
 # -----------------------------------------------------------------------------
@@ -40,31 +54,14 @@ class ChatCompletionsCreateProtocol(Protocol):
     async def create(self, **kwargs: Any) -> Any: ...
 
 
-class ChatCompletionsParseProtocol(Protocol):
-    async def parse(self, **kwargs: Any) -> Any: ...
-
-
 class ChatCompletionsProtocol(Protocol):
     @property
     def completions(self) -> ChatCompletionsCreateProtocol: ...
 
 
-class BetaChatCompletionsProtocol(Protocol):
-    @property
-    def completions(self) -> ChatCompletionsParseProtocol: ...
-
-
-class BetaProtocol(Protocol):
-    @property
-    def chat(self) -> BetaChatCompletionsProtocol: ...
-
-
 class AsyncOpenAIClientProtocol(Protocol):
     @property
     def chat(self) -> ChatCompletionsProtocol: ...
-
-    @property
-    def beta(self) -> BetaProtocol: ...
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -190,7 +187,7 @@ class AsyncOpenAIWrapper:
         enforced_guardrails: Sequence[BaseGuardrail] | None = None,
         system_prompt: str | None = None,
     ) -> LLMCallResult[T]:
-        """Strict structured path using SDK-native structured parsing."""
+        """Strict structured path: schema-enforced create, then local Pydantic validation."""
         model = model_name or self.default_model
         temp = self.default_temperature if temperature is None else temperature
         guardrails = list(enforced_guardrails or [])
@@ -214,28 +211,41 @@ class AsyncOpenAIWrapper:
             system_prompt=system_prompt,
             user_prompt=prompt,
         )
+        response_format = strict_json_schema_response_format(response_schema)
 
         for attempt in range(1, self.max_retries + 2):
             try:
                 completion = await asyncio.wait_for(
-                    self.client.beta.chat.completions.parse(
+                    self.client.chat.completions.create(
                         model=model,
                         messages=messages,
                         temperature=temp,
-                        response_format=response_schema,
+                        response_format=response_format,
                     ),
                     timeout=self.timeout_seconds,
                 )
 
-                message = completion.choices[0].message
-                parsed = message.parsed
-                raw_text = message.content or ""
-
-                if parsed is None:
+                latency_ms = round((time.perf_counter() - start) * 1000, 2)
+                try:
+                    raw_text, refusal = self._extract_structured_message_content(completion)
+                except ModelOutputParsingError as exc:
                     raise ModelOutputParsingError(
-                        f"Structured response parsing returned None for schema "
-                        f"'{response_schema.__name__}'."
-                    )
+                        str(exc),
+                        raw_text=exc.raw_text,
+                        refusal_text=exc.refusal_text,
+                        model_name=model,
+                        attempts=attempt,
+                        latency_ms=latency_ms,
+                        structured_output_error=exc.structured_output_error,
+                    ) from None
+                parsed = self._parse_structured_content(
+                    raw_text=raw_text,
+                    refusal=refusal,
+                    response_schema=response_schema,
+                    model_name=model,
+                    attempts=attempt,
+                    latency_ms=latency_ms,
+                )
 
                 guardrail_notes.extend(
                     self._run_output_guardrails(
@@ -246,8 +256,6 @@ class AsyncOpenAIWrapper:
                         guardrails=guardrails,
                     )
                 )
-
-                latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
                 return LLMCallResult[T](
                     model_name=model,
@@ -268,14 +276,146 @@ class AsyncOpenAIWrapper:
                 await asyncio.sleep(0.5 * attempt)
 
             except Exception as exc:
-                if isinstance(exc, GuardrailBlockedError | ModelOutputParsingError):
+                if isinstance(
+                    exc,
+                    GuardrailBlockedError | ModelOutputParsingError | UpstreamServiceError,
+                ):
                     raise
 
                 raise ModelOutputParsingError(
-                    f"Structured parsing failed for schema '{response_schema.__name__}': {exc}"
+                    f"Structured parsing failed for schema '{response_schema.__name__}': {exc}",
+                    raw_text=None,
+                    refusal_text=None,
+                    model_name=model,
+                    attempts=attempt,
+                    latency_ms=round((time.perf_counter() - start) * 1000, 2),
+                    structured_output_error={
+                        "stage": "provider_response_unavailable",
+                        "error_type": "ProviderResponseUnavailable",
+                        "message": "provider did not return a usable completion",
+                        "validation_errors": [],
+                    },
                 ) from exc
 
         raise UpstreamServiceError(f"OpenAI structured request failed: {last_error}")
+
+    def _parse_structured_content(
+        self,
+        *,
+        raw_text: str,
+        refusal: str | None,
+        response_schema: type[T],
+        model_name: str,
+        attempts: int,
+        latency_ms: float,
+    ) -> T:
+        """Validate returned model text locally so diagnostics can keep the exact content."""
+
+        if refusal is not None and str(refusal).strip():
+            raise ModelOutputParsingError(
+                f"Structured response refused for schema '{response_schema.__name__}'.",
+                raw_text=raw_text if raw_text else None,
+                refusal_text=refusal,
+                model_name=model_name,
+                attempts=attempts,
+                latency_ms=latency_ms,
+                structured_output_error={
+                    "stage": "refusal",
+                    "error_type": "Refusal",
+                    "message": "model refused structured response",
+                    "validation_errors": [],
+                },
+            )
+        if not raw_text.strip():
+            raise ModelOutputParsingError(
+                f"Structured response content was empty for schema "
+                f"'{response_schema.__name__}'.",
+                raw_text=raw_text,
+                refusal_text=None,
+                model_name=model_name,
+                attempts=attempts,
+                latency_ms=latency_ms,
+                structured_output_error={
+                    "stage": "empty_content",
+                    "error_type": "EmptyContent",
+                    "message": "structured response content was empty",
+                    "validation_errors": [],
+                },
+            )
+        try:
+            payload = json.loads(raw_text)
+        except json.JSONDecodeError as decode_exc:
+            raise ModelOutputParsingError(
+                f"Structured response was not valid JSON for schema "
+                f"'{response_schema.__name__}'.",
+                raw_text=raw_text,
+                refusal_text=None,
+                model_name=model_name,
+                attempts=attempts,
+                latency_ms=latency_ms,
+                structured_output_error={
+                    "stage": "json_decode",
+                    "error_type": "JSONDecodeError",
+                    "message": "structured response is not valid JSON",
+                    "validation_errors": [],
+                    "decode_error": {
+                        "msg": decode_exc.msg,
+                        "lineno": decode_exc.lineno,
+                        "colno": decode_exc.colno,
+                        "pos": decode_exc.pos,
+                    },
+                },
+            ) from None
+        try:
+            return response_schema.model_validate(payload)
+        except ValidationError as exc:
+            raise ModelOutputParsingError(
+                f"Structured response failed validation for schema "
+                f"'{response_schema.__name__}'.",
+                raw_text=raw_text,
+                refusal_text=None,
+                model_name=model_name,
+                attempts=attempts,
+                latency_ms=latency_ms,
+                structured_output_error={
+                    "stage": "schema_validation",
+                    "error_type": "ValidationError",
+                    "message": "structured response failed validation",
+                    "validation_errors": _safe_validation_errors(exc),
+                },
+            ) from None
+
+    @staticmethod
+    def _extract_structured_message_content(response: Any) -> tuple[str, str | None]:
+        try:
+            message = response.choices[0].message
+        except Exception as exc:  # noqa: BLE001 - map to unavailable completion
+            raise ModelOutputParsingError(
+                "Structured response did not include a completion message.",
+                raw_text=None,
+                refusal_text=None,
+                structured_output_error={
+                    "stage": "provider_response_unavailable",
+                    "error_type": "ProviderResponseUnavailable",
+                    "message": "provider did not return a usable completion",
+                    "validation_errors": [],
+                },
+            ) from exc
+
+        refusal_value = getattr(message, "refusal", None)
+        refusal = refusal_value if isinstance(refusal_value, str) else None
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            return content, refusal
+        if isinstance(content, list):
+            chunks: list[str] = []
+            content_parts = cast(list[Any], content)
+            for part in content_parts:
+                text = getattr(part, "text", None)
+                if isinstance(text, str):
+                    chunks.append(text)
+            return "\n".join(c for c in chunks if c), refusal
+        return "", refusal
 
     def _run_input_guardrails(
         self,
@@ -390,3 +530,19 @@ class AsyncOpenAIWrapper:
             pass
 
         raise UpstreamServiceError("Could not extract text from chat completion response.")
+
+
+def _safe_validation_errors(exc: ValidationError) -> list[dict[str, Any]]:
+    """Extract loc/type/msg only; never persist Pydantic input values."""
+
+    safe: list[dict[str, Any]] = []
+    for item in exc.errors(include_url=False):
+        loc = item.get("loc", ())
+        safe.append(
+            {
+                "loc": [str(part) for part in loc],
+                "type": str(item.get("type", "")),
+                "msg": str(item.get("msg", "")),
+            }
+        )
+    return safe

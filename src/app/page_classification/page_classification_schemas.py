@@ -60,7 +60,7 @@ DocumentSupportingLabel: TypeAlias = Literal[
     "CERTIFICATE",
 ]
 
-# Derive validation order from each Literal: one vocabulary source per call.
+# Derive allowed-label vocabulary from each Literal: one source per call.
 MATERIAL_EQUIPMENT_LABELS: tuple[str, ...] = get_args(MaterialEquipmentLabel)
 PROCESS_OPERATIONS_LABELS: tuple[str, ...] = get_args(ProcessOperationsLabel)
 DOCUMENT_SUPPORTING_LABELS: tuple[str, ...] = get_args(DocumentSupportingLabel)
@@ -95,9 +95,11 @@ class LabelEvidence(BaseModel, Generic[LabelT]):
         min_length=1,
         max_length=256,
         description=(
-            "Exact existing HTML id of the quoted element or its closest "
-            "containing element with an id; null when none exists. "
-            "Never invent an id, selector, or page number."
+            "Exact unmodified value from id, data-node-id, data-element-id, "
+            "or data-table-id on the smallest identifiable element containing "
+            "the complete quote, or its nearest identifiable ancestor; null "
+            "when no suitable identifier exists. Never invent, repair, or "
+            "convert an identifier, selector, or page number."
         ),
     )
 
@@ -123,8 +125,7 @@ class _PageClassificationResponse(BaseModel, Generic[LabelT]):
     labels: list[LabelT] = Field(
         description=(
             "All supported labels from this call's allowed set, with no "
-            "duplicates, in the order listed in its prompt. An empty list "
-            "is allowed."
+            "duplicates, in any order. An empty list is allowed."
         ),
     )
     status: ResponseStatus = Field(
@@ -137,8 +138,9 @@ class _PageClassificationResponse(BaseModel, Generic[LabelT]):
     )
     evidence: list[LabelEvidence[LabelT]] = Field(
         description=(
-            "Exactly one evidence item per returned label, in the same order. "
-            "No missing or extra items. Use [] when labels=[]."
+            "Exactly one evidence item per returned label, in any order. "
+            "Associate each item by its own label field. No missing or extra "
+            "items. Use [] when labels=[]."
         ),
     )
 
@@ -157,17 +159,17 @@ class _PageClassificationResponse(BaseModel, Generic[LabelT]):
                 "status='empty' requires labels=[]",
             )
 
-        expected_order = [label for label in self.LABEL_ORDER if label in self.labels]
-        if self.labels != expected_order:
+        evidence_labels = [item.label for item in self.evidence]
+        if len(evidence_labels) != len(set(evidence_labels)):
             raise PydanticCustomError(
-                "label_order",
-                "labels must follow the order defined in this call's prompt",
+                "duplicate_evidence_labels",
+                "evidence labels must not contain duplicates",
             )
 
-        if [item.label for item in self.evidence] != self.labels:
+        if set(evidence_labels) != set(self.labels):
             raise PydanticCustomError(
                 "evidence_label_mismatch",
-                "evidence must match labels exactly, once each and in the same order",
+                "evidence must cover returned labels exactly once each by label",
             )
 
         return self

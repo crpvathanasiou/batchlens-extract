@@ -98,10 +98,94 @@ def test_duplicate_labels_are_rejected_not_deduplicated(model: type[Any]) -> Non
 
 
 @pytest.mark.parametrize("model", MODELS)
-def test_out_of_order_labels_are_rejected_not_sorted(model: type[Any]) -> None:
+def test_labels_in_non_definition_order_are_accepted_and_preserved(
+    model: type[Any],
+) -> None:
+    labels = list(reversed(model.LABEL_ORDER))
+    result = model.model_validate(payload(labels))
+    assert result.labels == labels
+    assert [item.label for item in result.evidence] == labels
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_evidence_in_different_order_from_labels_is_accepted_and_preserved(
+    model: type[Any],
+) -> None:
+    labels = list(model.LABEL_ORDER[:2])
+    if len(labels) < 2:
+        labels = list(model.LABEL_ORDER)
+    data = payload(labels)
+    cast(list[Any], data["evidence"]).reverse()
+    evidence_order = [item["label"] for item in data["evidence"]]
+    assert evidence_order != labels
+    result = model.model_validate(data)
+    assert result.labels == labels
+    assert [item.label for item in result.evidence] == evidence_order
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_duplicate_evidence_labels_are_rejected(model: type[Any]) -> None:
+    first = model.LABEL_ORDER[0]
+    data = payload([first])
+    data["evidence"] = list(payload([first, first])["evidence"])
     with pytest.raises(ValidationError) as error:
-        model.model_validate(payload(list(reversed(model.LABEL_ORDER))))
-    assert error.value.errors()[0]["type"] == "label_order"
+        model.model_validate(data)
+    assert error.value.errors()[0]["type"] == "duplicate_evidence_labels"
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_missing_evidence_is_rejected(model: type[Any]) -> None:
+    first, second = model.LABEL_ORDER[:2]
+    data = payload([first, second])
+    data["evidence"] = list(payload([first])["evidence"])
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(data)
+    assert error.value.errors()[0]["type"] == "evidence_label_mismatch"
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_extra_or_unlisted_evidence_is_rejected(model: type[Any]) -> None:
+    first, second = model.LABEL_ORDER[:2]
+    data = payload([first])
+    data["evidence"] = list(payload([first, second])["evidence"])
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(data)
+    assert error.value.errors()[0]["type"] == "evidence_label_mismatch"
+    data = payload([first])
+    data["evidence"] = list(payload([second])["evidence"])
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(data)
+    assert error.value.errors()[0]["type"] == "evidence_label_mismatch"
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_evidence_matches_labels_by_set_not_position(model: type[Any]) -> None:
+    first, second = model.LABEL_ORDER[:2]
+    mismatched: list[list[dict[str, Any]]] = [
+        [],
+        list(payload([second])["evidence"]),
+    ]
+    for evidence in mismatched:
+        data = payload([first])
+        data["evidence"] = evidence
+        with pytest.raises(ValidationError) as error:
+            model.model_validate(data)
+        assert error.value.errors()[0]["type"] == "evidence_label_mismatch"
+    data = payload()
+    data["evidence"] = list(payload([first])["evidence"])
+    with pytest.raises(ValidationError):
+        model.model_validate(data)
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_schema_descriptions_allow_any_order(model: type[Any]) -> None:
+    schema = model.model_json_schema(mode="validation")
+    labels_desc = schema["properties"]["labels"]["description"]
+    evidence_desc = schema["properties"]["evidence"]["description"]
+    assert "in any order" in labels_desc
+    assert "in any order" in evidence_desc
+    assert "same order" not in evidence_desc
+    assert "order listed in its prompt" not in labels_desc
 
 
 @pytest.mark.parametrize("target", MODELS)
@@ -222,30 +306,6 @@ def test_label_partition_has_2_19_19_disjoint_members() -> None:
     labels = [label for group in groups for label in group]
     assert len(set(labels)) == 40
     assert "OTHER_UNCLASSIFIED" not in labels
-
-
-@pytest.mark.parametrize("model", MODELS)
-def test_evidence_matches_labels_exactly(model: type[Any]) -> None:
-    first, second = model.LABEL_ORDER[:2]
-    mismatched: list[list[dict[str, Any]]] = [
-        [],
-        list(payload([second])["evidence"]),
-        list(payload([first, first])["evidence"]),
-    ]
-    for evidence in mismatched:
-        data = payload([first])
-        data["evidence"] = evidence
-        with pytest.raises(ValidationError) as error:
-            model.model_validate(data)
-        assert error.value.errors()[0]["type"] == "evidence_label_mismatch"
-    data = payload([first, second])
-    cast(list[Any], data["evidence"]).reverse()
-    with pytest.raises(ValidationError):
-        model.model_validate(data)
-    data = payload()
-    data["evidence"] = list(payload([first])["evidence"])
-    with pytest.raises(ValidationError):
-        model.model_validate(data)
 
 
 @pytest.mark.parametrize("model", MODELS)

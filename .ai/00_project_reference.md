@@ -78,7 +78,9 @@ Discussed ~85% effort reduction and ~90% extraction accuracy are **hypotheses**,
 - `/health`, `/ready`, `/version`
 - Python 3.11, Poetry, Ruff, Pyright strict, pytest
 - Multistage Docker + Compose, including a Node 22.12 review-frontend build stage
-- Optional async OpenAI wrapper with fake-based tests (unwired to product flows)
+- Optional async OpenAI wrapper with fake-based tests; reused by the Stage 4 local
+  page-classification MVP through the existing `app.llm` boundary (not a redesigned
+  multi-provider stack)
 - Optional document conversion (disabled by default): Textract, Textractor 1.10.0, durable DynamoDB/S3/SQS jobs, Cognito-owned upload/jobs shell, canonical `document.json` + unreviewed HTML
 - Optional document review (same feature flag): Vue/TipTap/PDF.js workspace, review API, immutable revisions, page/document approval, reviewed HTML/JSON exports
 - Stage 3 — Extraction Review Workspace **U1–U3 local slice complete**
@@ -111,15 +113,40 @@ Discussed ~85% effort reduction and ~90% extraction accuracy are **hypotheses**,
     highlights; By page edit / All findings navigate; Add/Edit/Remove/Restore/Save;
     Download TXT; final approval; `Extraction run` selector; harness
     `--run-extraction` + `initialLocalJobId`. Local vertical slice is
-    **manually verified**. Production mount/auth and the future workflow remain
-    outside this mini-project.
-- Lexical extraction engine L01–L13 in `src/app/lexical_extraction/` (independent of Stage 3 review UI)
+    **manually verified**. Production mount/auth remains outside this local MVP.
+- Stage 4 — Page Classification and Extraction Routing **local MVP complete**
+  (`src/app/page_classification/`, Stage 4 adapter/API seams, Vue workspace):
+  - **Input.** Only Stage 1 approved/reviewed HTML v1 plus existing
+    reviewed-document/page provenance. Reviewed HTML bytes and page identities
+    are not rewritten.
+  - **Classifier.** Three fixed independent structured calls per page over the
+    complete page HTML fragment (materials/equipment; process/operations/controls;
+    document/supporting records). Labels and evidence are order-independent for
+    validity; evidence associates by its own `label` field.
+  - **Persistence.** Read-only, current-state-only local classification per
+    reviewed-HTML identity (`current-classification.json`); bounded local
+    diagnostics; no classifier history, approval, or SQLite classification store.
+  - **Evidence / eligibility.** Source-aware quote/identifier validation proves
+    location only. Conservative exclusion: a page is excluded only under a fully
+    valid, non-empty, exclusively exclusion-label condition with no incomplete,
+    failed, invalid, conflicting, `needs_review`, or unverified-evidence state.
+    All other pages remain eligible.
+  - **Routing.** **Extract All** submits existing Stage 2 `full` on selected
+    eligible pages only, with an immutable per-job classification snapshot.
+    Unrestricted Stage 2 behavior is unchanged when no allow-list is supplied.
+  - **Approval boundary.** Classification labels are informational beside lexical
+    findings. Stage 3 remains the sole final human extraction-result approval.
+  - Local MVP is **test-verified** and has **recorded local** end-to-end
+    acceptance with configured OpenAI plus classified Extract All. Not
+    production-mounted/authenticated; live model quality is not a product
+    guarantee.
+- Lexical extraction engine L01–L13 in `src/app/lexical_extraction/` (independent of Stage 3 review UI; optional Stage 4 page allow-list)
 - Development/test-only local review harness under `tests/document_review/` and
   extraction-review harness under `tests/extraction_review/`
 
 `/ready` is foundation readiness only — not document-processing or AWS dependency proof.
 
-Pharmaceutical extraction, recipe graph UI, rules/Audit evaluation, and AWS deployment verification are **not** implemented. Intended production composition uses Cognito, DynamoDB, S3, and SQS; that wiring exists in code and is **not** live-cloud verified. See [04](04_code_map.md) and [03](03_common_handoff.md).
+Pharmaceutical recipe assembly, recipe graph UI, rules/Audit evaluation, and AWS deployment verification are **not** implemented. Intended production composition uses Cognito, DynamoDB, S3, and SQS; that wiring exists in code and is **not** live-cloud verified. See [04](04_code_map.md) and [03](03_common_handoff.md).
 
 ---
 
@@ -174,7 +201,8 @@ Do not claim certification, guaranteed confidentiality, or AWS-only data residen
 
 ### Deferred
 
-- LLM wrapper hardening/redesign until extraction integration is designed
+- LLM wrapper hardening/redesign beyond the existing wrapper reused by Stage 4
+  local page classification
 - Neo4j and GraphRAG
 - BatchLens Audit implementation and the future rules layer
 - Persistent audit/provenance ledger (direction recorded in [03](03_common_handoff.md) and [05](05_pipeline_contracts.md); not implemented)
@@ -225,7 +253,7 @@ Detailed topology follows processing requirements. Documentation-only and local 
 | Containers | Multistage Dockerfile (Node review builder + Python), Compose |
 | Conversion | Amazon Textractor 1.10.0; boto3 Textract/S3/DynamoDB/SQS (feature-flagged) |
 | Review UI | Vue 3, TipTap 3, PDF.js (feature-flagged) |
-| Optional LLM asset | Async OpenAI wrapper (unwired) |
+| Optional LLM asset | Async OpenAI wrapper; reused by Stage 4 local page classification |
 
 ---
 
@@ -233,10 +261,10 @@ Detailed topology follows processing requirements. Documentation-only and local 
 
 Operational current state: [03_common_handoff.md](03_common_handoff.md).
 
-**Immediate next (from 03):** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Do not implement audit logging, extraction, rules, or deployment in that step.
+**Immediate next (from 03):** intended-use / regulatory-boundary and audit/provenance design before any audit-log implementation. Do not implement audit logging, recipe assembly, rules, or deployment in that step. Stage 4 local MVP is already accepted; do not reopen it as the next feature.
 
 **Later:** pharmaceutical-extraction **M-Design** develops remaining pipeline/contracts and the extraction slice primarily in [05](05_pipeline_contracts.md), with security, evaluation, and check-selection implications recorded in [06](06_security_and_data_handling.md)–[08](08_check_selection_strategy.md).
 
-Conversion and document-review contracts already exist in code. Extraction schemas, provider choices, and detailed AWS topology may stay open until their requirements are understood.
+Conversion, document-review, Stage 2 lexical, Stage 3 extraction-review, and Stage 4 page-classification contracts already exist in code for their local scopes. Broader extraction schemas, provider choices, and detailed AWS topology may stay open until their requirements are understood.
 
-Do not implement extraction, the rules layer, or the audit ledger in documentation-only work.
+Do not implement recipe assembly, the rules layer, or the audit ledger in documentation-only work.

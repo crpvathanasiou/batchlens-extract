@@ -53,7 +53,7 @@
               "type": "null"
             }
           ],
-          "description": "Exact existing HTML id of the quoted element or its closest containing element with an id; null when none exists. Never invent an id, selector, or page number.",
+          "description": "Exact unmodified value from id, data-node-id, data-element-id, or data-table-id on the smallest identifiable element containing the complete quote, or its nearest identifiable ancestor; null when no suitable identifier exists. Never invent, repair, or convert an identifier, selector, or page number.",
           "title": "Element Id"
         }
       },
@@ -71,7 +71,7 @@
   "description": "Call 2: the 19 process, operations, and control labels.",
   "properties": {
     "labels": {
-      "description": "All supported labels from this call's allowed set, with no duplicates, in the order listed in its prompt. An empty list is allowed.",
+      "description": "All supported labels from this call's allowed set, with no duplicates, in any order. An empty list is allowed.",
       "items": {
         "enum": [
           "SPECIAL_REQUIREMENTS",
@@ -110,7 +110,7 @@
       "type": "string"
     },
     "evidence": {
-      "description": "Exactly one evidence item per returned label, in the same order. No missing or extra items. Use [] when labels=[].",
+      "description": "Exactly one evidence item per returned label, in any order. Associate each item by its own label field. No missing or extra items. Use [] when labels=[].",
       "items": {
         "$ref": "#/$defs/LabelEvidence_Literal__SPECIAL_REQUIREMENTS____PROCESS_FLOW_DIAGRAM____SAMPLING_TESTING_PLAN____FORMULATION_RECIPE____BILL_OF_PACKAGING_MATERIALS____MATERIAL_RECEIPT_AND_ACCEPTANCE____AREA_CLEARANCE____EQUIPMENT_SETUP____EQUIPMENT_CLEANING_SANITIZATION____EQUIPMENT_TEST____EQUIPMENT_STORAGE____MANUFACTURING_INSTRUCTIONS____PROCESS_EXECUTION_RECORD____IN_PROCESS_CONTROL____ANALYTICAL_TEST_DATA____WEIGHING_PRINTOUT____YIELD_CALCULATION____BATCH_RECONCILIATION____PACKAGING_AND_LABELING___"
       },

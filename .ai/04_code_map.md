@@ -81,26 +81,50 @@ src/app/
 │   ├── value_expressions.py         L10 controlled value-expression recognition
 │   ├── parameter_unit_value.py      L10 independent parameter/unit/value block-stream API (+ fuzzy flag)
 │   ├── monitoring.py                L12 compact in-memory operational monitoring helpers
-│   ├── runner.py                    L12 callable run boundary + evidence-sink lifecycle
+│   ├── runner.py                    L12 callable run boundary + evidence-sink lifecycle; optional Stage 4 page allow-list
 │   ├── publication.py               L13 filesystem EvidenceSink, atomic artifacts, final manifest
 │   └── __main__.py                  L13 thin CLI: load L02 YAML → L12 run → finalize publication
+├── page_classification/
+│   ├── contracts.py                 Prepared input, call/merge/eligibility, current-classification envelope
+│   ├── page_input.py                Reviewed HTML v1 → full-page fragments, readable text, page-local IDs
+│   ├── page_classification_schemas.py  Three locked Pydantic response models + evidence rules
+│   ├── rules.py                     Source-evidence validation, merge, OTHER_UNCLASSIFIED, eligibility
+│   ├── runner.py                    Three serial structured calls per page via existing app.llm
+│   ├── service.py                   Local classification lifecycle / in-process worker gate
+│   ├── store.py                     One current-classification.json per reviewed-HTML identity
+│   ├── diagnostics.py               Bounded local diagnostic bundles (newest five)
+│   ├── export_schemas.py            Regenerate locked JSON Schema assets from response models
+│   ├── prompts/                     Fixed call prompts (plus archived copies)
+│   └── json_schemas/                Regenerated JSON Schema assets for the three calls
 ├── extraction_review/
 │   ├── contracts.py                 U1 current-state models: findings, provenance, revision id, approval
 │   ├── transitions.py               pure initialize / save / approve over current state
 │   ├── store.py                     U1.2 atomic current-review.json under extraction-reviews/<sha256(local_job_id)>/
 │   ├── approved_documents.py        U2.1 read-only approved-document discovery and Stage 2 HTML selection
-│   ├── local_jobs.py                U2.2 local persisted serialized Stage 2/L13 background jobs
+│   ├── local_jobs.py                U2.2 local Stage 2/L13 jobs + classified Extract All / snapshot
+│   ├── stage4_local.py              Stage 4 adapter: classify / Extract All / snapshot views
 │   ├── workspace.py                 U3 open completed job, project findings, page save/approve, TXT
 │   └── page_html.py                 U3 page HTML + category highlight marks
 └── main.py                          feature lifespan, routers, CSP/isolation middleware
 
 frontend/
 ├── src/                             Vue document-review + extraction-review workspaces
-├── src/components/ExtractionReviewWorkspace.vue  Stage 3 local UI
-├── src/extractionReview.ts          Stage 3 local API client
+├── src/components/ExtractionReviewWorkspace.vue  Stage 3 + Stage 4 local UI
+├── src/extractionReview.ts          Stage 3 + Stage 4 local API client
 ├── tests/                           editor/mapping/state/API + extraction-review workspace tests
 ├── package.json / package-lock.json pinned Node dependencies
 └── vite.config.ts                   library output under document_review/static
+
+tests/page_classification/
+├── test_page_input.py               Prepared page fragments / identifiers / readable text
+├── test_page_classification_schemas.py  Locked response contracts and order-independence
+├── test_rules.py                    Source validation, merge, OTHER_UNCLASSIFIED, eligibility
+├── test_runner.py                   Three-call runner with fakes
+├── test_service.py                  Classification lifecycle / busy gate
+├── test_store.py                    Current-state persistence and binding
+├── test_diagnostics.py              Diagnostic bundles and retention
+├── test_contract_resources.py       Prompt/schema asset coherence
+└── fixtures/                        Reviewed HTML v1 fixtures
 
 tests/lexical_extraction/
 ├── acceptance.py                    L09 read-only Materials feasibility measurement helper
@@ -115,7 +139,7 @@ tests/lexical_extraction/
 ├── test_dictionary_aggregation.py   L08 dictionary aggregation and supporting-ref tests
 ├── test_fuzzy_matching.py           L11 optional fuzzy matching and L08/L10 bridge tests
 ├── test_parameter_unit_value.py     L10 independent parameter/unit/value tests
-├── test_runner.py                   L12 callable runner, sink lifecycle, and failure-boundary tests
+├── test_runner.py                   L12 callable runner, sink lifecycle, failure-boundary, Stage 4 page restriction
 └── test_publication.py              L13 filesystem publication, CLI, and atomic-manifest tests
 
 tests/extraction_review/
@@ -124,8 +148,10 @@ tests/extraction_review/
 ├── test_store.py                    U1.2 create/load/save/approve/reload; per-local-job paths
 ├── test_approved_documents.py       U2.1 discovery/selection/validation and path-safety tests
 ├── test_local_jobs.py               U2.2 submit/progress/restart/serial-execution/safe-error tests
+├── test_classified_local_jobs.py    Classified Extract All, allow-list, immutable snapshot
+├── test_stage4_local.py             Stage 4 adapter classify / Extract All / snapshot views
 ├── test_workspace.py                U3 workspace/API open/save/approve/TXT; per-run isolation
-├── local_harness.py                 localhost Stage 3 UI + optional --run-extraction
+├── local_harness.py                 localhost Stage 3/4 UI; --config wires classified Extract All
 └── test_local_harness.py            harness bootstrap / initialLocalJobId / job listing
 
 tests/document_review/
@@ -167,26 +193,37 @@ Inspect when:
 | `src/app/extraction_review/transitions.py` | Pure initialize / save / approve over one current state; Save clears approval and requires a new revision id | Commands + `ExtractionReviewState` → outcomes | Changing stale conflict, no-op, Add uniqueness, provenance stamping, or discard-on-save behavior |
 | `src/app/extraction_review/store.py` | U1.2 local atomic JSON: one `current-review.json` per `sha256(local_job_id)` | Data dir + local_job_id / commands → durable current `ExtractionReviewState` | Changing path layout, atomic write, create/load/save/approve persistence rules |
 | `src/app/extraction_review/approved_documents.py` | U2.1 read-only Approved Documents Registry: paginated layout discovery and safe selection through the Stage 2 reviewed-HTML reader | Caller-supplied approved-documents root → candidate metadata or `SelectedApprovedDocument` | Changing folder layout rules, pagination bounds, path/symlink escape, or HTML identity matching |
-| `src/app/extraction_review/local_jobs.py` | U2.2 local persisted serialized Stage 2/L13 jobs; atomic job JSON; one execution at a time per data dir; restart interruption | Approved-document identity + L02 path + action/fuzzy → durable job state and optional raw-run registration | Changing job/raw-run layout, status/phase model, serial execution, safe errors, or Stage 2 invoke boundary |
+| `src/app/extraction_review/local_jobs.py` | U2.2 local Stage 2/L13 jobs; classified Extract All allow-list + immutable `classification.json` snapshot | Approved-document identity + L02 path + optional Stage 4 classification → durable job state / raw-run registration | Changing job layout, classified Extract All, snapshot binding, serial execution, or Stage 2 invoke boundary |
+| `src/app/extraction_review/stage4_local.py` | Local Stage 4 adapter: classify / Extract All coordination and snapshot views | Classification service + local jobs → harness API views | Changing classify start, terminal views, Extract All outcomes, or job-snapshot reads |
 | `src/app/extraction_review/workspace.py` | U3 open completed local job, project published findings, page-scoped save/approve, TXT export | Local jobs + U1 store + L13 readers → current review state / page HTML inputs | Changing projection, per-run binding checks, save/approve orchestration, or TXT grouping |
 | `src/app/extraction_review/page_html.py` | U3 reviewed-page HTML extraction and category highlight marks | Document HTML + finding spans → single-page HTML | Changing highlight markup or page slicing |
-| `src/app/api/extraction_reviews.py` | Local Stage 3 HTTP surface (harness-mounted): list/open/save/approve/page/TXT | `ExtractionReviewWorkspace` → JSON/TXT responses | Changing local extraction-review routes or response shapes |
+| `src/app/api/extraction_reviews.py` | Local Stage 3/4 HTTP surface (harness-mounted): Stage 3 routes + classify/Extract All/classification | Workspace + Stage 4 adapter → JSON/TXT responses | Changing local extraction-review or Stage 4 routes/response shapes |
+| `src/app/page_classification/contracts.py` | Prepared input, call/merge/eligibility, current-classification envelope | Reviewed HTML v1 identity → versioned classification contracts; no LLM I/O | Changing current-state shape, eligibility fields, or persistence envelope |
+| `src/app/page_classification/page_input.py` | Reviewed HTML v1 → full-page fragments, readable text, page-local identifier maps | Reviewed HTML → `PreparedDocument` / `PreparedPageInput` | Changing fragment slicing, readable-text rules, identifier attrs, or ambiguity resolution |
+| `src/app/page_classification/page_classification_schemas.py` | Three locked Pydantic response models; order-independent labels/evidence; no silent repair | Structured model output → validated call responses | Changing allowed labels, evidence rules, statuses, or quote/reason bounds |
+| `src/app/page_classification/rules.py` | Source-evidence validation, merge, application-only `OTHER_UNCLASSIFIED`, conservative eligibility | Call outcomes + prepared page → merged result + eligibility | Changing verification, merge kinds, exclusion set, or eligibility conservatism |
+| `src/app/page_classification/runner.py` | Three serial structured calls per page through existing `app.llm` | Prepared page + prompts/schemas → three call outcomes | Changing call order, prompt/schema binding, or LLM wrapper seam |
+| `src/app/page_classification/service.py` | Local classification lifecycle; one in-process active worker per data directory | Store + runner → current classification progress/terminal outcomes | Changing start/busy/interrupt semantics or progress honesty |
+| `src/app/page_classification/store.py` | One atomic `current-classification.json` per reviewed-HTML identity | Data dir + reviewed-HTML binding → durable current state | Changing identity key, path layout, or atomic write/binding checks |
+| `src/app/page_classification/diagnostics.py` | Bounded local diagnostic bundles (newest five valid) | Classification run → `page-classification-diagnostics/<run-id>/` | Changing bundle layout, retention, or secret-safe settings recording |
 | `tests/extraction_review/test_contracts.py` | Contract validation for current-state models and provenance | Pydantic validation cases | Changing allowed finding/approval/command shapes |
 | `tests/extraction_review/test_transitions.py` | Pure transition coverage for initialize/save/approve | In-memory state transitions | Changing Save/Approve semantics |
 | `tests/extraction_review/test_store.py` | Local JSON create/load/save/approve/reload and per-local-job path isolation | Temp directories only | Changing store persistence behavior |
 | `tests/extraction_review/test_approved_documents.py` | U2.1 discovery/pagination, selection validation, path/symlink escape, and no-write guarantees | Synthetic reviewed-HTML fixtures under temp roots | Changing registry discovery or selection/validation rules |
 | `tests/extraction_review/test_local_jobs.py` | U2.2 submit/progress/completion, serial execution, restart interruption, safe errors, and no review mutation | Injected Stage 2 seam + temp data/approved roots | Changing job lifecycle, serial lock, raw-run registration, or error sanitization |
+| `tests/extraction_review/test_classified_local_jobs.py` | Classified Extract All allow-list, immutable snapshot, no-eligible-pages | Temp data + classification fixtures | Changing classified job submission or snapshot digest binding |
+| `tests/extraction_review/test_stage4_local.py` | Stage 4 adapter classify / Extract All / snapshot view contracts | Injected classification + job seams | Changing Stage 4 adapter outcomes or error mapping |
 | `tests/extraction_review/test_workspace.py` | U3 workspace/API coverage including two-run independent reviews | Temp data + approved HTML fixtures | Changing open/save/approve/TXT or per-run isolation |
-| `tests/extraction_review/local_harness.py` | Localhost Stage 3 acceptance server; optional `--run-extraction` | Real workspace API + Vue bundle + local jobs | Changing harness bind, bootstrap, or run-extraction wait |
-| `frontend/src/components/ExtractionReviewWorkspace.vue` | Stage 3 local UI: Extraction run selector, page/findings, legend, save/approve/TXT | `extractionReview.ts` API → browser UI | Changing run labels, highlight legend, edit/save, or initialLocalJobId |
-| `frontend/src/extractionReview.ts` | Stage 3 local API client and option types | Harness routes ↔ Vue workspace | Changing client contracts or initialLocalJobId |
-| `src/app/lexical_extraction/contracts.py` | L01 lexical evidence, candidate, unit/value, provenance, extraction-outcome, and publication-claim records | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, span checks, outcome coherence, or publication claims |
+| `tests/extraction_review/local_harness.py` | Localhost Stage 3/4 acceptance server; `--config` wires classified Extract All; optional `--run-extraction` | Real workspace API + Vue bundle + local jobs + Stage 4 composition | Changing harness bind, bootstrap, Stage 4 composition, or run-extraction wait |
+| `frontend/src/components/ExtractionReviewWorkspace.vue` | Stage 3/4 local UI: Classify pages, Extract All, classification panel, classifications TXT, Stage 3 controls | `extractionReview.ts` API → browser UI | Changing classify/Extract All UX, classification panel, or Stage 3 controls |
+| `frontend/src/extractionReview.ts` | Stage 3/4 local API client, classification views, classifications TXT builder | Harness routes ↔ Vue workspace | Changing client contracts, classification polling, or TXT export |
+| `src/app/lexical_extraction/contracts.py` | L01 lexical records plus Stage 4 page-restriction provenance | Reviewed HTML v1 identity and flat-SQLite field names → bounded records; no reader or publisher | Changing lexical record fields, outcome coherence, publication claims, or Stage 4 restriction provenance |
 | `src/app/lexical_extraction/configuration.py` | L02 strict execution YAML load, fixed preset→component union, resource safeguards, effective SHA-256 | Config file path (+ optional typed selection override) → `EffectiveExecutionConfiguration`; no I/O beyond reading the YAML file | Changing YAML shape, preset map, path resolution, override semantics, resource bounds, or digest material |
 | `src/app/lexical_extraction/html_reader.py` | L03 streaming reviewed HTML v1 reader; fail-closed provenance; final digest only on completed read | File path → chunked `iter_pages` → `PageRecord`/`BlockEvidence`; final `ReviewedHtmlV1Input` only when `completed` | Changing streaming/completion semantics, exact version `"1"`, duplicate-attribute rejection, or silent-omission failures |
 | `src/app/lexical_extraction/knowledge_snapshot.py` | L04 read-only flat SQLite snapshot preflight, pinned connection, single-table `rowid` paging, and source `row_id` lookup | Snapshot directory + L02 batch/cache limits → `KnowledgeSnapshotIdentity` and raw source rows | Changing companion validation, read-only pinning, allowlisted paging, or `row_id` lookup |
 | `src/app/lexical_extraction/field_mapping.py` | L05 fixed V1 per-table search-field mapping and eligibility over L04 `SourceRow` | Raw source rows + selected components → compact `EligibleSearchTerm` stream; no matching | Changing eligible fields, UNII/unit boundary hints, `Index this row` authorization, or unit-token eligibility |
 | `src/app/lexical_extraction/comparison.py` | L06 fixed V1 per-term/per-block comparison normalization, comparison→original projection, and role-aware boundaries | One term or block text → temporary `ComparisonSurface` and optional `CharSpan`; no matcher | Changing NFC/casefold/whitespace rules, unit alignment, or `default` / `whole_code` / `atomic_unit` boundaries |
-| `src/app/lexical_extraction/runner.py` | L12 callable run boundary: HTML/snapshot preflight, component execution, component-scoped sink streaming, outcomes/provenance/`run_error` | `EffectiveExecutionConfiguration` + `EvidenceSink` → `LexicalRunResult` | Changing sink lifecycle, page scoping, failure boundaries, component grouping, or outcome honesty |
+| `src/app/lexical_extraction/runner.py` | L12 callable run boundary: HTML/snapshot preflight, component execution, optional Stage 4 page allow-list + restriction provenance, sink streaming, outcomes/provenance/`run_error` | `EffectiveExecutionConfiguration` + `EvidenceSink` (+ optional allow-list) → `LexicalRunResult` | Changing sink lifecycle, page scoping/restriction, failure boundaries, component grouping, or outcome honesty |
 | `src/app/lexical_extraction/monitoring.py` | L12 compact in-memory monitoring and nonprivileged peak-memory measurement | Runner accumulator → `RunMonitoringSummary` | Changing measured counters, unavailable semantics, or memory method labels |
 | `src/app/lexical_extraction/publication.py` | L13 filesystem EvidenceSink, streamed page/block staging, atomic artifacts, final-manifest-last publication, snapshot output guard | Output directory + L12 result → run directory artifacts + optional `manifest.json` | Changing staging bounds, streaming read/write, locate_hit, atomic replace, or snapshot path guard |
 | `src/app/lexical_extraction/__main__.py` | L13 thin CLI over L02 YAML + L12 runner + L13 finalize | `--config` path → exit code + compact summary | Changing exit codes, summary fields, or CLI surface |
@@ -398,13 +435,26 @@ to the current evidence-region hash and become unresolved again if the region ch
   - `GET /api/v1/documents/jobs/{job_id}/review/revisions/{revision_id}/exports/{format}`
 - Test harness: `http://127.0.0.1:8765/documents/local-review` (user completed review);
   isolated A2: `http://127.0.0.1:8766/documents/local-review`
-- Local Stage 3 extraction-review harness (not production-mounted):
+- Local Stage 3/4 extraction-review harness (not production-mounted):
   - UI: `/documents/local-extraction-review`
   - `GET /api/v1/extraction-reviews/jobs`
   - `GET|PUT /api/v1/extraction-reviews/jobs/{local_job_id}`
   - `GET /api/v1/extraction-reviews/jobs/{local_job_id}/pages/{page_number}`
   - `POST /api/v1/extraction-reviews/jobs/{local_job_id}/approve`
   - `GET /api/v1/extraction-reviews/jobs/{local_job_id}/results.txt`
+  - `GET /api/v1/extraction-reviews/approved-documents`
+  - `GET .../approved-documents/{job_id}/{review_revision_id}/pages`
+  - `GET .../pages/{page_number}`
+  - `GET .../approved-documents/{job_id}/{review_revision_id}/classification`
+  - `POST .../approved-documents/{job_id}/{review_revision_id}/classify`
+  - `POST .../approved-documents/{job_id}/{review_revision_id}/extract-all`
+  - `GET /api/v1/extraction-reviews/jobs/{local_job_id}/classification`
+  - `GET /api/v1/extraction-reviews/local-jobs/{local_job_id}`
+
+Stage 4 product docs (accepted human-facing summaries; not a second code map):
+
+- `docs/BatchLens-Stage4-Page-Classification-Overview-EN.md`
+- `docs/BatchLens-Stage4-Detailed-Local-Guide-EN.md`
 
 Every production data operation reuses bearer verification and ownership-hiding job lookup before
 artifact or review access.

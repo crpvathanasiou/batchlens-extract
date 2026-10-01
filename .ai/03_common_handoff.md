@@ -1,13 +1,90 @@
 # 03 — Common Handoff
 
-## 1. Current state — 2026-09-30 Stage 3 U1–U3 local workspace complete
+## 1. Current state — 2026-10-01 Stage 4 local MVP complete
+
+**Status:** Stages 1–3 are locked baselines. Stage 4 — Page Classification and
+Extraction Routing local MVP is **implemented**, **test-verified**, and has
+**recorded local** end-to-end acceptance (configured OpenAI classification plus
+classified Extract All on the extraction-review harness).
+
+Human-facing summaries (do not copy wholesale into `.ai`):
+`docs/BatchLens-Stage4-Page-Classification-Overview-EN.md`,
+`docs/BatchLens-Stage4-Detailed-Local-Guide-EN.md`.
+
+### Locked baselines
+
+- **Stage 1** — evidence-preserving conversion and document review/approval remain
+  unchanged. Stage 4 consumes only approved/reviewed HTML v1 and existing
+  reviewed-document/page provenance.
+- **Stage 2** — independent deterministic Lexical Extraction Engine (L01–L13).
+  Unrestricted runs are unchanged. Classified Extract All supplies an optional
+  page allow-list plus Stage 4 restriction provenance.
+- **Stage 3** — sole final human extraction-result approval. One action only:
+  **Approve extraction result**. Save / Download TXT / Approve semantics are
+  unchanged. Classification labels are informational beside findings.
+
+### Stage 4 local MVP boundaries
+
+- Three fixed structured classifier calls per page over the complete page HTML
+  fragment (materials/equipment; process/operations/controls; document/supporting).
+- Labels and evidence are order-independent for validity; evidence associates by
+  its own `label` field; no silent response repair.
+- Source-aware evidence validation (one HTML-entity decode + whitespace collapse;
+  page-local identifiers from `id` / `data-node-id` / `data-element-id` /
+  `data-table-id`; `article.element` wrapper/direct-child pair resolution;
+  other multi-matches ambiguous). Unverified evidence preserves labels, requires
+  review, and does not by itself exclude the page.
+- `OTHER_UNCLASSIFIED` is application-generated only when all three calls are
+  valid `ok` with an empty merged label union; that page remains eligible.
+- Current-state-only local classification per reviewed-HTML identity; bounded
+  diagnostics (newest five valid bundles); in-process one active classifier worker
+  per data directory (not cross-process locking). Restart marks abandoned work
+  `interrupted` without auto-resume.
+- Conservative exclusion only when every final label is in the fixed exclusion
+  set and the result is fully valid, non-empty, exclusively excluded, with no
+  incomplete/failed/invalid/conflicting/`needs_review`/unverified state. All
+  other pages stay eligible.
+- Terminal classification enables Extract All → Stage 2 `full` on eligible pages
+  only, with an immutable `classification.json` snapshot beside the local job.
+  Zero eligible pages is informational; no empty Stage 2 job is submitted.
+- No classifier label editing, classifier approval, classification history,
+  page-level approval, retry UI, or manual-resolution workflow.
+
+### Evidence vs non-claims
+
+- **test-verified:** focused `tests/page_classification/`, Stage 4-related
+  `tests/extraction_review/` (including `test_stage4_local.py`,
+  `test_classified_local_jobs.py`), and Stage 2 page-restriction coverage in
+  `tests/lexical_extraction/`.
+- **manually verified (recorded local):** live configured OpenAI classification
+  and classified Extract All path, including classification context with lexical
+  findings and ordinary Stage 3 save/approve on a reviewable run.
+- **unverified as product guarantees:** pharmaceutical label correctness, model
+  quality for arbitrary documents, production mounting/authentication, AWS/live
+  cloud behavior.
+
+### Explicit deferrals (not next Stage 4 scope)
+
+Production API mount/auth; classifier editing/approval/history; LLM entity
+extraction; graph/association/recipe assembly; SQLite review/classification
+stores; generic queues / cross-process locking; automatic approvals; broader
+audit/history infrastructure.
+
+**Next unfinished boundary:** intended-use / regulatory-boundary and
+audit/provenance design before any audit-log implementation. Do not reopen
+completed Stage 1–4 local MVP work as the next feature.
+
+---
+
+## 1af. Prior current state — 2026-09-30 Stage 3 U1–U3 local workspace complete
 
 **Mini-project:** Stage 3 — Extraction Review Workspace.
 
-**Status:** **implemented**, **test-verified**, and **manually verified** for the
+**Status (historical):** **implemented**, **test-verified**, and **manually verified** for the
 local U1–U3 vertical slice under `src/app/extraction_review/`,
 `src/app/api/extraction_reviews.py`, the Vue extraction-review workspace, and
-`tests/extraction_review/local_harness.py`.
+`tests/extraction_review/local_harness.py`. Superseded as the current anchor by
+Stage 4 (§1); Stage 3 contracts themselves remain locked.
 
 ### Boundaries
 
@@ -57,8 +134,8 @@ precedence over aliases; one deterministic candidate per exact component/block/s
 one displayed occurrence per `(page, component, casefolded matched text)`; components
 remain independent; `hasRelatedSynonym` aliases are searchable; short literals under
 three code points and `context_required` UO terms stay excluded; per-page de-duplication
-buffering is bounded by `result_buffer_records`. Page classification / page-policy
-exclusion remain future work.
+buffering is bounded by `result_buffer_records`. (Historical note at Stage 3 close:
+page classification was then still future work; implemented later as Stage 4 §1.)
 
 ### Accepted local UI / API / harness
 
@@ -85,15 +162,15 @@ Completed for: manual add → Save → final approval; refresh persistence; TXT 
 post-approval Save clears approval; same approved HTML with two lexical runs keeps
 independent reviews and approvals.
 
-### Explicitly out of this mini-project
+### Explicitly out of this mini-project (historical Stage 3 close)
 
-Production API mounting/authentication; page classification; duplicate-upload /
-fingerprint / reuse workflows; LLM; graph/associations; recipe assembly; automatic
-approval; Stage 1 or Stage 2 redesign.
+Production API mounting/authentication; duplicate-upload / fingerprint / reuse
+workflows; LLM entity extraction; graph/associations; recipe assembly; automatic
+approval; Stage 1 or Stage 2 redesign. (Page classification was later delivered as
+Stage 4 local MVP — see §1.)
 
-**Next safe step:** treat Stage 3 local U1–U3 as accepted baseline. Do not expand into
-production mount/auth, page classification, fingerprint/reuse, LLM, or graph work
-without a new authorized task.
+**Next safe step (historical):** treat Stage 3 local U1–U3 as accepted baseline.
+Superseded by Stage 4 current §1.
 
 ---
 
